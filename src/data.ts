@@ -1,14 +1,36 @@
-import { Dog, FeedbackLoopRule, HealthEvent, JournalEntry, Milestone, Person, Task } from "./types";
+import {
+  Dog,
+  ExposureItem,
+  FeedbackLoopRule,
+  HealthEvent,
+  Household,
+  JournalEntry,
+  Milestone,
+  Person,
+  RelationshipLog,
+  Task,
+} from "./types";
+
+export const households: Household[] = [
+  {
+    id: "andrew-bree",
+    name: "Andrew & Bree's household",
+    memberIds: ["andrew", "bree"],
+    dogIds: ["puppy", "griz"],
+  },
+];
 
 export const people: Person[] = [
   {
     id: "andrew",
+    householdId: "andrew-bree",
     name: "Andrew",
     color: "#2f6f64",
     taskIds: ["morning-potty", "name-recall"],
   },
   {
     id: "bree",
+    householdId: "andrew-bree",
     name: "Bree",
     color: "#b46b55",
     taskIds: ["breakfast-reset", "parallel-walk", "handling"],
@@ -18,6 +40,7 @@ export const people: Person[] = [
 export const dogs: Dog[] = [
   {
     id: "puppy",
+    householdId: "andrew-bree",
     name: "New Puppy",
     breed: "Mixed breed",
     birthday: "2026-05-14",
@@ -54,6 +77,7 @@ export const dogs: Dog[] = [
   },
   {
     id: "griz",
+    householdId: "andrew-bree",
     name: "Griz",
     breed: "Adult dog",
     birthday: "2020-08-20",
@@ -289,6 +313,411 @@ export const milestones: Milestone[] = [
     ],
     why: "Dog park access requires vaccines, recall, loose leash skills, and consistently calm dog-to-dog body language.",
   },
+  ...([
+    {
+      id: "name-recognition",
+      title: "Name recognition",
+      track: "obedience",
+      dependencies: [],
+      steps: [
+        { title: "Charge the name", successCriteria: "Turns head toward handler on name 8 of 10 reps in a quiet room", sessionsRequired: 2, completedSessions: 0 },
+        { title: "Add distance and distraction", successCriteria: "Orients to name from across the room with mild distraction present", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Generalize outside", successCriteria: "Responds to name outdoors on leash 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "How to Teach Your Dog Their Name", type: "article", url: "https://www.akc.org/expert-advice/training/how-to-teach-dog-name/", publisher: "AKC" },
+        { title: "Name recognition foundation game", type: "video", url: "https://www.youtube.com/results?search_query=kikopup+teach+puppy+name+recognition", publisher: "Kikopup" },
+        { title: "Positive reinforcement training basics", type: "article", url: "https://www.humanesociety.org/resources/positive-reinforcement-training", publisher: "Humane Society" },
+      ],
+      why: "Reliable orientation to the puppy's name is the first building block every later cue depends on, since a dog can't respond to instruction it isn't already listening for.",
+    },
+    {
+      id: "food-lure",
+      title: "Food lure mechanics",
+      track: "obedience",
+      dependencies: [],
+      steps: [
+        { title: "Nose-follows-hand", successCriteria: "Tracks a treat in a closed fist through a simple path 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
+        { title: "Lure into basic position shifts", successCriteria: "Follows lure into a sit or a turn without freezing or jumping", sessionsRequired: 3, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "Lure-and-reward training plan", type: "plan", url: "https://www.akc.org/expert-advice/training/lure-reward-training/", publisher: "AKC" },
+        { title: "Lure training fundamentals", type: "video", url: "https://www.youtube.com/results?search_query=kikopup+lure+training+fundamentals+puppy", publisher: "Kikopup" },
+        { title: "Positive reinforcement training basics", type: "article", url: "https://www.humanesociety.org/resources/positive-reinforcement-training", publisher: "Humane Society" },
+      ],
+      why: "Clean lure mechanics (steady hand, correct pace, timely release) are the mechanical skill behind sit, down, touch, shake, spin, and roll over, so it is worth teaching as its own milestone before those cues stack on top of it.",
+    },
+    {
+      id: "focus",
+      title: "Focus / engagement",
+      track: "obedience",
+      dependencies: ["name-recognition"],
+      steps: [
+        { title: "Eye contact for a treat", successCriteria: "Offers voluntary eye contact 8 of 10 reps indoors", sessionsRequired: 2, completedSessions: 0 },
+        { title: "Hold eye contact briefly", successCriteria: "Holds eye contact 3 seconds before reward", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Focus around mild distraction", successCriteria: "Re-engages with handler within 2 seconds of a mild distraction outdoors", sessionsRequired: 4, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "Grab & Hold Your Dog's Attention With the \"Watch Me\" Command", type: "article", url: "https://www.akc.org/expert-advice/training/watch-me-command-grab-dogs-attention/", publisher: "AKC" },
+        { title: "How to Train Your Dog to Stay Focused Around Distractions", type: "article", url: "https://www.akc.org/expert-advice/training/training-dogs-to-ignore-distractions/", publisher: "AKC" },
+        { title: "Engagement and focus training", type: "video", url: "https://www.youtube.com/results?search_query=kikopup+engagement+focus+training+puppy", publisher: "Kikopup" },
+      ],
+      why: "Builds on name recognition by teaching sustained voluntary attention, which down, stay, spin, heel, and impulse control all rely on to hold the dog's attention through a full behavior.",
+    },
+    {
+      id: "impulse-control",
+      title: "Impulse control",
+      track: "obedience",
+      dependencies: ["focus"],
+      steps: [
+        { title: "It's Yer Choice / bowl game", successCriteria: "Waits without lunging while food bowl lowers 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Wait at doorway / crate", successCriteria: "Holds position while door opens until released", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Settle during play arousal", successCriteria: "Interrupts play and offers a sit within 3 seconds of cue", sessionsRequired: 4, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "Impulse Control for Dogs: Dog Self-Control Training", type: "article", url: "https://www.akc.org/expert-advice/training/teaching-your-dog-self-control/", publisher: "AKC" },
+        { title: "Impulse control games", type: "video", url: "https://www.youtube.com/results?search_query=impulse+control+games+for+puppies+positive+training", publisher: "YouTube training library" },
+        { title: "Training games for dogs", type: "article", url: "https://www.akc.org/expert-advice/training/training-games-for-dogs/", publisher: "AKC" },
+      ],
+      why: "Extends focus into self-restraint around real motivators (food, doors, arousal), and is the readiness gate leave-it and wait depend on before they can be proofed in daily life.",
+    },
+    {
+      id: "drop-it",
+      title: "Drop it",
+      track: "obedience",
+      dependencies: ["marker-word", "food-lure"],
+      steps: [
+        { title: "Trade for low-value toy", successCriteria: "Releases a low-value toy for a treat trade 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
+        { title: "Add verbal cue", successCriteria: "Drops item on verbal cue before treat is shown 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Proof with higher-value items", successCriteria: "Drops a favorite toy or found object on first cue without chase", sessionsRequired: 4, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "How to Teach Your Dog to Drop It", type: "article", url: "https://www.akc.org/expert-advice/training/teaching-your-dog-to-drop-it/", publisher: "AKC" },
+        { title: "Drop it without a chase", type: "video", url: "https://www.youtube.com/results?search_query=kikopup+drop+it+trade+training", publisher: "Kikopup" },
+        { title: "Positive reinforcement training basics", type: "article", url: "https://www.humanesociety.org/resources/positive-reinforcement-training", publisher: "Humane Society" },
+      ],
+      why: "Teaches a fair trade instead of a grab, which prevents resource guarding and is required before leave-it (impulse control around items already in the mouth) and retrieve (releasing the toy into the handler's hand).",
+    },
+    {
+      id: "recall-foundation",
+      title: "Recall foundation (come when called)",
+      track: "obedience",
+      dependencies: ["name-recognition", "marker-word"],
+      steps: [
+        { title: "Come for a treat, no distance", successCriteria: "Runs to handler from 3 feet on cue 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
+        { title: "Add distance indoors", successCriteria: "Recalls across a room away from mild distraction", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Backyard recall", successCriteria: "Recalls from 15 feet outdoors on first cue 8 of 10 reps", sessionsRequired: 4, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "Reliable Recall: Teaching Your Dog to Always Come When Called", type: "article", url: "https://www.akc.org/expert-advice/training/reliable-recall-train-dogs-to-come-when-called/", publisher: "AKC" },
+        { title: "Recall foundation games", type: "video", url: "https://www.youtube.com/results?search_query=zak+george+puppy+recall+foundation", publisher: "Zak George" },
+        { title: "Games for building reliable recall behavior", type: "plan", url: "https://www.whole-dog-journal.com/training/leash_training/games-for-building-reliable-recall-behavior-for-your-dog/", publisher: "Whole Dog Journal" },
+      ],
+      why: "Establishes the basic come-when-called response in low-distraction settings, which loose leash walking, dog park readiness, and later advanced/emergency recall all build distance and distraction on top of.",
+    },
+    {
+      id: "outside-confidence",
+      title: "Outside confidence",
+      track: "confidence",
+      dependencies: ["name-recognition"],
+      steps: [
+        { title: "Front yard exposure", successCriteria: "Explores front yard with loose body language for 5 minutes", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Novel surfaces and sounds", successCriteria: "Recovers within 5 seconds after a mild startle outdoors", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Quiet street exposure", successCriteria: "Walks past a passing car or jogger without freezing or bolting", sessionsRequired: 4, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "Confident Puppy: How Do You Raise a Secure Young Dog", type: "article", url: "https://www.akc.org/expert-advice/training/how-do-you-raise-a-confident-puppy/", publisher: "AKC" },
+        { title: "Puppy Socialization: Why, When, and How to Do It Right", type: "plan", url: "https://www.akc.org/expert-advice/training/puppy-socialization/", publisher: "AKC" },
+        { title: "Building outdoor confidence in puppies", type: "video", url: "https://www.youtube.com/results?search_query=puppy+outdoor+confidence+building+socialization", publisher: "YouTube behavior library" },
+      ],
+      why: "Builds calm, curious body language in outdoor environments before leash pressure and traffic are added, which loose leash walking depends on to avoid pairing the leash itself with stress.",
+    },
+    {
+      id: "vaccines-complete",
+      title: "Puppy vaccine series complete",
+      track: "health",
+      dependencies: [],
+      ageGateWeeks: 16,
+      steps: [
+        { title: "Puppy series 1 of 3", successCriteria: "First distemper/parvo combo vaccine given at 6-8 weeks, no adverse reaction", sessionsRequired: 1, completedSessions: 0 },
+        { title: "Puppy series 2 of 3", successCriteria: "Second combo booster given 3-4 weeks after the first, no adverse reaction", sessionsRequired: 1, completedSessions: 0 },
+        { title: "Puppy series 3 of 3 + vet clearance", successCriteria: "Final booster given at 16+ weeks and vet confirms full protection for public spaces", sessionsRequired: 1, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "Puppy Vaccination Schedule: What Shots Do Puppies Need?", type: "article", url: "https://www.akc.org/expert-advice/health/puppy-shots-complete-guide/", publisher: "AKC" },
+        { title: "2022 AAHA Canine Vaccination Guidelines", type: "plan", url: "https://www.aaha.org/resources/2022-aaha-canine-vaccination-guidelines/", publisher: "AAHA" },
+        { title: "Puppy Vaccine Schedule", type: "article", url: "https://vcahospitals.com/pediatric/puppy/health-wellness/puppy-vaccine-schedule", publisher: "VCA Animal Hospitals" },
+      ],
+      why: "This is a medical gate rather than a training skill: dog park readiness and any off-property socialization around unknown dogs should not unlock until the vet confirms the full puppy series is complete.",
+    },
+    {
+      id: "dog-body-language",
+      title: "Reading dog body language",
+      track: "socialization",
+      dependencies: [],
+      steps: [
+        { title: "Identify calm vs. stiff body signals", successCriteria: "Handler correctly labels loose vs. tense body language in 8 of 10 photos or clips", sessionsRequired: 2, completedSessions: 0 },
+        { title: "Live observation at distance", successCriteria: "Handler flags a stress signal in a real dog interaction within 3 seconds", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Apply during a supervised greeting", successCriteria: "Handler interrupts a greeting before escalation using body-language cues", sessionsRequired: 3, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "Dog Body Language", type: "article", url: "https://www.akc.org/expert-advice/training/dog-body-language/", publisher: "AKC" },
+        { title: "7 Tips: Canine Body Language", type: "article", url: "https://www.aspcapro.org/resource/7-tips-canine-body-language", publisher: "ASPCA" },
+        { title: "Reading dog body language and play signals", type: "video", url: "https://www.youtube.com/results?search_query=dog+body+language+play+signals+training", publisher: "YouTube behavior library" },
+      ],
+      why: "This is a handler skill, not a dog skill: recognizing stress and play signals is what makes dog park readiness and any dog-to-dog introduction safe to attempt, since escalation must be caught before it happens.",
+    },
+    {
+      id: "stay",
+      title: "Stay",
+      track: "obedience",
+      dependencies: ["sit", "focus"],
+      steps: [
+        { title: "Stay 3 seconds, handler stationary", successCriteria: "Holds sit-stay 3 seconds with handler at arm's length 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Add duration and distance", successCriteria: "Holds stay 15 seconds with handler 6 feet away", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Add distraction", successCriteria: "Holds stay through a mild distraction (dropped object, passerby) until released", sessionsRequired: 4, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "How to Teach Your Dog to Stay", type: "article", url: "https://www.akc.org/expert-advice/training/teach-your-dog-to-stay/", publisher: "AKC" },
+        { title: "Stay with duration and distraction", type: "video", url: "https://www.youtube.com/results?search_query=kikopup+teach+dog+stay+duration+distraction", publisher: "Kikopup" },
+        { title: "Training 'stay' vs. 'wait'", type: "article", url: "https://www.vet.cornell.edu/departments-centers-and-institutes/riney-canine-health-center/canine-health-information/training-stay-vs-wait", publisher: "Cornell Riney Canine Health Center" },
+      ],
+      why: "Layers duration on top of a reliable sit and the focus needed to hold it, and becomes the foundation for place and advanced recall (a dog must reliably hold position before being released to come).",
+    },
+    {
+      id: "wait",
+      title: "Wait",
+      track: "obedience",
+      dependencies: ["impulse-control", "sit"],
+      steps: [
+        { title: "Wait at bowl", successCriteria: "Waits without breaking while bowl is set down, released on cue", sessionsRequired: 2, completedSessions: 0 },
+        { title: "Wait at door", successCriteria: "Waits at threshold while door opens fully, released on cue", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Wait at car / curb", successCriteria: "Waits before exiting car or crossing curb until released", sessionsRequired: 3, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "How to Teach Your Dog to Wait at Doorways", type: "article", url: "https://www.akc.org/expert-advice/training/teach-your-dog-to-wait-at-doorways/", publisher: "AKC" },
+        { title: "Training your dog to 'wait' and 'stay'", type: "plan", url: "https://www.whole-dog-journal.com/behavior/training-your-dog-to-wait-and-stay/", publisher: "Whole Dog Journal" },
+        { title: "Wait command training", type: "video", url: "https://www.youtube.com/results?search_query=teach+dog+wait+at+door+command", publisher: "YouTube training library" },
+      ],
+      why: "A lighter-weight cousin of stay focused on momentary impulse control at thresholds (doors, cars, curbs), so it depends on impulse control and a working sit rather than full stay duration.",
+    },
+    {
+      id: "heel",
+      title: "Heel",
+      track: "obedience",
+      dependencies: ["loose-leash", "focus"],
+      steps: [
+        { title: "Position at the leg indoors", successCriteria: "Holds heel position for 10 steps indoors with lure", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Fade lure, add turns", successCriteria: "Maintains heel position through 2 turns without a lure", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Proof outdoors with distraction", successCriteria: "Holds heel position for 30 feet past a mild distraction", sessionsRequired: 5, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "Teach a Dog to Heel: How to Train a Dog to Walk Beside You", type: "article", url: "https://www.akc.org/expert-advice/training/heeling-teach-dog-walk/", publisher: "AKC" },
+        { title: "Heel position training", type: "video", url: "https://www.youtube.com/results?search_query=kikopup+heel+position+training", publisher: "Kikopup" },
+        { title: "Training games for dogs", type: "article", url: "https://www.akc.org/expert-advice/training/training-games-for-dogs/", publisher: "AKC" },
+      ],
+      why: "A precise, structured version of loose leash walking that also requires strong focus, since the dog must hold a specific position relative to the handler rather than just avoid pulling.",
+    },
+    {
+      id: "touch",
+      title: "Touch (hand target)",
+      track: "obedience",
+      dependencies: ["marker-word", "food-lure"],
+      steps: [
+        { title: "Nose to palm", successCriteria: "Touches nose to open palm 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
+        { title: "Add verbal cue and distance", successCriteria: "Moves 3 feet to touch palm on cue alone", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Use touch to redirect", successCriteria: "Redirects away from a mild distraction using touch cue 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "How to Teach Your Dog to Nose Target or 'Touch'", type: "article", url: "https://www.akc.org/expert-advice/training/teach-dog-nose-target-touch/", publisher: "AKC" },
+        { title: "Hand targeting foundation", type: "video", url: "https://www.youtube.com/results?search_query=kikopup+hand+targeting+touch+training", publisher: "Kikopup" },
+        { title: "Positive reinforcement training basics", type: "article", url: "https://www.humanesociety.org/resources/positive-reinforcement-training", publisher: "Humane Society" },
+      ],
+      why: "A simple, high-value target behavior built on marker timing and lure mechanics that becomes the building block for fetch (targeting an object) and for redirecting attention in distracting environments.",
+    },
+    {
+      id: "place",
+      title: "Place / go-to-mat",
+      track: "obedience",
+      dependencies: ["down", "stay"],
+      steps: [
+        { title: "Lure onto mat", successCriteria: "Steps all four paws onto mat and sits or downs 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Send from a short distance", successCriteria: "Runs to mat and settles from 6 feet away on cue", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Hold place through household activity", successCriteria: "Stays on mat through doorbell or meal prep until released", sessionsRequired: 5, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "How To Teach Your Dog To Go to Their Place", type: "article", url: "https://www.akc.org/expert-advice/training/teaching-go-to-your-place/", publisher: "AKC" },
+        { title: "Place / go-to-mat training", type: "video", url: "https://www.youtube.com/results?search_query=kikopup+go+to+mat+place+training", publisher: "Kikopup" },
+        { title: "Training games for dogs", type: "article", url: "https://www.akc.org/expert-advice/training/training-games-for-dogs/", publisher: "AKC" },
+      ],
+      why: "Combines a settled down with stay-level duration on a specific target, making it a practical tool for managing greetings and mealtimes once both prerequisite skills are solid.",
+    },
+    {
+      id: "speak",
+      title: "Speak",
+      track: "obedience",
+      dependencies: ["marker-word"],
+      steps: [
+        { title: "Capture and mark a bark", successCriteria: "Marks and rewards a spontaneous single bark 5 times in a session", sessionsRequired: 2, completedSessions: 0 },
+        { title: "Add verbal cue", successCriteria: "Barks once within 3 seconds of cue 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "'Speak!' Training Your Dog to Bark on Command", type: "article", url: "https://www.akc.org/expert-advice/training/train-your-dog-to-speak/", publisher: "AKC" },
+        { title: "Teach speak on cue", type: "video", url: "https://www.youtube.com/results?search_query=teach+dog+speak+bark+on+command+positive+training", publisher: "YouTube training library" },
+        { title: "Positive reinforcement training basics", type: "article", url: "https://www.humanesociety.org/resources/positive-reinforcement-training", publisher: "Humane Society" },
+      ],
+      why: "Putting barking on a deliberate cue relies only on solid marker timing, and it sets up quiet as a natural next step since the two behaviors are trained as a pair.",
+    },
+    {
+      id: "quiet",
+      title: "Quiet",
+      track: "obedience",
+      dependencies: ["speak"],
+      steps: [
+        { title: "Mark silence after a bark", successCriteria: "Rewards 2 seconds of silence immediately following a cued bark 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
+        { title: "Add verbal cue and extend duration", successCriteria: "Stops barking within 3 seconds of cue and holds silence 10 seconds", sessionsRequired: 4, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "Expert Tips to Help Curb Excessive Dog Barking", type: "article", url: "https://www.akc.org/expert-advice/training/curb-excessive-dog-barking/", publisher: "AKC" },
+        { title: "Teach quiet on cue", type: "video", url: "https://www.youtube.com/results?search_query=teach+dog+quiet+command+stop+barking+positive+training", publisher: "YouTube training library" },
+        { title: "Positive reinforcement training basics", type: "article", url: "https://www.humanesociety.org/resources/positive-reinforcement-training", publisher: "Humane Society" },
+      ],
+      why: "Quiet is easiest to train once barking is already on a cue via speak, since the handler can prompt a bark and then reward the stop rather than waiting for random barking to interrupt.",
+    },
+    {
+      id: "shake",
+      title: "Shake",
+      track: "obedience",
+      dependencies: ["marker-word", "food-lure"],
+      steps: [
+        { title: "Capture the paw lift", successCriteria: "Paws at closed hand and gets marked/rewarded 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
+        { title: "Add verbal cue", successCriteria: "Offers paw on cue alone without hand presented first", sessionsRequired: 3, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "How To Teach a Dog to Shake Hands", type: "article", url: "https://www.akc.org/expert-advice/training/how-to-teach-your-dog-to-shake-hands/", publisher: "AKC" },
+        { title: "Teach shake without hand manipulation", type: "video", url: "https://www.youtube.com/results?search_query=kikopup+teach+dog+shake+paw+trick", publisher: "Kikopup" },
+        { title: "Positive reinforcement training basics", type: "article", url: "https://www.humanesociety.org/resources/positive-reinforcement-training", publisher: "Humane Society" },
+      ],
+      why: "A simple capture-and-lure trick that reinforces clean marker timing and lure fading, giving an easy early win once the mechanical foundations are in place.",
+    },
+    {
+      id: "spin",
+      title: "Spin",
+      track: "obedience",
+      dependencies: ["food-lure", "focus"],
+      steps: [
+        { title: "Lure a full circle", successCriteria: "Follows lure through a 360-degree turn 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
+        { title: "Fade lure, add cue, both directions", successCriteria: "Spins in either direction on verbal cue without a visible lure", sessionsRequired: 3, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "How to Teach Your Dog to Spin Around", type: "article", url: "https://www.akc.org/expert-advice/training/teach-your-dog-to-spin-around/", publisher: "AKC" },
+        { title: "Spin trick training", type: "video", url: "https://www.youtube.com/results?search_query=kikopup+teach+dog+spin+trick", publisher: "Kikopup" },
+        { title: "Advanced dog tricks", type: "article", url: "https://www.akc.org/expert-advice/training/advanced-dog-tricks/", publisher: "AKC" },
+      ],
+      why: "Builds directly on lure-following mechanics and requires sustained focus to complete a full circle without breaking off, making it a natural next trick once both are solid.",
+    },
+    {
+      id: "roll-over",
+      title: "Roll over",
+      track: "obedience",
+      dependencies: ["down", "food-lure"],
+      steps: [
+        { title: "Lure from down to side", successCriteria: "Follows lure from down into a side-lie 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Complete the roll", successCriteria: "Completes a full roll from lure with verbal cue paired", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Fade lure", successCriteria: "Rolls over on verbal cue alone 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "How to Teach a Dog to Roll Over", type: "article", url: "https://www.akc.org/expert-advice/training/how-to-teach-a-dog-to-roll-over/", publisher: "AKC" },
+        { title: "Roll over trick training", type: "video", url: "https://www.youtube.com/results?search_query=kikopup+teach+dog+roll+over+trick", publisher: "Kikopup" },
+        { title: "Advanced dog tricks", type: "article", url: "https://www.akc.org/expert-advice/training/advanced-dog-tricks/", publisher: "AKC" },
+      ],
+      why: "Starts from a settled down and uses the same lure-following skill as spin, just guided along the ground instead of in a circle, so a comfortable down is a prerequisite.",
+    },
+    {
+      id: "play-dead",
+      title: "Play dead",
+      track: "obedience",
+      dependencies: ["down"],
+      steps: [
+        { title: "Lure onto side from down", successCriteria: "Falls onto side from a down position 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Add cue and hold briefly", successCriteria: "Holds the side-lie 3 seconds on verbal cue before release word", sessionsRequired: 3, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "How to Teach Your Dog to Play Dead", type: "article", url: "https://www.akc.org/expert-advice/training/teach-your-dog-to-play-dead/", publisher: "AKC" },
+        { title: "Play dead trick training", type: "video", url: "https://www.youtube.com/results?search_query=kikopup+teach+dog+play+dead+trick", publisher: "Kikopup" },
+        { title: "Advanced dog tricks", type: "article", url: "https://www.akc.org/expert-advice/training/advanced-dog-tricks/", publisher: "AKC" },
+      ],
+      why: "Explicitly requires a known down cue as the starting position before the side-lie and hold can be layered on top, per standard trick-training progression.",
+    },
+    {
+      id: "fetch",
+      title: "Fetch",
+      track: "obedience",
+      dependencies: ["touch", "impulse-control"],
+      steps: [
+        { title: "Chase and grab a tossed toy", successCriteria: "Chases and picks up a tossed toy 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
+        { title: "Bring toy back toward handler", successCriteria: "Returns toy to within arm's reach of handler 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Full fetch loop with release", successCriteria: "Completes toss-chase-return-release loop 5 times in a row without chasing", sessionsRequired: 4, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "How to Teach Your Dog to Fetch", type: "article", url: "https://www.akc.org/expert-advice/training/teach-your-dog-to-fetch/", publisher: "AKC" },
+        { title: "Two-toy fetch training", type: "video", url: "https://www.youtube.com/results?search_query=kikopup+teach+dog+fetch+two+toy+method", publisher: "Kikopup" },
+        { title: "Training games for dogs", type: "article", url: "https://www.akc.org/expert-advice/training/training-games-for-dogs/", publisher: "AKC" },
+      ],
+      why: "Uses hand-targeting drive toward an object plus enough impulse control to bring the toy back rather than keep-away, making both prerequisite skills load-bearing for a clean return.",
+    },
+    {
+      id: "retrieve",
+      title: "Formal retrieve",
+      track: "obedience",
+      dependencies: ["fetch", "drop-it"],
+      steps: [
+        { title: "Hold and carry", successCriteria: "Holds a toy in mouth for 5 seconds while walking beside handler", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Deliver to hand", successCriteria: "Releases toy directly into handler's hand on cue 8 of 10 reps", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Retrieve a dropped item on request", successCriteria: "Picks up and delivers a named household item to hand 7 of 10 reps", sessionsRequired: 5, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "How to Teach Your Dog to Fetch", type: "article", url: "https://www.akc.org/expert-advice/training/teach-your-dog-to-fetch/", publisher: "AKC" },
+        { title: "Formal retrieve with hold and deliver", type: "video", url: "https://www.youtube.com/results?search_query=formal+retrieve+hold+and+deliver+dog+training", publisher: "YouTube training library" },
+        { title: "Positive reinforcement training basics", type: "article", url: "https://www.humanesociety.org/resources/positive-reinforcement-training", publisher: "Humane Society" },
+      ],
+      why: "Extends casual fetch into a controlled hold-and-deliver behavior, which requires the clean release taught in drop it so the dog gives up the item into a hand instead of dropping it on the ground.",
+    },
+    {
+      id: "advanced-recall",
+      title: "Advanced recall",
+      track: "obedience",
+      dependencies: ["recall-foundation", "stay"],
+      steps: [
+        { title: "Recall away from a stay", successCriteria: "Breaks a stay and recalls immediately on cue 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Recall with moderate distraction", successCriteria: "Recalls past a person, toy, or food distraction at 10 feet", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Long-line recall outdoors", successCriteria: "Recalls from 30+ feet on a long line in a new outdoor location 8 of 10 reps", sessionsRequired: 5, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "How to Train Your Dog to Come When Called: Step-by-Step Recall", type: "article", url: "https://www.akc.org/expert-advice/training/reliable-recalls-how-to-train-your-dog-to-come-when-called/", publisher: "AKC" },
+        { title: "Advanced recall with distraction and distance", type: "video", url: "https://www.youtube.com/results?search_query=zak+george+advanced+recall+training+distractions", publisher: "Zak George" },
+        { title: "Why a reliable recall is so important", type: "plan", url: "https://www.whole-dog-journal.com/training/leash_training/why-a-reliable-recall-is-so-important/", publisher: "Whole Dog Journal" },
+      ],
+      why: "Adds real distraction and distance on top of recall foundation, and requires stay so the dog has practice holding position under mild arousal before being asked to break it on cue.",
+    },
+    {
+      id: "emergency-recall",
+      title: "Emergency recall",
+      track: "obedience",
+      dependencies: ["recall-foundation", "advanced-recall"],
+      steps: [
+        { title: "Condition a unique emergency cue", successCriteria: "Orients and sprints to handler on the special cue paired with a jackpot reward 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Proof under high distraction", successCriteria: "Responds to emergency cue within 2 seconds during active play or around another dog", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Randomized real-world tests", successCriteria: "Responds successfully to 5 unannounced real-world tests across different locations", sessionsRequired: 5, completedSessions: 0 },
+      ],
+      sources: [
+        { title: "How to Teach Your Dog the Emergency Recall", type: "article", url: "https://www.preventivevet.com/dogs/teach-your-dog-the-emergency-recall-come", publisher: "Preventive Vet" },
+        { title: "Emergency recall conditioning", type: "video", url: "https://www.youtube.com/results?search_query=emergency+recall+training+dog+jackpot+cue", publisher: "YouTube training library" },
+        { title: "Reliable Recall: Teaching Your Dog to Always Come When Called", type: "article", url: "https://www.akc.org/expert-advice/training/reliable-recall-train-dogs-to-come-when-called/", publisher: "AKC" },
+      ],
+      why: "Reserves a separate, never-poisoned cue with maximum reinforcement history for true emergencies, so it depends on both recall foundation and advanced-recall being solid before adding a dedicated life-or-death cue on top.",
+    },
+  ] as Array<Omit<Milestone, "dogIds" | "status">>).map((milestone) => ({ ...milestone, dogIds: ["puppy"], status: "locked" as const })),
 ];
 
 export const healthEvents: HealthEvent[] = [
@@ -316,6 +745,166 @@ export const journalEntries: JournalEntry[] = [
     text: "Puppy noticed the blender, recovered after food scatter, and chose to re-enter the kitchen.",
     tags: ["confidence", "noise", "kitchen"],
     mood: "great",
+  },
+];
+
+function slug(title: string) {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function exposureItem(
+  category: ExposureItem["category"],
+  title: string,
+  overrides: Partial<Pick<ExposureItem, "status" | "log" | "dogIds">> = {},
+): ExposureItem {
+  return {
+    id: `${category}-${slug(title)}`,
+    category,
+    title,
+    dogIds: overrides.dogIds ?? ["puppy"],
+    status: overrides.status ?? "not-started",
+    log: overrides.log ?? [],
+  };
+}
+
+const socializationList = [
+  "Children",
+  "Men",
+  "Women",
+  "Tall people",
+  "Beards",
+  "Umbrellas",
+  "Wheelchairs",
+  "Scooters",
+  "Skateboards",
+  "Vacuum",
+  "Blender",
+  "Hair dryer",
+  "Doorbell",
+  "Thunder",
+  "Fireworks",
+  "Rain",
+  "Snow",
+  "Wind",
+  "Cars",
+  "Buses",
+  "Motorcycles",
+  "Livestock",
+  "Cats",
+  "Birds",
+  "Other dogs",
+  "Restaurants",
+  "Stores",
+  "Parks",
+  "Vet clinic",
+  "Groomer",
+  "Elevator",
+  "Escalator",
+  "Metal flooring",
+  "Wood flooring",
+  "Concrete flooring",
+  "Grass",
+  "Sand",
+  "Water",
+  "Bridges",
+  "Stairs",
+];
+
+const confidenceList = [
+  "Balance discs",
+  "Wobble board",
+  "Tunnel",
+  "Boxes",
+  "Plastic bags",
+  "Tarps",
+  "Car rides",
+  "Camping",
+  "Kayak",
+  "Hotel stays",
+  "Elevator",
+  "Busy sidewalks",
+];
+
+const handlingList = [
+  "Touch ears",
+  "Touch paws",
+  "Brush",
+  "Open mouth",
+  "Lift lips",
+  "Tail handling",
+  "Nail grinder",
+  "Nail clippers",
+  "Bath",
+  "Hair dryer",
+  "Tooth brushing",
+  "Eye cleaning",
+  "Medication practice",
+  "Harness",
+  "Collar",
+  "Cone",
+];
+
+export const exposureItems: ExposureItem[] = [
+  ...socializationList.map((title) => exposureItem("socialization", title)),
+  ...confidenceList.map((title) => exposureItem("confidence", title)),
+  ...handlingList.map((title) => exposureItem("handling", title)),
+].map((item) => {
+  const seeded: Record<string, Pick<ExposureItem, "status" | "log">> = {
+    "socialization-blender": {
+      status: "introduced",
+      log: [{ date: "2026-07-08", reaction: "curious", notes: "Noticed the blender, recovered after food scatter, and chose to re-enter the kitchen." }],
+    },
+    "socialization-vet-clinic": {
+      status: "introduced",
+      log: [{ date: "2026-06-28", reaction: "cautious", notes: "First wellness visit; froze on the scale but accepted the exam with treats." }],
+    },
+    "confidence-car-rides": {
+      status: "introduced",
+      log: [{ date: "2026-06-26", reaction: "curious", notes: "Rode home from pickup in a crate; settled after 10 minutes." }],
+    },
+    "handling-touch-paws": {
+      status: "introduced",
+      log: [{ date: "2026-07-09", reaction: "confident", notes: "Accepted paw handling during cooperative handling minis." }],
+    },
+    "handling-brush": {
+      status: "introduced",
+      log: [{ date: "2026-07-09", reaction: "confident", notes: "One calm brush stroke during handling minis, ended with play." }],
+    },
+  };
+  const seed = seeded[item.id];
+  return seed ? { ...item, ...seed } : item;
+});
+
+export const relationshipLogs: RelationshipLog[] = [
+  {
+    id: "relationship-1",
+    dogIds: ["puppy", "griz"],
+    date: "2026-07-09",
+    comfort: 62,
+    sharedToys: 20,
+    sharedBeds: 10,
+    sharedWalks: 55,
+    bodyLanguage: 68,
+    resourceGuarding: 18,
+    playQuality: 48,
+    corrections: 2,
+    recoveryMinutes: 3,
+    notes: "First parallel walk went well at distance. Griz still gets a separate bed and toys.",
+  },
+  {
+    id: "relationship-2",
+    dogIds: ["puppy", "griz"],
+    date: "2026-07-02",
+    comfort: 54,
+    sharedToys: 12,
+    sharedBeds: 8,
+    sharedWalks: 40,
+    bodyLanguage: 60,
+    resourceGuarding: 22,
+    playQuality: 38,
+    corrections: 3,
+    recoveryMinutes: 5,
+    notes: "Early integration week. Feeding and crating fully separate; short supervised sniff sessions only.",
   },
 ];
 

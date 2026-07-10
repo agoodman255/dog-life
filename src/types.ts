@@ -1,7 +1,15 @@
 export type DogStatus = "puppy" | "adult" | "senior";
 
+export type Household = {
+  id: string;
+  name: string;
+  memberIds: string[];
+  dogIds: string[];
+};
+
 export type Dog = {
   id: string;
+  householdId: string;
   name: string;
   breed: string;
   birthday: string;
@@ -35,6 +43,7 @@ export type Dog = {
 
 export type Person = {
   id: string;
+  householdId: string;
   name: string;
   color: string;
   taskIds: string[];
@@ -125,6 +134,50 @@ export type DailyFeedback = {
   fear: boolean;
   guarding: boolean;
   completedAt: string;
+};
+
+export type ExposureCategory = "socialization" | "confidence" | "handling";
+
+export type ExposureStatus = "not-started" | "introduced" | "comfortable";
+
+export type ExposureLogEntry = {
+  date: string;
+  reaction: "confident" | "curious" | "cautious" | "fearful";
+  notes: string;
+};
+
+export type ExposureItem = {
+  id: string;
+  category: ExposureCategory;
+  title: string;
+  dogIds: string[];
+  status: ExposureStatus;
+  log: ExposureLogEntry[];
+};
+
+export type RelationshipLog = {
+  id: string;
+  dogIds: [string, string];
+  date: string;
+  comfort: number;
+  sharedToys: number;
+  sharedBeds: number;
+  sharedWalks: number;
+  bodyLanguage: number;
+  resourceGuarding: number;
+  playQuality: number;
+  corrections: number;
+  recoveryMinutes: number;
+  notes: string;
+};
+
+export type NotificationItem = {
+  id: string;
+  kind: "overdue-task" | "upcoming-health" | "milestone-unlocked" | "missed-task";
+  title: string;
+  detail: string;
+  date: string;
+  severity: "info" | "warning" | "critical";
 };
 
 export type FeedbackLoopRule = {
