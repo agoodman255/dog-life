@@ -8,7 +8,7 @@ const queryClient = new QueryClient();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/public-sw.js").catch(() => undefined);
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}public-sw.js`).catch(() => undefined);
   });
 }
 

@@ -1,5 +1,7 @@
 const CACHE_NAME = "dog-life-os-v2";
-const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
+const CORE_ASSETS = ["", "index.html", "manifest.webmanifest", "icon.svg"].map(
+  (path) => new URL(path, self.registration.scope).href,
+);
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -33,6 +35,6 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(event.request).then((cached) => cached ?? caches.match("/"))),
+      .catch(() => caches.match(event.request).then((cached) => cached ?? caches.match(self.registration.scope))),
   );
 });

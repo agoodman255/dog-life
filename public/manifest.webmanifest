@@ -1,13 +1,13 @@
 {
   "name": "Dog Life OS",
   "short_name": "Dog Life",
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#f6f3ec",
   "theme_color": "#153d35",
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "icon.svg",
       "sizes": "any",
       "type": "image/svg+xml"
     }
