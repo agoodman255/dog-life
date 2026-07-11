@@ -35,12 +35,16 @@ export function FeedbackWizard({ page, onClose }: { page: string; onClose: () =>
   const [locationNote, setLocationNote] = useState("");
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const authorEmail = session?.user?.email ?? "";
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!message.trim()) return;
-    await store.productFeedback.add({
+    setSubmitting(true);
+    setError(false);
+    const ok = await store.productFeedback.add({
       id: makeId("feedback"),
       page,
       feedbackType,
@@ -49,7 +53,12 @@ export function FeedbackWizard({ page, onClose }: { page: string; onClose: () =>
       message: message.trim(),
       createdAt: new Date().toISOString(),
     });
-    setSubmitted(true);
+    setSubmitting(false);
+    if (ok) {
+      setSubmitted(true);
+    } else {
+      setError(true);
+    }
   }
 
   if (submitted) {
@@ -96,8 +105,14 @@ export function FeedbackWizard({ page, onClose }: { page: string; onClose: () =>
             placeholder="Describe the issue, idea, or question…"
           />
         </label>
-        <button className="primary-button" type="submit">
-          Send feedback
+        {error && (
+          <p className="form-error">
+            That didn't save — the server rejected it (check the browser console for details). Your message is still
+            here; try again in a moment.
+          </p>
+        )}
+        <button className="primary-button" type="submit" disabled={submitting}>
+          {submitting ? "Sending…" : "Send feedback"}
         </button>
       </form>
     </Modal>

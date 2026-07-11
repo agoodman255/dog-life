@@ -74,12 +74,15 @@ function usePersistedCollection<T extends { id: string }>(key: string, seed: T[]
 
   async function add(item: T) {
     setItems((prev) => [...prev, item]);
+    return true;
   }
   async function update(id: string, patch: Partial<T>) {
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+    return true;
   }
   async function remove(id: string) {
     setItems((prev) => prev.filter((item) => item.id !== id));
+    return true;
   }
   return { items, setItems, add, update, remove, loaded: true };
 }
@@ -132,22 +135,23 @@ function useSupabaseCollection<T extends { id: string }>(table: string, mapper: 
 
   async function add(item: T) {
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) return false;
     const householdId = await getHouseholdId();
     const { data, error } = await supabase.from(table).insert(mapper.toRow(item, householdId)).select().single();
     if (error) {
       console.error(`Failed to add to ${table}:`, error.message);
-      return;
+      return false;
     }
     const mapped = mapper.fromRow(data);
     setItems((prev) => (prev.some((existing) => existing.id === mapped.id) ? prev : [...prev, mapped]));
+    return true;
   }
 
   async function update(id: string, patch: Partial<T>) {
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) return false;
     const current = itemsRef.current.find((item) => item.id === id);
-    if (!current) return;
+    if (!current) return false;
     const merged = { ...current, ...patch };
     const householdId = await getHouseholdId();
     const row = mapper.toRow(merged, householdId);
@@ -155,20 +159,22 @@ function useSupabaseCollection<T extends { id: string }>(table: string, mapper: 
     const { error } = await supabase.from(table).update(row).eq("id", id);
     if (error) {
       console.error(`Failed to update ${table}:`, error.message);
-      return;
+      return false;
     }
     setItems((prev) => prev.map((item) => (item.id === id ? merged : item)));
+    return true;
   }
 
   async function remove(id: string) {
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) return false;
     const { error } = await supabase.from(table).delete().eq("id", id);
     if (error) {
       console.error(`Failed to remove from ${table}:`, error.message);
-      return;
+      return false;
     }
     setItems((prev) => prev.filter((item) => item.id !== id));
+    return true;
   }
 
   async function replaceAll(next: T[]) {
