@@ -7,6 +7,7 @@ import {
   Home,
   Import,
   ListTodo,
+  MessageSquarePlus,
   Moon,
   PawPrint,
   Search,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { FeedbackWizard } from "./components";
 import { NotificationBell } from "./views";
 import {
   AnalyticsView,
@@ -77,7 +79,9 @@ function Shell() {
   const [query, setQuery] = useState("");
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const [largeText, setLargeText] = useState<boolean>(loadLargeText);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const currentPageLabel = navItems.find((item) => item.id === active)?.label ?? active;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -139,6 +143,10 @@ function Shell() {
             </button>
           ))}
         </nav>
+        <button className="sidebar-feedback" type="button" onClick={() => setFeedbackOpen(true)}>
+          <MessageSquarePlus size={18} aria-hidden />
+          <span>Feedback</span>
+        </button>
       </aside>
 
       <main>
@@ -220,6 +228,8 @@ function Shell() {
           />
         )}
       </main>
+
+      {feedbackOpen && <FeedbackWizard page={currentPageLabel} onClose={() => setFeedbackOpen(false)} />}
     </div>
   );
 }

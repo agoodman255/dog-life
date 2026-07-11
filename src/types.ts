@@ -179,6 +179,18 @@ export type NotificationItem = {
   severity: "info" | "warning" | "critical";
 };
 
+export type FeedbackType = "quick-fix" | "feature" | "comment" | "question";
+
+export type ProductFeedback = {
+  id: string;
+  page: string;
+  feedbackType: FeedbackType;
+  authorEmail: string;
+  locationNote: string;
+  message: string;
+  createdAt: string;
+};
+
 export type FeedbackLoopRule = {
   id: string;
   trigger: string;

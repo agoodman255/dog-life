@@ -158,6 +158,20 @@ create table if not exists feedback (
   unique (household_id, task_id)
 );
 
+-- In-app feedback submitted via the sidebar wizard — bugs, feature ideas,
+-- comments, questions. Pulled into markdown via scripts/export-feedback.ts
+-- for review in Claude Code sessions rather than read directly from here.
+create table if not exists product_feedback (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households (id) on delete cascade,
+  page text not null default '',
+  feedback_type text not null default 'comment',
+  author_email text not null default '',
+  location_note text not null default '',
+  message text not null,
+  created_at timestamptz not null default now()
+);
+
 -- ---------------------------------------------------------------------------
 -- Row Level Security
 --
@@ -179,6 +193,7 @@ alter table journal_entries enable row level security;
 alter table exposure_items enable row level security;
 alter table relationship_logs enable row level security;
 alter table feedback enable row level security;
+alter table product_feedback enable row level security;
 
 do $$
 declare
@@ -187,7 +202,7 @@ begin
   for t in select unnest(array[
     'households', 'people', 'dogs', 'tasks', 'milestones',
     'health_events', 'journal_entries', 'exposure_items',
-    'relationship_logs', 'feedback'
+    'relationship_logs', 'feedback', 'product_feedback'
   ])
   loop
     if not exists (
@@ -212,7 +227,7 @@ begin
   for t in select unnest(array[
     'households', 'people', 'dogs', 'tasks', 'milestones',
     'health_events', 'journal_entries', 'exposure_items',
-    'relationship_logs', 'feedback'
+    'relationship_logs', 'feedback', 'product_feedback'
   ])
   loop
     if not exists (

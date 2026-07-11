@@ -22,6 +22,7 @@ import {
   JournalEntry,
   Milestone,
   Person,
+  ProductFeedback,
   RelationshipLog,
   Task,
 } from "./types";
@@ -201,6 +202,7 @@ function useDataStore() {
   const journalEntries = useCollection<JournalEntry>("journal-entries", seedJournalEntries, "journal_entries", mapping.journalEntry);
   const exposureItems = useCollection<ExposureItem>("exposure-items", seedExposureItems, "exposure_items", mapping.exposureItem);
   const relationshipLogs = useCollection<RelationshipLog>("relationship-logs", seedRelationshipLogs, "relationship_logs", mapping.relationshipLog);
+  const productFeedback = useCollection<ProductFeedback>("product-feedback", [], "product_feedback", mapping.productFeedback);
 
   const backend = isBackendConfigured();
   const local = usePersistedCollection<DailyFeedback & { id: string }>(
@@ -360,6 +362,7 @@ function useDataStore() {
     journalEntries,
     exposureItems,
     relationshipLogs,
+    productFeedback,
     feedback,
     feedbackLoopRules,
     completeTask,

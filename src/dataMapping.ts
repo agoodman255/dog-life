@@ -7,6 +7,7 @@ import {
   JournalEntry,
   Milestone,
   Person,
+  ProductFeedback,
   RelationshipLog,
   Task,
 } from "./types";
@@ -317,6 +318,32 @@ export const feedback = {
       fear: item.fear,
       guarding: item.guarding,
       completed_at: item.completedAt,
+    };
+  },
+};
+
+export const productFeedback = {
+  fromRow(row: any): ProductFeedback {
+    return {
+      id: row.id,
+      page: row.page,
+      feedbackType: row.feedback_type,
+      authorEmail: row.author_email,
+      locationNote: row.location_note,
+      message: row.message,
+      createdAt: row.created_at,
+    };
+  },
+  toRow(item: ProductFeedback, householdId: string) {
+    return {
+      id: item.id,
+      household_id: householdId,
+      page: item.page,
+      feedback_type: item.feedbackType,
+      author_email: item.authorEmail,
+      location_note: item.locationNote,
+      message: item.message,
+      created_at: item.createdAt,
     };
   },
 };

@@ -1,7 +1,8 @@
 import { Activity, Check, Lock, Play, X } from "lucide-react";
-import { ReactNode, useState } from "react";
-import { useStore } from "./store";
-import { DailyFeedback, Dog, Milestone, Person, Task } from "./types";
+import { FormEvent, ReactNode, useState } from "react";
+import { useSession } from "./auth";
+import { makeId, useStore } from "./store";
+import { DailyFeedback, Dog, FeedbackType, Milestone, Person, Task } from "./types";
 import { computeMilestoneStatus, milestoneProgress, resolveDependencies } from "./utils";
 
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -17,6 +18,89 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
         <div className="modal-body">{children}</div>
       </div>
     </div>
+  );
+}
+
+const FEEDBACK_TYPES: { id: FeedbackType; label: string }[] = [
+  { id: "quick-fix", label: "Quick fix" },
+  { id: "feature", label: "Feature" },
+  { id: "comment", label: "Comment" },
+  { id: "question", label: "Question" },
+];
+
+export function FeedbackWizard({ page, onClose }: { page: string; onClose: () => void }) {
+  const store = useStore();
+  const { session } = useSession();
+  const [feedbackType, setFeedbackType] = useState<FeedbackType>("comment");
+  const [locationNote, setLocationNote] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const authorEmail = session?.user?.email ?? "";
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!message.trim()) return;
+    await store.productFeedback.add({
+      id: makeId("feedback"),
+      page,
+      feedbackType,
+      authorEmail,
+      locationNote: locationNote.trim(),
+      message: message.trim(),
+      createdAt: new Date().toISOString(),
+    });
+    setSubmitted(true);
+  }
+
+  if (submitted) {
+    return (
+      <Modal title="Feedback sent" onClose={onClose}>
+        <p className="form-success">Thanks — that's been logged and synced.</p>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal title="Send feedback" onClose={onClose}>
+      <form className="entity-form" onSubmit={handleSubmit}>
+        <p className="small">
+          From {authorEmail || "this device"} · {page}
+        </p>
+        <div className="subtabs" role="group" aria-label="Feedback type">
+          {FEEDBACK_TYPES.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={feedbackType === option.id ? "active" : ""}
+              onClick={() => setFeedbackType(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <label>
+          Section or specific place on the page (optional)
+          <input
+            value={locationNote}
+            onChange={(event) => setLocationNote(event.target.value)}
+            placeholder="e.g. Dashboard, task checklist"
+          />
+        </label>
+        <label>
+          What's on your mind?
+          <textarea
+            required
+            rows={4}
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            placeholder="Describe the issue, idea, or question…"
+          />
+        </label>
+        <button className="primary-button" type="submit">
+          Send feedback
+        </button>
+      </form>
+    </Modal>
   );
 }
 
