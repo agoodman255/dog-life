@@ -31,8 +31,8 @@ export const person = {
   fromRow(row: any): Person {
     return { id: row.id, householdId: row.household_id, name: row.name, color: row.color };
   },
-  toRow(item: Person) {
-    return { id: item.id, household_id: item.householdId, name: item.name, color: item.color };
+  toRow(item: Person, householdId: string) {
+    return { id: item.id, household_id: householdId, name: item.name, color: item.color };
   },
 };
 
@@ -72,10 +72,10 @@ export const dog = {
       status: row.status,
     };
   },
-  toRow(item: Dog) {
+  toRow(item: Dog, householdId: string) {
     return {
       id: item.id,
-      household_id: item.householdId,
+      household_id: householdId,
       name: item.name,
       breed: item.breed,
       birthday: item.birthday || null,
