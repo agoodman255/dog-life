@@ -190,11 +190,14 @@ begin
     'relationship_logs', 'feedback'
   ])
   loop
-    execute format('drop policy if exists "authenticated read/write" on %I;', t);
-    execute format(
-      'create policy "authenticated read/write" on %I for all to authenticated using (true) with check (true);',
-      t
-    );
+    if not exists (
+      select 1 from pg_policies where tablename = t and policyname = 'authenticated read/write'
+    ) then
+      execute format(
+        'create policy "authenticated read/write" on %I for all to authenticated using (true) with check (true);',
+        t
+      );
+    end if;
   end loop;
 end $$;
 
@@ -202,6 +205,20 @@ end $$;
 -- Realtime
 -- ---------------------------------------------------------------------------
 
-alter publication supabase_realtime add table
-  households, people, dogs, tasks, milestones, health_events,
-  journal_entries, exposure_items, relationship_logs, feedback;
+do $$
+declare
+  t text;
+begin
+  for t in select unnest(array[
+    'households', 'people', 'dogs', 'tasks', 'milestones',
+    'health_events', 'journal_entries', 'exposure_items',
+    'relationship_logs', 'feedback'
+  ])
+  loop
+    if not exists (
+      select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table %I;', t);
+    end if;
+  end loop;
+end $$;
