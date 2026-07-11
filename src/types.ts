@@ -46,7 +46,6 @@ export type Person = {
   householdId: string;
   name: string;
   color: string;
-  taskIds: string[];
 };
 
 export type TaskCategory =

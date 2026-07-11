@@ -33,6 +33,7 @@ import {
   TrainingView,
 } from "./views";
 import { DataProvider, useStore } from "./store";
+import { AuthGate } from "./auth";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: Home },
@@ -225,8 +226,10 @@ function Shell() {
 
 export function App() {
   return (
-    <DataProvider>
-      <Shell />
-    </DataProvider>
+    <AuthGate>
+      <DataProvider>
+        <Shell />
+      </DataProvider>
+    </AuthGate>
   );
 }

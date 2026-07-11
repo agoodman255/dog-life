@@ -14,7 +14,7 @@ import {
   Target,
   Type as TypeIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import {
   AppMetric,
   DogProfile,
@@ -40,6 +40,8 @@ import {
   taskFormValuesToTask,
 } from "./forms";
 import { makeId, useStore } from "./store";
+import { setPassword as setAccountPassword, signOut, useSession } from "./auth";
+import { isBackendConfigured } from "./supabaseClient";
 import { Dog, ExposureCategory, ExposureItem, FeedbackLoopRule, NotificationItem, Task } from "./types";
 import { ageLabel, computeNotifications, milestoneProgress, readinessScore, useAdaptivePlan } from "./utils";
 
@@ -268,7 +270,7 @@ export function ProfileView() {
           <PersonForm
             onCancel={() => setPersonModal(false)}
             onSubmit={(values) => {
-              people.add({ id: makeId("person"), householdId: "andrew-bree", taskIds: [], ...values });
+              people.add({ id: makeId("person"), householdId: "andrew-bree", ...values });
               setPersonModal(false);
             }}
           />
@@ -681,6 +683,56 @@ function FeedbackLoopView() {
   );
 }
 
+function AccountSection() {
+  const { session } = useSession();
+  const [password, setPasswordValue] = useState("");
+  const [status, setStatus] = useState<{ kind: "idle" | "success" | "error"; message?: string }>({ kind: "idle" });
+  const [submitting, setSubmitting] = useState(false);
+
+  if (!isBackendConfigured()) return null;
+
+  async function handleSetPassword(event: FormEvent) {
+    event.preventDefault();
+    setSubmitting(true);
+    try {
+      await setAccountPassword(password);
+      setStatus({ kind: "success", message: "Password updated." });
+      setPasswordValue("");
+    } catch (error) {
+      setStatus({ kind: "error", message: error instanceof Error ? error.message : "Could not update password." });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Account</p>
+          <h2>{session?.user.email}</h2>
+        </div>
+        <button className="text-button" type="button" onClick={() => signOut()}>
+          Sign out
+        </button>
+      </div>
+      <form className="entity-form" onSubmit={handleSetPassword}>
+        <label>
+          Set or update password (optional — magic link always works without one)
+          <input type="password" value={password} onChange={(event) => setPasswordValue(event.target.value)} minLength={6} />
+        </label>
+        {status.kind === "success" && <p className="form-success">{status.message}</p>}
+        {status.kind === "error" && <p className="form-error">{status.message}</p>}
+        <div className="form-actions">
+          <button className="primary-button" type="submit" disabled={submitting || password.length < 6}>
+            Update password
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 export function SettingsView({
   theme,
   onToggleTheme,
@@ -700,6 +752,7 @@ export function SettingsView({
   const [personModal, setPersonModal] = useState(false);
   return (
     <div className="stack settings">
+      <AccountSection />
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -739,7 +792,11 @@ export function SettingsView({
         </div>
         <div className="settings-row">
           <Info size={18} aria-hidden />
-          <p>Roles, invitations, and notification preferences arrive with Supabase Auth in the planned backend path.</p>
+          <p>
+            {isBackendConfigured()
+              ? "Signed-in accounts now sync in real time across devices. Notification preferences per person can layer on top later."
+              : "Roles, invitations, and notification preferences arrive with Supabase Auth in the planned backend path."}
+          </p>
         </div>
       </section>
       <section className="panel">
@@ -769,7 +826,7 @@ export function SettingsView({
           <PersonForm
             onCancel={() => setPersonModal(false)}
             onSubmit={(values) => {
-              people.add({ id: makeId("person"), householdId: "andrew-bree", taskIds: [], ...values });
+              people.add({ id: makeId("person"), householdId: "andrew-bree", ...values });
               setPersonModal(false);
             }}
           />

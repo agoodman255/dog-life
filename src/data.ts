@@ -26,14 +26,12 @@ export const people: Person[] = [
     householdId: "andrew-bree",
     name: "Andrew",
     color: "#2f6f64",
-    taskIds: ["morning-potty", "name-recall"],
   },
   {
     id: "bree",
     householdId: "andrew-bree",
     name: "Bree",
     color: "#b46b55",
-    taskIds: ["breakfast-reset", "parallel-walk", "handling"],
   },
 ];
 

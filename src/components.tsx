@@ -289,7 +289,7 @@ export function DogProfile({ dog, onEdit, onDelete }: { dog: Dog; onEdit?: (dog:
 
 export function HumanProfile({ person }: { person: Person }) {
   const { tasks } = useStore();
-  const assignedTasks = tasks.items.filter((task) => person.taskIds.includes(task.id));
+  const assignedTasks = tasks.items.filter((task) => task.assignedTo === person.id);
   return (
     <article className="human-card">
       <span style={{ background: person.color }} />
