@@ -87,7 +87,12 @@ function usePersistedCollection<T extends { id: string }>(key: string, seed: T[]
   return { items, setItems, add, update, remove, loaded: true };
 }
 
-function useSupabaseCollection<T extends { id: string }>(table: string, mapper: Mapper<T>) {
+// Most tables use a DB-generated uuid primary key (gen_random_uuid() default),
+// so the app-side id from makeId() must be dropped before insert — Postgres
+// rejects it outright ("invalid input syntax for type uuid"). Milestones and
+// exposure items instead use meaningful text-slug ids with no DB default, so
+// those must be sent as-is.
+function useSupabaseCollection<T extends { id: string }>(table: string, mapper: Mapper<T>, idStrategy: "server" | "client" = "server") {
   const [items, setItems] = useState<T[]>([]);
   const [loaded, setLoaded] = useState(false);
   const itemsRef = useRef(items);
@@ -137,7 +142,9 @@ function useSupabaseCollection<T extends { id: string }>(table: string, mapper: 
     const supabase = getSupabaseClient();
     if (!supabase) return false;
     const householdId = await getHouseholdId();
-    const { data, error } = await supabase.from(table).insert(mapper.toRow(item, householdId)).select().single();
+    const row = mapper.toRow(item, householdId);
+    if (idStrategy === "server") delete (row as { id?: unknown }).id;
+    const { data, error } = await supabase.from(table).insert(row).select().single();
     if (error) {
       console.error(`Failed to add to ${table}:`, error.message);
       return false;
@@ -192,9 +199,15 @@ function useSupabaseCollection<T extends { id: string }>(table: string, mapper: 
   return { items, setItems: replaceAll, add, update, remove, loaded };
 }
 
-function useCollection<T extends { id: string }>(key: string, seed: T[], table: string, mapper: Mapper<T>) {
+function useCollection<T extends { id: string }>(
+  key: string,
+  seed: T[],
+  table: string,
+  mapper: Mapper<T>,
+  idStrategy: "server" | "client" = "server",
+) {
   const local = usePersistedCollection<T>(key, seed);
-  const remote = useSupabaseCollection<T>(table, mapper);
+  const remote = useSupabaseCollection<T>(table, mapper, idStrategy);
   return isBackendConfigured() ? remote : local;
 }
 
@@ -203,10 +216,16 @@ function useDataStore() {
   const dogs = useCollection<Dog>("dogs", seedDogs, "dogs", mapping.dog);
   const people = useCollection<Person>("people", seedPeople, "people", mapping.person);
   const tasks = useCollection<Task>("tasks", seedTasks, "tasks", mapping.task);
-  const milestones = useCollection<Milestone>("milestones", seedMilestones, "milestones", mapping.milestone);
+  const milestones = useCollection<Milestone>("milestones", seedMilestones, "milestones", mapping.milestone, "client");
   const healthEvents = useCollection<HealthEvent>("health-events", seedHealthEvents, "health_events", mapping.healthEvent);
   const journalEntries = useCollection<JournalEntry>("journal-entries", seedJournalEntries, "journal_entries", mapping.journalEntry);
-  const exposureItems = useCollection<ExposureItem>("exposure-items", seedExposureItems, "exposure_items", mapping.exposureItem);
+  const exposureItems = useCollection<ExposureItem>(
+    "exposure-items",
+    seedExposureItems,
+    "exposure_items",
+    mapping.exposureItem,
+    "client",
+  );
   const relationshipLogs = useCollection<RelationshipLog>("relationship-logs", seedRelationshipLogs, "relationship_logs", mapping.relationshipLog);
   const productFeedback = useCollection<ProductFeedback>("product-feedback", [], "product_feedback", mapping.productFeedback);
 
