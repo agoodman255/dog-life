@@ -151,13 +151,20 @@ export function TaskCard({
 }: {
   task: Task;
   feedback?: DailyFeedback;
-  onComplete: (task: Task, rating: number) => void;
+  onComplete: (task: Task, rating: number) => Promise<boolean> | boolean | void;
   onDelete?: (task: Task) => void;
 }) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [failed, setFailed] = useState(false);
 
   function toggleItem(item: string) {
     setChecked((prev) => ({ ...prev, [item]: !prev[item] }));
+  }
+
+  async function handleRate(rating: number) {
+    setFailed(false);
+    const ok = await onComplete(task, rating);
+    if (ok === false) setFailed(true);
   }
 
   return (
@@ -204,6 +211,7 @@ export function TaskCard({
             </strong>
           )}
         </div>
+        {failed && <p className="form-error">That didn't save — check the browser console and try again.</p>}
         <div className="rating-row" aria-label={`Complete ${task.title}`}>
           {[1, 2, 3, 4, 5].map((rating) => (
             <button
@@ -211,7 +219,7 @@ export function TaskCard({
               type="button"
               className={feedback?.rating === rating ? "selected" : ""}
               aria-pressed={feedback?.rating === rating}
-              onClick={() => onComplete(task, rating)}
+              onClick={() => handleRate(rating)}
             >
               {rating}
             </button>

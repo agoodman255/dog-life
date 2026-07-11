@@ -299,16 +299,20 @@ function useDataStore() {
     if (!backend) {
       const next = [...local.items.filter((item) => item.taskId !== task.id), { ...entry, id: task.id }];
       local.setItems(next);
-      return;
+      return true;
     }
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) return false;
     const householdId = await getHouseholdId();
     const { error } = await supabase
       .from("feedback")
       .upsert(mapping.feedback.toRow(entry, householdId), { onConflict: "household_id,task_id" });
-    if (error) console.error("Failed to log feedback:", error.message);
+    if (error) {
+      console.error("Failed to log feedback:", error.message);
+      return false;
+    }
     setRemoteFeedback((prev) => [...prev.filter((item) => item.taskId !== task.id), entry]);
+    return true;
   }
 
   function logMilestoneSession(milestoneId: string, stepTitle: string) {
