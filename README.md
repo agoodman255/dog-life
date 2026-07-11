@@ -4,6 +4,8 @@ Adaptive planning for puppy raising and lifelong multi-dog household management.
 
 Dog Life OS combines daily routines, training progression, milestone dependencies, health scheduling, relationship tracking, and AI-coach-ready feedback loops. Version 1 is local-first and seeded for Andrew, Bree, a new puppy, and Griz, while the architecture is organized around multiple dogs and multiple household members.
 
+Dog training is the first chapter, not the whole book — see [BACKLOG.md](BACKLOG.md) for where this grows into a full household life app (human health, spending, chores, trip planning) and how those features are prioritized.
+
 ## Run locally
 
 ```bash
