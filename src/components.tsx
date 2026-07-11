@@ -97,9 +97,23 @@ export function TaskCard({
             </label>
           ))}
         </div>
+        <div className="rating-label">
+          <span>{feedback?.completed ? "Logged — how did it go?" : "How did it go?"}</span>
+          {feedback?.completed && (
+            <strong>
+              <Check size={14} aria-hidden /> Rated {feedback.rating}/5
+            </strong>
+          )}
+        </div>
         <div className="rating-row" aria-label={`Complete ${task.title}`}>
           {[1, 2, 3, 4, 5].map((rating) => (
-            <button key={rating} type="button" onClick={() => onComplete(task, rating)}>
+            <button
+              key={rating}
+              type="button"
+              className={feedback?.rating === rating ? "selected" : ""}
+              aria-pressed={feedback?.rating === rating}
+              onClick={() => onComplete(task, rating)}
+            >
               {rating}
             </button>
           ))}

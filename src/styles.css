@@ -419,10 +419,27 @@ main {
   accent-color: var(--teal);
 }
 
+.rating-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.rating-label strong {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--teal);
+}
+
 .rating-row {
   display: flex;
   gap: 6px;
-  margin-top: 14px;
+  margin-top: 8px;
 }
 
 .rating-row button {
@@ -437,6 +454,12 @@ main {
 
 .rating-row button:hover {
   border-color: var(--teal);
+}
+
+.rating-row button.selected {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
 }
 
 .milestone-grid {
