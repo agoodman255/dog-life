@@ -9,3 +9,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# Generated locally by scripts/export-feedback.ts — contains your email
+# address (whoever's logged in when they submit feedback), so it stays out
+# of the public repo. Regenerate any time; I can read it directly during
+# sessions since it's still on disk.
+FEEDBACK.md
