@@ -1,4 +1,6 @@
 import {
+  AloneTimeLog,
+  CalendarEvent,
   DailyFeedback,
   Dog,
   ExposureItem,
@@ -318,6 +320,63 @@ export const feedback = {
       fear: item.fear,
       guarding: item.guarding,
       completed_at: item.completedAt,
+    };
+  },
+};
+
+export const calendarEvent = {
+  fromRow(row: any): CalendarEvent {
+    return {
+      id: row.id,
+      title: row.title,
+      category: row.category,
+      kind: row.kind,
+      dayOfWeek: row.day_of_week ?? undefined,
+      activeFrom: row.active_from ?? undefined,
+      activeTo: row.active_to ?? undefined,
+      date: row.date ?? undefined,
+      windowLabel: row.window_label,
+      timeLabel: row.time_label,
+      durationHours: row.duration_hours ?? undefined,
+      coverageNeeded: row.coverage_needed,
+      status: row.status,
+      importance: row.importance ?? undefined,
+      notes: row.notes,
+    };
+  },
+  toRow(item: CalendarEvent, householdId: string) {
+    return {
+      id: item.id,
+      household_id: householdId,
+      title: item.title,
+      category: item.category,
+      kind: item.kind,
+      day_of_week: item.dayOfWeek ?? null,
+      active_from: item.activeFrom || null,
+      active_to: item.activeTo || null,
+      date: item.date || null,
+      window_label: item.windowLabel,
+      time_label: item.timeLabel,
+      duration_hours: item.durationHours ?? null,
+      coverage_needed: item.coverageNeeded,
+      status: item.status,
+      importance: item.importance ?? null,
+      notes: item.notes,
+    };
+  },
+};
+
+export const aloneTimeLog = {
+  fromRow(row: any): AloneTimeLog {
+    return { id: row.id, date: row.date, durationMinutes: row.duration_minutes, notes: row.notes };
+  },
+  toRow(item: AloneTimeLog, householdId: string) {
+    return {
+      id: item.id,
+      household_id: householdId,
+      date: item.date,
+      duration_minutes: item.durationMinutes,
+      notes: item.notes,
     };
   },
 };

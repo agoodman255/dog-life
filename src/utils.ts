@@ -1,13 +1,27 @@
 import { useMemo } from "react";
-import { DailyFeedback, HealthEvent, Milestone, NotificationItem, Task } from "./types";
+import { AloneTimeLog, CalendarEvent, DailyFeedback, HealthEvent, Milestone, NotificationItem, Task } from "./types";
+
+// `new Date("2026-08-01")` parses as UTC midnight per spec, which renders as
+// the previous day in any timezone behind UTC (e.g. Mountain) — exactly the
+// household this app is built for. Appending a local time-of-day avoids that
+// off-by-one for every date-only ("YYYY-MM-DD") string in the app.
+export function parseLocalDate(date: string): Date {
+  return new Date(`${date}T00:00:00`);
+}
+
+export function formatDate(date: string, options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" }) {
+  return parseLocalDate(date).toLocaleDateString(undefined, options);
+}
 
 export function weeksOld(date: string) {
-  const birthday = new Date(date).getTime();
+  const birthday = parseLocalDate(date).getTime();
   return Math.max(0, Math.floor((Date.now() - birthday) / (1000 * 60 * 60 * 24 * 7)));
 }
 
 export function ageLabel(date: string) {
-  const birth = new Date(date);
+  if (!date) return "Age TBD";
+  const birth = parseLocalDate(date);
+  if (Number.isNaN(birth.getTime())) return "Age TBD";
   const now = new Date();
   let months = (now.getFullYear() - birth.getFullYear()) * 12 + now.getMonth() - birth.getMonth();
   if (now.getDate() < birth.getDate()) months -= 1;
@@ -102,6 +116,44 @@ export function useAdaptivePlan(tasks: Task[], feedback: DailyFeedback[]) {
   }, [tasks, feedback]);
 }
 
+function weekStart(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setDate(d.getDate() - d.getDay());
+  return d.toISOString().slice(0, 10);
+}
+
+export function heavyWeeks(events: CalendarEvent[]): Set<string> {
+  const weeks = new Set<string>();
+  events.forEach((event) => {
+    if (event.importance === "marquee" && event.date) weeks.add(weekStart(event.date));
+  });
+  return weeks;
+}
+
+export function isHeavyWeek(event: CalendarEvent, weeks: Set<string>): boolean {
+  return !!event.date && weeks.has(weekStart(event.date));
+}
+
+export type AloneTimeReadiness = {
+  maxAchievedMinutes: number;
+  nextEvent: CalendarEvent | null;
+  requiredMinutes: number;
+  gapMinutes: number;
+  ready: boolean;
+};
+
+export function computeAloneTimeReadiness(logs: AloneTimeLog[], events: CalendarEvent[]): AloneTimeReadiness {
+  const maxAchievedMinutes = logs.reduce((max, log) => Math.max(max, log.durationMinutes), 0);
+  const now = Date.now();
+  const upcoming = events
+    .filter((event) => (event.durationHours ?? 0) > 0 && event.date && parseLocalDate(event.date).getTime() >= now)
+    .sort((a, b) => parseLocalDate(a.date as string).getTime() - parseLocalDate(b.date as string).getTime());
+  const nextEvent = upcoming[0] ?? null;
+  const requiredMinutes = nextEvent?.durationHours ? nextEvent.durationHours * 60 : 0;
+  const gapMinutes = Math.max(0, requiredMinutes - maxAchievedMinutes);
+  return { maxAchievedMinutes, nextEvent, requiredMinutes, gapMinutes, ready: requiredMinutes > 0 && gapMinutes === 0 };
+}
+
 export function computeNotifications(
   tasks: Task[],
   feedback: DailyFeedback[],
@@ -126,7 +178,7 @@ export function computeNotifications(
   });
 
   healthEvents.forEach((event) => {
-    const eventDate = new Date(event.date);
+    const eventDate = parseLocalDate(event.date);
     const daysAway = Math.ceil((eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     if (daysAway < 0) {
       notifications.push({

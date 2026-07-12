@@ -26,6 +26,8 @@ import {
 } from "./components";
 import { Modal } from "./components";
 import {
+  AloneTimeLogForm,
+  CalendarEventForm,
   DogForm,
   ExposureLogForm,
   HealthEventForm,
@@ -33,6 +35,8 @@ import {
   PersonForm,
   RelationshipLogForm,
   TaskForm,
+  aloneTimeLogFormValuesToLog,
+  calendarEventFormValuesToEvent,
   dogFormValuesToDog,
   healthEventFormValuesToEvent,
   journalFormValuesToEntry,
@@ -43,7 +47,18 @@ import { makeId, useStore } from "./store";
 import { setPassword as setAccountPassword, signOut, useSession } from "./auth";
 import { isBackendConfigured } from "./supabaseClient";
 import { Dog, ExposureCategory, ExposureItem, FeedbackLoopRule, NotificationItem, Task } from "./types";
-import { ageLabel, computeNotifications, milestoneProgress, readinessScore, useAdaptivePlan } from "./utils";
+import {
+  ageLabel,
+  computeAloneTimeReadiness,
+  computeNotifications,
+  formatDate,
+  heavyWeeks,
+  isHeavyWeek,
+  milestoneProgress,
+  parseLocalDate,
+  readinessScore,
+  useAdaptivePlan,
+} from "./utils";
 
 export function NotificationBell() {
   const { tasks, feedback, healthEvents, milestones } = useStore();
@@ -76,7 +91,7 @@ export function DashboardView() {
   const adaptive = useAdaptivePlan(tasks.items, feedback);
   const feedbackByTask = new Map(feedback.map((item) => [item.taskId, item]));
   const puppy = dogs.items.find((dog) => dog.status === "puppy") ?? dogs.items[0];
-  const overdue = healthEvents.items.filter((event) => new Date(event.date) < new Date()).length;
+  const overdue = healthEvents.items.filter((event) => parseLocalDate(event.date) < new Date()).length;
   const currentMilestone =
     milestones.items.find((item) => item.status !== "completed" && item.dependencies.length > 0) ?? milestones.items[0];
 
@@ -158,8 +173,29 @@ export function DashboardView() {
   );
 }
 
+const dayLabels: Record<string, string> = {
+  monday: "Mon",
+  tuesday: "Tue",
+  wednesday: "Wed",
+  thursday: "Thu",
+  friday: "Fri",
+  saturday: "Sat",
+  sunday: "Sun",
+};
+
 export function CalendarView() {
-  const { healthEvents, milestones, tasks, dogs } = useStore();
+  const { healthEvents, milestones, tasks, dogs, calendarEvents, aloneTimeLogs } = useStore();
+  const [eventModal, setEventModal] = useState<"new" | (typeof calendarEvents.items)[number] | null>(null);
+  const [aloneTimeModal, setAloneTimeModal] = useState(false);
+
+  const recurring = calendarEvents.items.filter((event) => event.kind === "recurring");
+  const upcoming = calendarEvents.items
+    .filter((event) => event.kind === "one-off")
+    .slice()
+    .sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999"));
+  const weeks = heavyWeeks(calendarEvents.items);
+  const readiness = computeAloneTimeReadiness(aloneTimeLogs.items, calendarEvents.items);
+
   return (
     <section className="panel">
       <div className="section-heading">
@@ -171,7 +207,7 @@ export function CalendarView() {
       <div className="calendar-grid">
         {healthEvents.items.map((event) => (
           <article className="event" key={event.id}>
-            <span>{new Date(event.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+            <span>{formatDate(event.date)}</span>
             <strong>{event.title}</strong>
             <p>
               {event.kind} · {dogs.items.find((dog) => dog.id === event.dogId)?.name}
@@ -201,6 +237,106 @@ export function CalendarView() {
             </article>
           ))}
       </div>
+
+      <div className="row between" style={{ marginTop: 24 }}>
+        <div>
+          <p className="eyebrow">Alone-time readiness</p>
+          <h3 style={{ margin: 0 }}>
+            {readiness.nextEvent ? `Next up: ${readiness.nextEvent.title}` : "No upcoming commitment needs coverage yet"}
+          </h3>
+        </div>
+        <button className="text-button" type="button" onClick={() => setAloneTimeModal(true)}>
+          <Plus size={16} aria-hidden /> Log alone time
+        </button>
+      </div>
+      {readiness.nextEvent && (
+        <p className={`readiness-note ${readiness.ready ? "ready" : "gap"}`}>
+          {readiness.ready
+            ? `Logged max of ${Math.round(readiness.maxAchievedMinutes / 60)}h already meets the ${readiness.requiredMinutes / 60}h needed for ${readiness.nextEvent.title}.`
+            : `Best logged so far is ${Math.round(readiness.maxAchievedMinutes / 60)}h, but ${readiness.nextEvent.title} on ${
+                readiness.nextEvent.date ? formatDate(readiness.nextEvent.date) : "an upcoming date"
+              } needs ${readiness.requiredMinutes / 60}h — ${Math.round(readiness.gapMinutes / 60)}h gap to close.`}
+        </p>
+      )}
+
+      <div className="row between" style={{ marginTop: 24 }}>
+        <div>
+          <p className="eyebrow">Recurring commitments</p>
+          <h3 style={{ margin: 0 }}>Weekly household schedule</h3>
+        </div>
+        <button className="primary-button" type="button" onClick={() => setEventModal("new")}>
+          <Plus size={16} aria-hidden /> Add calendar event
+        </button>
+      </div>
+      <div className="calendar-grid">
+        {recurring.map((event) => (
+          <article
+            className={`event commitment ${event.status === "placeholder" ? "placeholder" : ""}`}
+            key={event.id}
+            onClick={() => setEventModal(event)}
+          >
+            <span>{event.dayOfWeek ? dayLabels[event.dayOfWeek] : ""}</span>
+            <strong>{event.title}</strong>
+            <p>
+              {event.timeLabel}
+              {event.activeTo ? ` · through ${formatDate(event.activeTo)}` : ""}
+            </p>
+            {event.status === "placeholder" && <small className="tbd-tag">TBD</small>}
+            <small>{event.notes}</small>
+          </article>
+        ))}
+      </div>
+
+      <div className="row between" style={{ marginTop: 24 }}>
+        <div>
+          <p className="eyebrow">Upcoming events & football</p>
+          <h3 style={{ margin: 0 }}>Concerts, tailgates, and the season</h3>
+        </div>
+      </div>
+      <div className="calendar-grid">
+        {upcoming.map((event) => (
+          <article
+            className={`event one-off ${event.status === "placeholder" ? "placeholder" : ""} ${isHeavyWeek(event, weeks) ? "heavy-week" : ""}`}
+            key={event.id}
+            onClick={() => setEventModal(event)}
+          >
+            <span>{event.date ? formatDate(event.date) : event.windowLabel || "Date TBD"}</span>
+            <strong>{event.title}</strong>
+            <p>{event.timeLabel}</p>
+            {event.status === "placeholder" && <small className="tbd-tag">TBD</small>}
+            {isHeavyWeek(event, weeks) && <small className="heavy-tag">Heavy week</small>}
+            <small>{event.notes}</small>
+          </article>
+        ))}
+      </div>
+
+      {eventModal && (
+        <Modal title={eventModal === "new" ? "Add calendar event" : "Edit calendar event"} onClose={() => setEventModal(null)}>
+          <CalendarEventForm
+            initial={eventModal === "new" ? undefined : eventModal}
+            onCancel={() => setEventModal(null)}
+            onSubmit={(values) => {
+              if (eventModal === "new") {
+                calendarEvents.add(calendarEventFormValuesToEvent(values, makeId("event")));
+              } else {
+                calendarEvents.update(eventModal.id, calendarEventFormValuesToEvent(values, eventModal.id));
+              }
+              setEventModal(null);
+            }}
+          />
+        </Modal>
+      )}
+      {aloneTimeModal && (
+        <Modal title="Log alone time" onClose={() => setAloneTimeModal(false)}>
+          <AloneTimeLogForm
+            onCancel={() => setAloneTimeModal(false)}
+            onSubmit={(values) => {
+              aloneTimeLogs.add(aloneTimeLogFormValuesToLog(values, makeId("alone")));
+              setAloneTimeModal(false);
+            }}
+          />
+        </Modal>
+      )}
     </section>
   );
 }

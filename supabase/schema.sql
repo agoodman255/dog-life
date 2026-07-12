@@ -158,6 +158,39 @@ create table if not exists feedback (
   unique (household_id, task_id)
 );
 
+-- Recurring commitments (gym, volleyball, curling), one-off life events
+-- (concerts, tailgates, family visits), and the football schedule all live
+-- here as a single flexible calendar entry shape — see
+-- docs/knowledge/puppy-life-knowledge.md sections 3-6 for the source data.
+create table if not exists calendar_events (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households (id) on delete cascade,
+  title text not null,
+  category text not null,
+  kind text not null,
+  day_of_week text,
+  active_from date,
+  active_to date,
+  date date,
+  window_label text not null default '',
+  time_label text not null default '',
+  duration_hours numeric,
+  coverage_needed text not null default 'none',
+  status text not null default 'confirmed',
+  importance text,
+  notes text not null default ''
+);
+
+-- Logged instances of the puppy being left alone comfortably, compared
+-- against calendar_events that need coverage to flag readiness gaps early.
+create table if not exists alone_time_logs (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households (id) on delete cascade,
+  date date not null,
+  duration_minutes int not null,
+  notes text not null default ''
+);
+
 -- In-app feedback submitted via the sidebar wizard — bugs, feature ideas,
 -- comments, questions. Pulled into markdown via scripts/export-feedback.ts
 -- for review in Claude Code sessions rather than read directly from here.
@@ -194,6 +227,8 @@ alter table exposure_items enable row level security;
 alter table relationship_logs enable row level security;
 alter table feedback enable row level security;
 alter table product_feedback enable row level security;
+alter table calendar_events enable row level security;
+alter table alone_time_logs enable row level security;
 
 do $$
 declare
@@ -202,7 +237,8 @@ begin
   for t in select unnest(array[
     'households', 'people', 'dogs', 'tasks', 'milestones',
     'health_events', 'journal_entries', 'exposure_items',
-    'relationship_logs', 'feedback', 'product_feedback'
+    'relationship_logs', 'feedback', 'product_feedback',
+    'calendar_events', 'alone_time_logs'
   ])
   loop
     if not exists (
@@ -227,7 +263,8 @@ begin
   for t in select unnest(array[
     'households', 'people', 'dogs', 'tasks', 'milestones',
     'health_events', 'journal_entries', 'exposure_items',
-    'relationship_logs', 'feedback', 'product_feedback'
+    'relationship_logs', 'feedback', 'product_feedback',
+    'calendar_events', 'alone_time_logs'
   ])
   loop
     if not exists (

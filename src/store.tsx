@@ -1,5 +1,7 @@
 import { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import {
+  aloneTimeLogs as seedAloneTimeLogs,
+  calendarEvents as seedCalendarEvents,
   dogs as seedDogs,
   exposureItems as seedExposureItems,
   feedbackLoopRules,
@@ -14,6 +16,8 @@ import {
 import * as mapping from "./dataMapping";
 import { getSupabaseClient, isBackendConfigured } from "./supabaseClient";
 import {
+  AloneTimeLog,
+  CalendarEvent,
   DailyFeedback,
   Dog,
   ExposureItem,
@@ -228,6 +232,8 @@ function useDataStore() {
   );
   const relationshipLogs = useCollection<RelationshipLog>("relationship-logs", seedRelationshipLogs, "relationship_logs", mapping.relationshipLog);
   const productFeedback = useCollection<ProductFeedback>("product-feedback", [], "product_feedback", mapping.productFeedback);
+  const calendarEvents = useCollection<CalendarEvent>("calendar-events", seedCalendarEvents, "calendar_events", mapping.calendarEvent);
+  const aloneTimeLogs = useCollection<AloneTimeLog>("alone-time-logs", seedAloneTimeLogs, "alone_time_logs", mapping.aloneTimeLog);
 
   const backend = isBackendConfigured();
   const local = usePersistedCollection<DailyFeedback & { id: string }>(
@@ -392,6 +398,8 @@ function useDataStore() {
     exposureItems,
     relationshipLogs,
     productFeedback,
+    calendarEvents,
+    aloneTimeLogs,
     feedback,
     feedbackLoopRules,
     completeTask,

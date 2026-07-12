@@ -2,6 +2,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import {
+  AloneTimeLog,
+  CalendarEvent,
   Dog,
   DogStatus,
   ExposureItem,
@@ -753,6 +755,232 @@ export function RelationshipLogForm({
         </button>
         <button className="primary-button" type="submit">
           Log check-in
+        </button>
+      </div>
+    </form>
+  );
+}
+
+const calendarEventSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  category: z.enum(["gym", "sports", "concert", "comedy", "family", "travel", "curling", "volleyball", "other"]),
+  kind: z.enum(["recurring", "one-off"]),
+  dayOfWeek: z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", ""]),
+  activeFrom: z.string(),
+  activeTo: z.string(),
+  date: z.string(),
+  windowLabel: z.string(),
+  timeLabel: z.string().min(1, "Time label is required"),
+  durationHours: z.number().min(0),
+  coverageNeeded: z.enum(["none", "rover", "full-day"]),
+  status: z.enum(["confirmed", "placeholder"]),
+  importance: z.enum(["marquee", "normal", ""]),
+  notes: z.string(),
+});
+
+type CalendarEventFormValues = z.infer<typeof calendarEventSchema>;
+
+export function calendarEventFormValuesToEvent(values: CalendarEventFormValues, id: string): CalendarEvent {
+  return {
+    id,
+    title: values.title,
+    category: values.category,
+    kind: values.kind,
+    dayOfWeek: values.dayOfWeek || undefined,
+    activeFrom: values.activeFrom || undefined,
+    activeTo: values.activeTo || undefined,
+    date: values.date || undefined,
+    windowLabel: values.windowLabel,
+    timeLabel: values.timeLabel,
+    durationHours: values.durationHours || undefined,
+    coverageNeeded: values.coverageNeeded,
+    status: values.status,
+    importance: values.importance || undefined,
+    notes: values.notes,
+  };
+}
+
+export function CalendarEventForm({
+  initial,
+  onSubmit,
+  onCancel,
+}: {
+  initial?: CalendarEvent;
+  onSubmit: (values: CalendarEventFormValues) => void;
+  onCancel: () => void;
+}) {
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<CalendarEventFormValues>({
+    resolver: zodResolver(calendarEventSchema),
+    defaultValues: {
+      title: initial?.title ?? "",
+      category: initial?.category ?? "other",
+      kind: initial?.kind ?? "one-off",
+      dayOfWeek: initial?.dayOfWeek ?? "",
+      activeFrom: initial?.activeFrom ?? "",
+      activeTo: initial?.activeTo ?? "",
+      date: initial?.date ?? "",
+      windowLabel: initial?.windowLabel ?? "",
+      timeLabel: initial?.timeLabel ?? "",
+      durationHours: initial?.durationHours ?? 0,
+      coverageNeeded: initial?.coverageNeeded ?? "none",
+      status: initial?.status ?? "placeholder",
+      importance: initial?.importance ?? "",
+      notes: initial?.notes ?? "",
+    },
+  });
+  const kind = watch("kind");
+  return (
+    <form className="entity-form" onSubmit={handleSubmit(onSubmit)}>
+      <div className="form-grid">
+        <label>
+          Title
+          <input {...register("title")} />
+          {errors.title && <small className="form-error">{errors.title.message}</small>}
+        </label>
+        <label>
+          Category
+          <select {...register("category")}>
+            {["gym", "sports", "concert", "comedy", "family", "travel", "curling", "volleyball", "other"].map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Recurring or one-off
+          <select {...register("kind")}>
+            <option value="recurring">Recurring weekly</option>
+            <option value="one-off">One-off event</option>
+          </select>
+        </label>
+        {kind === "recurring" ? (
+          <>
+            <label>
+              Day of week
+              <select {...register("dayOfWeek")}>
+                {["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((day) => (
+                  <option key={day} value={day}>
+                    {day}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Active from (optional)
+              <input type="date" {...register("activeFrom")} />
+            </label>
+            <label>
+              Active to (optional)
+              <input type="date" {...register("activeTo")} />
+            </label>
+          </>
+        ) : (
+          <>
+            <label>
+              Date (leave blank if only a window is known)
+              <input type="date" {...register("date")} />
+            </label>
+            <label>
+              Window label (e.g. "mid-to-late September")
+              <input {...register("windowLabel")} />
+            </label>
+          </>
+        )}
+        <label>
+          Time label
+          <input {...register("timeLabel")} placeholder="6:00 PM, TBA, Kickoff TBA…" />
+          {errors.timeLabel && <small className="form-error">{errors.timeLabel.message}</small>}
+        </label>
+        <label>
+          Duration (hours, optional)
+          <input type="number" min={0} step="0.5" {...register("durationHours", { valueAsNumber: true })} />
+        </label>
+        <label>
+          Coverage needed
+          <select {...register("coverageNeeded")}>
+            <option value="none">None</option>
+            <option value="rover">Rover</option>
+            <option value="full-day">Full day</option>
+          </select>
+        </label>
+        <label>
+          Status
+          <select {...register("status")}>
+            <option value="confirmed">Confirmed</option>
+            <option value="placeholder">Placeholder</option>
+          </select>
+        </label>
+        <label>
+          Importance
+          <select {...register("importance")}>
+            <option value="">—</option>
+            <option value="normal">Normal</option>
+            <option value="marquee">Marquee / heavy week</option>
+          </select>
+        </label>
+      </div>
+      <label>
+        Notes
+        <textarea rows={2} {...register("notes")} />
+      </label>
+      <div className="form-actions">
+        <button className="text-button" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="primary-button" type="submit">
+          Save event
+        </button>
+      </div>
+    </form>
+  );
+}
+
+const aloneTimeLogSchema = z.object({
+  date: z.string().min(1),
+  durationMinutes: z.number().min(1),
+  notes: z.string(),
+});
+
+type AloneTimeLogFormValues = z.infer<typeof aloneTimeLogSchema>;
+
+export function aloneTimeLogFormValuesToLog(values: AloneTimeLogFormValues, id: string): AloneTimeLog {
+  return { id, date: values.date, durationMinutes: values.durationMinutes, notes: values.notes };
+}
+
+export function AloneTimeLogForm({
+  onSubmit,
+  onCancel,
+}: {
+  onSubmit: (values: AloneTimeLogFormValues) => void;
+  onCancel: () => void;
+}) {
+  const { register, handleSubmit } = useForm<AloneTimeLogFormValues>({
+    resolver: zodResolver(aloneTimeLogSchema),
+    defaultValues: { date: new Date().toISOString().slice(0, 10), durationMinutes: 30, notes: "" },
+  });
+  return (
+    <form className="entity-form" onSubmit={handleSubmit(onSubmit)}>
+      <div className="form-grid">
+        <label>
+          Date
+          <input type="date" {...register("date")} />
+        </label>
+        <label>
+          Duration (minutes)
+          <input type="number" min={1} {...register("durationMinutes", { valueAsNumber: true })} />
+        </label>
+      </div>
+      <label>
+        Notes
+        <textarea rows={2} {...register("notes")} placeholder="How did it go? Any signs of stress?" />
+      </label>
+      <div className="form-actions">
+        <button className="text-button" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="primary-button" type="submit">
+          Log alone time
         </button>
       </div>
     </form>

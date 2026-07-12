@@ -191,6 +191,44 @@ export type ProductFeedback = {
   createdAt: string;
 };
 
+export type DayOfWeek = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+
+export type CalendarEventCategory =
+  | "gym"
+  | "sports"
+  | "concert"
+  | "comedy"
+  | "family"
+  | "travel"
+  | "curling"
+  | "volleyball"
+  | "other";
+
+export type CalendarEvent = {
+  id: string;
+  title: string;
+  category: CalendarEventCategory;
+  kind: "recurring" | "one-off";
+  dayOfWeek?: DayOfWeek;
+  activeFrom?: string;
+  activeTo?: string;
+  date?: string;
+  windowLabel: string;
+  timeLabel: string;
+  durationHours?: number;
+  coverageNeeded: "none" | "rover" | "full-day";
+  status: "confirmed" | "placeholder";
+  importance?: "marquee" | "normal";
+  notes: string;
+};
+
+export type AloneTimeLog = {
+  id: string;
+  date: string;
+  durationMinutes: number;
+  notes: string;
+};
+
 export type FeedbackLoopRule = {
   id: string;
   trigger: string;
