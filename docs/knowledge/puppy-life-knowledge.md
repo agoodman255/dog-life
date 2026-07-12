@@ -163,7 +163,7 @@ As a placeholder's date approaches (~7–14 days out), the app should prompt to 
 - **Major rule — specific potty time is a "job":** ignore the dog until potty happens, reward the instant they squat (closed hand with 2 treats at the nose), then unleash a short puppy play-time party after
 - **Other occasions (up to ~4 months):** reward all outdoor potty, but as a side activity — treat + verbal only, no play party, then continue whatever activity was happening
 
-### Command-by-command notes (with real linked resources — see Section 10)
+### Command-by-command notes (with real linked resources — see Section 14)
 - **Name / Look at Me:** beginner = lure to force eye contact; medium = add distance/new places/unexpected timing; hard = different people/places/distractions
 - **Leash:** beginner = circles indoors, reward attention; medium = change location/distance; hard = add other skills while leashed in new places; if the dog pulls, stop — don't yell — wait for redirect then reward
 - **Leave It:** beginner = closed hand; medium = food on ground, hand covering (**major rule: never let the dog "win" by stealing — start slow, never reward speed over patience**); hard = real-life distractions (walks, trash, bones)
@@ -209,7 +209,88 @@ Weeks are counted from **pickup (8/1/26)**, not from birth — since birthdate i
 | Grooming | Bi-monthly | Week 1 |
 | Vet wellness checkup | Annual | April |
 
-## 10. Real Training Reference Links (from Dog Rules.docx hyperlinks)
+## 10. Merged Daily Schedule — Griz + Puppy
+
+Griz is a flexible, chill adult who can adapt to whatever timing the puppy needs, so instead of running two
+separate care schedules, his meals and morning potty are folded onto the puppy's cadence. This is now
+reflected directly in the app's daily task list (`src/data.ts`).
+
+| Time | Activity | Dogs | Notes |
+|---|---|---|---|
+| 7:15 AM | Morning potty | Both (joint trip) | Griz's morning-walk poop happens naturally in this window — one outing, not two |
+| 7:45 AM | Breakfast + settle reset | Both (separate bowls) | Griz's ~1 cup meal + Gabapentin, Carprofen, salmon oil, Dasuquin chew moves into this slot |
+| Every ~2 hrs, daytime | Puppy potty + 2 of the 4 daily feeds | Puppy only | Doesn't require adjusting Griz's routine at all |
+| 6:00 PM | Evening meal | Both (separate bowls) | Griz's second meal + Gabapentin, Carprofen, FortiFlora probiotic moves here, right before the walk |
+| 6:15 PM | Parallel decompression walk | Both | Existing task, unchanged |
+| 8:30 PM | Cooperative handling / grooming | Puppy (Griz managed nearby) | Existing task, unchanged |
+
+Net effect: Griz keeps his ~2 meals/day and ~2 walks/day rhythm, just re-timed to overlap with the puppy's
+schedule rather than needing separate windows — which is what actually makes the day workable around both
+of our work hours.
+
+## 11. Gym & Shared-Commitment Overlap Policy
+
+Both the Wednesday concert-series class and the Monday "Hot Dogs" class run ~1-1.25 hrs — inside the
+no-Rover short-alone-time tier (see Section 13), so the default is **both of us go together**.
+
+When that's not possible on a given week:
+- **Stagger, don't both leave.** Offset start times by ~30-45 min so one person is always home. This avoids
+  a from-scratch "both away" window entirely rather than needing coverage for it.
+- **Max simultaneous-away-time policy** while the puppy is young: cap it at ~1 hour for the first few weeks
+  home, expanding to the class's full ~1.25 hrs once the puppy is reliably settling in the crate, and up to
+  ~2.5 hrs (curling) once alone-time readiness (Section 13) clears that duration solo.
+- **Andrew's morning fallback is a last resort, not a default.** Andrew owns the morning routine (joint potty
+  + breakfast, Section 10) plus one weekday chore, so shifting his gym time to mornings only happens if the
+  evening options are fully blocked — and if it's used, the morning handoff shifts to Bree that day.
+
+## 12. Personal Downtime Blocks
+
+Rough weekday shape as described by the household: Andrew runs the morning routine and one workday chore;
+Bree covers the other workday chore and leaves work a bit early for it; we do something together after work;
+Bree runs the last nighttime routine. That leaves two natural gaps worth protecting as individual time
+(Spanish practice, vibe-coding, art, house projects, etc.):
+
+- **Tuesday evenings** — Andrew is already out at volleyball, so this is Bree's default solo-time window
+  (`bree-personal-time` on the calendar).
+- **A second slot (day/time TBD)** — once the daily routine settles post-pickup, add a matching block for
+  Andrew (`andrew-personal-time`) and consider a second one for Bree — a weekend afternoon/morning is the
+  likely candidate, but real timing should wait until the together-time and nighttime routine have a fixed
+  pattern to build around.
+
+Both exist in the app now as `downtime`-category recurring calendar placeholders, flagged "estimated — confirm
+day/time" per the Section 7 placeholder rules.
+
+## 13. Away-From-Home Coverage Tiers & Rover Plan
+
+Generalizing the age-based crating table (Section 4) and the household's real commitments into a reusable
+tiered plan — every calendar event that needs coverage now carries its own prep/Rover/post checklist directly
+(`prepSteps` / `roverInstructions` / `postSteps` / `roverVisits` fields), built from this pattern:
+
+| Tier | Duration | Rover visits | Examples |
+|---|---|---|---|
+| Short | 1-1.5 hrs | 0 | Gym classes |
+| Medium | 3-4 hrs | 1 | September concerts, comedy shows, BYU/ND tailgate |
+| Long (evening) | ~4.5 hrs | 2 | Mammoth hockey games |
+| Full day | ~7 hrs | 3 | Ski days (December) |
+
+**Standard prep (before leaving), medium tier and up:**
+1. Potty walk ~30 min before departure
+2. Pick up the water bowl ~1 hr before departure (cuts down on mid-outing accidents)
+3. Stuff and freeze a Kong; crate the puppy in the hardwood-floor room (easiest cleanup)
+4. Keep Griz in a separate room/gated area from the crate rather than free-roaming with a stressed puppy
+
+**Standard Rover visit:** leash out to the usual potty spot for a full elimination, refresh water, 15-20 min
+of low-key play or sniffing, fresh chew before re-crating, and a quick note on accidents/barking/anxiety.
+Full-day visits add a labeled meal per visit and rotate toys to keep it novel.
+
+**Standard post (on return):** full decompression walk with both dogs, refresh water/food, log the outing in
+the Alone-Time Readiness tracker so the next gap calculation stays accurate.
+
+The BYU/ND tailgate (Section 4/5) is the one worth calling out specifically: it's a confirmed date-driven
+target (~4 hrs) that lands before the age-based guidance suggests a puppy that age is typically ready for it
+— so it gets a Rover visit booked as a safety net rather than assuming readiness from the calendar alone.
+
+## 14. Real Training Reference Links (from Dog Rules.docx hyperlinks)
 
 - Online training videos — K9 of Mine: https://www.k9ofmine.com/free-dog-training-videos/
 - 13 Training Games — Journey Dog Training: https://journeydogtraining.com/13-dog-training-games/
@@ -240,7 +321,7 @@ Weeks are counted from **pickup (8/1/26)**, not from birth — since birthdate i
 - 30 Day Perfect Pup — PDF booklet: https://s3.us-east-2.amazonaws.com/30-day-perfect-pup-manual/30-Day-Perfect-Pup-With-Zak-George.pdf
 - The Dog Training Experience (Inertia, day-by-day): https://www.youtube.com/watch?v=mIot0mHLemQ&list=PLMssKIjsDxXl_ZXQgcHlEY_fC-yL5P76N
 
-## 11. Open Items / Follow-Ups
+## 15. Open Items / Follow-Ups
 
 Still needed from the household before these can move from placeholder to confirmed:
 
@@ -254,9 +335,10 @@ Still needed from the household before these can move from placeholder to confir
 8. TBA kickoff times to fill in as the season approaches: Georgia 11/14, 11/21, 11/28; Clemson 10/3, 10/17, 10/24, 10/31, 11/7, 11/14, 11/28
 9. BYU vs. Notre Dame kickoff time (date is confirmed: 10/17/26)
 
-## 12. Conflicts / Notable Cross-References Found During Consolidation
+## 16. Conflicts / Notable Cross-References Found During Consolidation
 
 - **Timeline conflict (fixed in app data):** the app's previous seed data assumed the puppy had already been home since late June 2026 (fake weight logs, a journal entry, a vet visit, relationship logs with Griz) — this contradicted the real 8/1/26 pickup date and has been cleared out.
 - **Griz's command list has two versions:** the 2024 Care Sheet lists ~11 basic commands; `Dog.xlsx`'s "Known Commands" sheet lists ~22, clearly a more complete/current list. Treated the xlsx list as authoritative and merged both into Griz's profile — no real conflict, just an update over time. Per the original knowledge doc's own instruction, this same command list is mirrored as the new puppy's training target list too.
 - **Alone-time targets are more aggressive than typical age-based guidance** (see Section 4 cross-reference) — flagging as a real risk to plan around (Rover backup), not a data error.
 - **Griz's daily schedule (Care Sheet) vs. the puppy's daily schedule (Dog.xlsx "Daily Schedule" sheet) look very different** — this is expected, not a conflict: Griz is a trained adult on a simple routine, the puppy sheet is an intensive newborn-puppy hour-by-hour potty/crate/play rotation meant for the first weeks home only.
+- **Not a conflict, an added layer:** Sections 10-13 (merged daily schedule, gym overlap policy, downtime blocks, coverage tiers) don't come from a source document — they're household-logistics guidance built on top of the source data, added because the household asked for realistic Rover/coverage planning and a workable shared schedule rather than two independent dog routines. Several specifics (exact downtime days, which weeks need staggered gym trips) are intentionally left as placeholders to tune once the real post-pickup routine settles.

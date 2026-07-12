@@ -202,6 +202,7 @@ export type CalendarEventCategory =
   | "travel"
   | "curling"
   | "volleyball"
+  | "downtime"
   | "other";
 
 export type CalendarEvent = {
@@ -220,6 +221,16 @@ export type CalendarEvent = {
   status: "confirmed" | "placeholder";
   importance?: "marquee" | "normal";
   notes: string;
+  /** Person id(s) this block belongs to / is expected to attend. Omit for whole-household events. */
+  attendees?: string[];
+  /** Number of Rover sitter visits recommended while away (0/undefined = no rover needed). */
+  roverVisits?: number;
+  /** Checklist to run through before leaving the house. */
+  prepSteps?: string[];
+  /** What the Rover sitter should do during each visit. */
+  roverInstructions?: string[];
+  /** Checklist for the moment someone gets home. */
+  postSteps?: string[];
 };
 
 export type AloneTimeLog = {

@@ -42,7 +42,7 @@ on conflict (id) do update set name = excluded.name, breed = excluded.breed, bir
 
 insert into dogs (id, household_id, name, breed, birthday, sex, color, weight, expected_adult_weight, weight_history, microchip, photo, veterinarian, insurance, breeder, health_summary, medical_history, allergies, medications, energy, confidence, fearfulness, resource_guarding, dog_friendliness, human_friendliness, noise_sensitivity, favorite_rewards, favorite_toys, mastered_commands, exercise_need, status) values (
   '11111111-1111-1111-1111-111111111115', '11111111-1111-1111-1111-111111111111', 'Griz', 'Adult dog', '2020-08-20', 'Male', '#6d7d8b',
-  64, 64, '[{"date":"2026-05-01","pounds":65,"notes":"Spring baseline"},{"date":"2026-07-09","pounds":64,"notes":"Stable adult weight"}]'::jsonb, 'On file', 'https://images.unsplash.com/photo-1558788353-f76d92427f16?auto=format&fit=crop&w=700&q=80', 'Canyons Vet', 'On file', 'On file', 'Adult maintenance per care sheet (5/8/2024): Gabapentin + Carprofen 2x/day with meals, salmon oil + Dasuquin (breakfast) + FortiFlora probiotic (dinner). Paws prone to injury — proactive mud-buster/towel care after outdoor time. Decompression exercise, grooming, and relationship support during puppy integration.',
+  64, 64, '[{"date":"2026-05-01","pounds":65,"notes":"Spring baseline"},{"date":"2026-07-09","pounds":64,"notes":"Stable adult weight"}]'::jsonb, 'On file', 'https://images.unsplash.com/photo-1558788353-f76d92427f16?auto=format&fit=crop&w=700&q=80', 'Canyons Vet', 'On file', 'On file', 'Adult maintenance per care sheet (5/8/2024): Gabapentin + Carprofen 2x/day with meals, salmon oil + Dasuquin (breakfast) + FortiFlora probiotic (dinner). Paws prone to injury — proactive mud-buster/towel care after outdoor time. Decompression exercise, grooming, and relationship support during puppy integration. Schedule note: Griz is flexible on exact meal/potty timing, so his routine is merged onto the puppy''s cadence (7:45 AM breakfast, 6:00 PM dinner, morning walk potty) rather than run separately — see the household daily schedule in docs/knowledge/puppy-life-knowledge.md.',
   ARRAY['Adult wellness records on file', 'No active restrictions logged', 'Paws prone to injury — proactive care needed after muddy walks']::text[], ARRAY[]::text[], ARRAY['Gabapentin (white oblong) — 1 whole pill, 2x/day with meals', 'Carprofen (brown circle) — half pill, 2x/day with meals', 'Monthly flea/tick + heartworm prevention']::text[],
   66, 78, 18, 18, 72, 84, 24,
   ARRAY['Cheese', 'Tug', 'Release to sniff', 'Beef lung tips', 'Bill Jack soft bits']::text[], ARRAY['Ball', 'Tug toy', 'Puzzle feeder', 'Frisbee']::text[], ARRAY['Sit', 'Down', 'Stay', 'Recall', 'Place', 'Look at Me', 'Up', 'Roll Over', 'Speak', 'Play Dead', 'Paw', 'Fetch', 'Settle', 'Spin', 'Give', 'Leave It', 'Heel', 'Wait', 'Leash/Easy', 'Get Back', 'Gentle', 'Free']::text[], 'Daily decompression walk and enrichment', 'adult'
@@ -50,11 +50,15 @@ insert into dogs (id, household_id, name, breed, birthday, sex, color, weight, e
 on conflict (id) do update set name = excluded.name, breed = excluded.breed, birthday = excluded.birthday, sex = excluded.sex, color = excluded.color, weight = excluded.weight, expected_adult_weight = excluded.expected_adult_weight, weight_history = excluded.weight_history, microchip = excluded.microchip, photo = excluded.photo, veterinarian = excluded.veterinarian, insurance = excluded.insurance, breeder = excluded.breeder, health_summary = excluded.health_summary, medical_history = excluded.medical_history, allergies = excluded.allergies, medications = excluded.medications, energy = excluded.energy, confidence = excluded.confidence, fearfulness = excluded.fearfulness, resource_guarding = excluded.resource_guarding, dog_friendliness = excluded.dog_friendliness, human_friendliness = excluded.human_friendliness, noise_sensitivity = excluded.noise_sensitivity, favorite_rewards = excluded.favorite_rewards, favorite_toys = excluded.favorite_toys, mastered_commands = excluded.mastered_commands, exercise_need = excluded.exercise_need, status = excluded.status;
 
 insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes) values (
-  '11111111-1111-1111-1111-111111111111', 'Morning potty', 'care', '11111111-1111-1111-1111-111111111112', '7:15 AM', 5, 'essential', ARRAY['Treat pouch', 'Leash']::text[], 'outdoor', 1, ARRAY['11111111-1111-1111-1111-111111111114']::uuid[], ARRAY['Outside', 'Reward', 'Pee', 'Poop', 'No accidents']::text[], 'separate', 'Keep it boring, reward fast, log how quickly the puppy goes. Real cadence once home: potty every ~2 hours (rule of thumb — hourly frequency roughly equals age in months), always right after eating or waking.'
+  '11111111-1111-1111-1111-111111111111', 'Morning potty', 'care', '11111111-1111-1111-1111-111111111112', '7:15 AM', 5, 'essential', ARRAY['Treat pouch', 'Leash']::text[], 'outdoor', 1, ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], ARRAY['Outside', 'Reward', 'Pee', 'Poop', 'No accidents']::text[], 'yes', 'Keep it boring, reward fast, log how quickly the puppy goes. Real cadence once home: potty every ~2 hours (rule of thumb — hourly frequency roughly equals age in months), always right after eating or waking. Griz''s morning-walk poop happens naturally in this same window, so this is one joint trip out rather than two separate ones — his schedule is flexible enough to slide onto the puppy''s timing (see the merged-schedule note in the knowledge doc).'
 );
 
 insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes) values (
-  '11111111-1111-1111-1111-111111111111', 'Breakfast + settle reset', 'care', '11111111-1111-1111-1111-111111111113', '7:45 AM', 15, 'essential', ARRAY['Food', 'Water', 'Crate', 'Puzzle feeder']::text[], 'indoor', 2, ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], ARRAY['Separate meals', 'Water refreshed', 'Calm release', 'Two-minute settle']::text[], 'separate', 'Feed separately until relationship score stays above 80 for two weeks. Real cadence once home: ~0.25 cup per serving, 4x/day total; water refreshed every ~2 hours (~1 oz per lb body weight/day total).'
+  '11111111-1111-1111-1111-111111111111', 'Breakfast + settle reset', 'care', '11111111-1111-1111-1111-111111111113', '7:45 AM', 15, 'essential', ARRAY['Food', 'Water', 'Crate', 'Puzzle feeder']::text[], 'indoor', 2, ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], ARRAY['Separate meals', 'Water refreshed', 'Calm release', 'Two-minute settle']::text[], 'separate', 'Feed separately until relationship score stays above 80 for two weeks. Real cadence once home: puppy ~0.25 cup per serving, 4x/day total; water refreshed every ~2 hours (~1 oz per lb body weight/day total). Griz''s usual ~1 cup morning meal (+ Gabapentin, Carprofen, salmon oil, Dasuquin chew) is folded into this same slot instead of running on his own separate morning schedule.'
+);
+
+insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Evening meal (both dogs)', 'care', '11111111-1111-1111-1111-111111111112', '6:00 PM', 10, 'essential', ARRAY['Food', 'Water', 'Crate', 'Griz''s meds']::text[], 'indoor', 1, ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], ARRAY['Separate meals', 'Griz''s evening meds + FortiFlora given', 'Water refreshed', 'Calm release']::text[], 'separate', 'Griz''s second daily meal (+ Gabapentin, Carprofen, FortiFlora probiotic) is scheduled here instead of on his own timetable, right before the 6:15 PM parallel walk — he''s a flexible, chill adult who adapts easily to the puppy''s cadence. This is one of the puppy''s 4 daily feeds; the other two (midday) are puppy-only and don''t need to move Griz''s routine at all.'
 );
 
 insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes) values (
@@ -430,140 +434,184 @@ insert into exposure_items (id, household_id, category, title, dog_ids, status, 
 on conflict (id) do update set category = excluded.category, title = excluded.title, dog_ids = excluded.dog_ids, status = excluded.status, log = excluded.log;
 
 
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Gym — concert series', 'gym', 'recurring', 'wednesday', NULL, '2026-09-07', NULL,
-  '', '~6:00 PM', NULL, 'none', 'confirmed', NULL, 'Through Labor Day (9/7/26).'
+  '', '~6:00 PM', 1.25, 'none', 'confirmed', NULL, 'Through Labor Day (9/7/26). Default: go together — a ~1-1.25 hr window is inside the crate-trained short-alone-time tier (no Rover needed). If schedules split some weeks, see the household overlap policy: stagger start times ~30-45 min so one person is always home, rather than both being out the full window.',
+  ARRAY['11111111-1111-1111-1111-111111111112', '11111111-1111-1111-1111-111111111113']::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Gym — "Hot Dogs"', 'gym', 'recurring', 'monday', NULL, '2026-09-07', NULL,
-  '', '~5:30 PM', NULL, 'none', 'confirmed', NULL, 'Through Labor Day (9/7/26).'
+  '', '~5:30 PM', 1.25, 'none', 'confirmed', NULL, 'Through Labor Day (9/7/26). Same overlap policy as the Wednesday concert-series class — go together by default; stagger if a given Monday doesn''t allow both to leave at once.',
+  ARRAY['11111111-1111-1111-1111-111111111112', '11111111-1111-1111-1111-111111111113']::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Andrew''s volleyball', 'volleyball', 'recurring', 'tuesday', NULL, NULL, NULL,
-  '', 'estimated — confirm exact time', 2.5, 'none', 'placeholder', NULL, '~2-3 hr blocks. Exact schedule to be uploaded.'
+  '', 'estimated — confirm exact time', 2.5, 'none', 'placeholder', NULL, '~2-3 hr blocks. Exact schedule to be uploaded. Bree is solo with both dogs during this window — good slot for her personal downtime once the puppy settles, or a quieter training/relationship-building evening early on.',
+  ARRAY['11111111-1111-1111-1111-111111111112']::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Curling', 'curling', 'recurring', 'thursday', NULL, NULL, NULL,
-  'starts fall 2026, exact date TBD', '8:30 PM – 11:00 PM', 2.5, 'none', 'placeholder', NULL, 'League start date not yet set.'
+  'starts fall 2026, exact date TBD', '8:30 PM – 11:00 PM', 2.5, 'none', 'placeholder', NULL, 'League start date not yet set. Treated as a shared couple activity (2.5 hrs, evening) — inside the medium alone-time tier once logged readiness supports it; no Rover needed if the puppy is already hitting 3-4 hr solo by fall.',
+  ARRAY['11111111-1111-1111-1111-111111111112', '11111111-1111-1111-1111-111111111113']::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
+  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Andrew — personal time', 'downtime', 'recurring', 'tuesday', NULL, NULL, NULL,
+  'estimated — confirm day/time', 'evening, during Bree''s coverage of Andrew''s volleyball window', 2, 'none', 'placeholder', NULL, 'Placeholder slot for Spanish practice, vibe-coding, or other solo hobbies. Proposed default: Tuesday evenings work themselves out since Andrew is already out at volleyball — this block is really about protecting a second, at-home slot later in the week (e.g. a weekend afternoon) once the puppy''s routine settles. Adjust day/time to whatever actually sticks.',
+  ARRAY['11111111-1111-1111-1111-111111111112']::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
+);
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
+  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Bree — personal time', 'downtime', 'recurring', 'tuesday', NULL, NULL, NULL,
+  'estimated — confirm day/time', 'evening, while Andrew is at volleyball', 2, 'none', 'placeholder', NULL, 'Placeholder slot for art, house projects, or other solo hobbies — uses the Tuesday window Andrew is already out for volleyball. A second slot (e.g. a weekend morning) is worth adding once the together-time and nighttime routine settle into a fixed pattern.',
+  ARRAY['11111111-1111-1111-1111-111111111113']::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
+);
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'September concerts', 'concert', 'one-off', NULL, NULL, NULL, NULL,
-  'mid-to-late September 2026', 'evening, date TBD', 3, 'rover', 'placeholder', NULL, 'Several hours away (~3 hr estimate); Rover visit for 1-2 potty/walk breaks. Exact dates pending.'
+  'mid-to-late September 2026', 'evening, date TBD', 3, 'rover', 'placeholder', NULL, 'Several hours away (~3 hr estimate). Puppy''s age at this point makes 1 Rover visit the right default — see Section 13 coverage tiers. Exact dates pending.',
+  ARRAY[]::uuid[], 1, ARRAY['Potty walk ~30 min before leaving', 'Pick up the water bowl ~1 hr before departure to cut down on mid-outing accidents', 'Stuff and freeze a Kong, crate the puppy in the hardwood-floor room (easiest cleanup)', 'Keep Griz in a separate room or gated area from the crate rather than free-roaming with a stressed puppy']::text[], ARRAY['Arrive around the halfway point of the outing (~1.5 hrs in)', 'Leash the puppy out to the usual potty spot and wait for a full elimination', 'Refresh water, 10-15 min of low-key play or sniffing, then back in the crate with a fresh chew', 'Text a quick note on accidents, barking, or anxiety']::text[], ARRAY['Full decompression walk with both dogs', 'Refresh water and clear any Kong remnants', 'Log the outing in Alone-Time Readiness']::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Comedy shows', 'comedy', 'one-off', NULL, NULL, NULL, NULL,
-  'mid-to-late September 2026 onward', 'evening, date TBD', 3, 'rover', 'placeholder', NULL, 'Several hours away (~3 hr estimate); Rover visit optional depending on length. Exact dates pending.'
+  'mid-to-late September 2026 onward', 'evening, date TBD', 3, 'rover', 'placeholder', NULL, 'Several hours away (~3 hr estimate). Optional depending on how alone-time readiness is tracking by then — if the puppy''s already comfortably past 3 hrs solo, this one can drop to no Rover. Exact dates pending.',
+  ARRAY[]::uuid[], 1, ARRAY['Potty walk ~30 min before leaving', 'Water bowl up ~1 hr before departure', 'Stuffed frozen Kong in the crate, hardwood-floor room', 'Griz kept separate from the crate for the first stretch']::text[], ARRAY['One visit at the halfway mark: potty, fresh water, short play, fresh chew before re-crating', 'Note any accidents or distress']::text[], ARRAY['Decompression walk on return', 'Refresh water', 'Log the outing']::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'BYU vs. Notre Dame tailgate', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-17',
-  '', 'Kickoff TBA', 4, 'none', 'confirmed', 'marquee', 'LaVell Edwards Stadium, Provo. This is the ~4-hour alone-time milestone target — same date as Georgia @ Auburn and Clemson vs. Charleston Southern (stacked heavy week).'
+  '', 'Kickoff TBA', 4, 'rover', 'confirmed', 'marquee', 'LaVell Edwards Stadium, Provo. This is the ~4-hour alone-time milestone target — same date as Georgia @ Auburn and Clemson vs. Charleston Southern (stacked heavy week). Section 4''s cross-reference found this date-driven target is more aggressive than typical age-based crating guidance for a puppy this age, so booking 1 Rover visit as a safety net is the realistic default rather than assuming readiness from the calendar alone.',
+  ARRAY[]::uuid[], 1, ARRAY['Potty walk ~30 min before leaving', 'Water bowl up ~1 hr before departure', 'Stuffed frozen Kong, puppy crated in the hardwood-floor room', 'Griz in a separate room/gated area, not free-roaming with the crate']::text[], ARRAY['Visit around the 2-hr mark', 'Potty break, fresh water, 15-20 min low-key play, fresh chew before re-crating', 'Note any accidents, barking, or anxiety']::text[], ARRAY['Full decompression walk with both dogs', 'Refresh water and food', 'Log the outing — this is the marquee readiness checkpoint']::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Utah Mammoth hockey games', 'sports', 'one-off', NULL, NULL, NULL, NULL,
-  'late October – early November 2026 onward', 'evening, specific games TBD', 3.5, 'none', 'placeholder', NULL, 'Partial season ticket holder — full evening alone-time target. Specific games attended still TBD.'
+  'late October – early November 2026 onward', 'evening, specific games TBD', 4.5, 'rover', 'placeholder', NULL, 'Partial season ticket holder — drive + game + drive realistically runs ~4.5 hrs, a full-evening alone-time target. 2 Rover visits is the realistic default until logged readiness clears this window solo. Specific games attended still TBD.',
+  ARRAY[]::uuid[], 2, ARRAY['Potty walk ~30 min before leaving', 'Water bowl up ~1-1.5 hrs before departure', 'Stuffed frozen Kong, puppy crated in the hardwood-floor room', 'Griz separated from the crate for the first stretch', 'If the visit overlaps a scheduled meal, portion it out and label it for the sitter']::text[], ARRAY['Visit 1 (~90 min in): potty, fresh water, short play, fresh chew', 'Visit 2 (~3 hr in): potty, feed the labeled meal if one falls in this window, another short play session', 'Note any accidents, barking, or anxiety on each visit']::text[], ARRAY['Full decompression walk', 'Refresh water', 'Log the outing in Alone-Time Readiness']::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Mom visiting', 'family', 'one-off', NULL, NULL, NULL, '2026-09-23',
-  'through Sept 26', 'multi-day visit', NULL, 'none', 'confirmed', NULL, 'Stay in Salt Lake City or day-trip distance only — no overnight travel or camping. Clemson @ Cal Fri 9/25 (8:30 PM MT) is a late TV game, no conflict with staying local.'
+  'through Sept 26', 'multi-day visit', NULL, 'none', 'confirmed', NULL, 'Stay in Salt Lake City or day-trip distance only — no overnight travel or camping. Clemson @ Cal Fri 9/25 (8:30 PM MT) is a late TV game, no conflict with staying local.',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Ski days', 'travel', 'one-off', NULL, NULL, NULL, NULL,
-  'late December 2026', 'full day, date TBD', 7, 'none', 'placeholder', NULL, 'Longest alone-time target of the year (~6-8 hrs).'
+  'late December 2026', 'full day, date TBD', 7, 'rover', 'placeholder', NULL, 'Longest alone-time target of the year (~6-8 hrs). 3 Rover visits is the realistic default for a full day away this early in the puppy''s alone-time progression.',
+  ARRAY[]::uuid[], 3, ARRAY['Run the normal morning routine (potty, breakfast) before leaving', 'Portion out and label each remaining meal for the day', 'Puppy in the hardwood-floor room/crate; Griz has the run of the rest of the house — he''s flexible enough for a full day on his own routine', 'Leave a rotation of 2-3 different chew toys so the sitter can swap them between visits']::text[], ARRAY['Visit 1 (mid-morning): potty, one full meal, 20-30 min play/enrichment', 'Visit 2 (midday): potty, meal if scheduled, fresh toy rotation', 'Visit 3 (afternoon): potty, meal if scheduled, calmer wind-down play', 'Note accidents, appetite, and energy level each visit so the day can be reconstructed on return']::text[], ARRAY['Big decompression walk with both dogs', 'Full evening meal', 'Earlier bedtime/settle routine given the long day']::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Tennessee State', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-05',
-  '', '1:00 PM', NULL, 'none', 'confirmed', 'normal', 'Home opener'
+  '', '1:00 PM', NULL, 'none', 'confirmed', 'normal', 'Home opener',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Western Kentucky', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-12',
-  '', '10:45 AM', NULL, 'none', 'confirmed', 'normal', 'Home'
+  '', '10:45 AM', NULL, 'none', 'confirmed', 'normal', 'Home',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia @ Arkansas', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-19',
-  '', '10:00 AM', NULL, 'none', 'confirmed', 'normal', 'Away'
+  '', '10:00 AM', NULL, 'none', 'confirmed', 'normal', 'Away',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Oklahoma', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-26',
-  '', 'Flex 1:30-2:30 PM or 4-6 PM', NULL, 'none', 'placeholder', 'normal', 'Home, SEC'
+  '', 'Flex 1:30-2:30 PM or 4-6 PM', NULL, 'none', 'placeholder', 'normal', 'Home, SEC',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Vanderbilt', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-03',
-  '', '~10-11 AM window', NULL, 'none', 'placeholder', 'normal', 'Home'
+  '', '~10-11 AM window', NULL, 'none', 'placeholder', 'normal', 'Home',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia @ Alabama', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-10',
-  '', 'Night, 4-6 PM window', NULL, 'none', 'placeholder', 'marquee', 'Heavy/marquee week'
+  '', 'Night, 4-6 PM window', NULL, 'none', 'placeholder', 'marquee', 'Heavy/marquee week',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Auburn', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-17',
-  '', '~1:30-2:30 PM window', NULL, 'none', 'placeholder', 'marquee', 'Heavy week — same date as BYU/Notre Dame tailgate'
+  '', '~1:30-2:30 PM window', NULL, 'none', 'placeholder', 'marquee', 'Heavy week — same date as BYU/Notre Dame tailgate',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Florida (Atlanta)', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-31',
-  '', '1:30 PM', NULL, 'none', 'confirmed', 'normal', 'Rivalry, moved to Mercedes-Benz Stadium'
+  '', '1:30 PM', NULL, 'none', 'confirmed', 'normal', 'Rivalry, moved to Mercedes-Benz Stadium',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia @ Ole Miss', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-07',
-  '', 'Flex', NULL, 'none', 'placeholder', 'marquee', 'Heavy/marquee week'
+  '', 'Flex', NULL, 'none', 'placeholder', 'marquee', 'Heavy/marquee week',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Missouri', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-14',
-  '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Home'
+  '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Home',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia @ South Carolina', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-21',
-  '', 'TBA', NULL, 'none', 'placeholder', 'marquee', 'Heavy week (Clemson @ Duke Fri 11/20 into this)'
+  '', 'TBA', NULL, 'none', 'placeholder', 'marquee', 'Heavy week (Clemson @ Duke Fri 11/20 into this)',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Georgia Tech', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-28',
-  '', 'TBA', NULL, 'none', 'placeholder', 'marquee', 'Rivalry, heavy week'
+  '', 'TBA', NULL, 'none', 'placeholder', 'marquee', 'Rivalry, heavy week',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson @ LSU', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-05',
-  '', '5:30 PM', NULL, 'none', 'confirmed', 'marquee', 'College GameDay, Lane Kiffin''s LSU debut'
+  '', '5:30 PM', NULL, 'none', 'confirmed', 'marquee', 'College GameDay, Lane Kiffin''s LSU debut',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson vs. Georgia Southern', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-12',
-  '', '5:30 PM', NULL, 'none', 'confirmed', 'normal', 'Home opener'
+  '', '5:30 PM', NULL, 'none', 'confirmed', 'normal', 'Home opener',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson vs. North Carolina', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-19',
-  '', '10:00 AM', NULL, 'none', 'confirmed', 'normal', 'Home'
+  '', '10:00 AM', NULL, 'none', 'confirmed', 'normal', 'Home',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson @ Cal', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-25',
-  '', '8:30 PM (Fri)', NULL, 'none', 'confirmed', 'normal', 'During mom''s visit — late TV game, no conflict'
+  '', '8:30 PM (Fri)', NULL, 'none', 'confirmed', 'normal', 'During mom''s visit — late TV game, no conflict',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson vs. Miami', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-03',
-  '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Home'
+  '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Home',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson vs. Charleston Southern', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-17',
-  '', 'TBA', NULL, 'none', 'placeholder', 'marquee', 'Heavy week — stacked with Georgia/Auburn + BYU/Notre Dame'
+  '', 'TBA', NULL, 'none', 'placeholder', 'marquee', 'Heavy week — stacked with Georgia/Auburn + BYU/Notre Dame',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson vs. Virginia Tech', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-24',
-  '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Home — light week for Georgia (bye), but Clemson still plays'
+  '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Home — light week for Georgia (bye), but Clemson still plays',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson @ Florida State', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-31',
-  '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Away'
+  '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Away',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson @ Syracuse', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-07',
-  '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Away'
+  '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Away',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson vs. Georgia Tech', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-14',
-  '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Home'
+  '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Home',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson @ Duke', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-20',
-  '', '5:30 PM (Fri)', NULL, 'none', 'confirmed', 'marquee', 'ACC title implications, heavy week into 11/21 Georgia @ South Carolina'
+  '', '5:30 PM (Fri)', NULL, 'none', 'confirmed', 'marquee', 'ACC title implications, heavy week into 11/21 Georgia @ South Carolina',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
-insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (
+insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
   gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson vs. South Carolina', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-28',
-  '', 'TBA', NULL, 'none', 'placeholder', 'marquee', 'Palmetto Bowl rivalry, heavy week'
+  '', 'TBA', NULL, 'none', 'placeholder', 'marquee', 'Palmetto Bowl rivalry, heavy week',
+  ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
 );
 

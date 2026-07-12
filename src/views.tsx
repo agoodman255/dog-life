@@ -184,7 +184,9 @@ const dayLabels: Record<string, string> = {
 };
 
 export function CalendarView() {
-  const { healthEvents, milestones, tasks, dogs, calendarEvents, aloneTimeLogs } = useStore();
+  const { healthEvents, milestones, tasks, dogs, calendarEvents, aloneTimeLogs, people } = useStore();
+  const attendeeNames = (ids?: string[]) =>
+    !ids || ids.length === 0 ? "" : ids.map((id) => people.items.find((person) => person.id === id)?.name ?? id).join(" & ");
   const [eventModal, setEventModal] = useState<"new" | (typeof calendarEvents.items)[number] | null>(null);
   const [aloneTimeModal, setAloneTimeModal] = useState(false);
 
@@ -271,7 +273,7 @@ export function CalendarView() {
       <div className="calendar-grid">
         {recurring.map((event) => (
           <article
-            className={`event commitment ${event.status === "placeholder" ? "placeholder" : ""}`}
+            className={`event commitment ${event.category === "downtime" ? "downtime" : ""} ${event.status === "placeholder" ? "placeholder" : ""}`}
             key={event.id}
             onClick={() => setEventModal(event)}
           >
@@ -282,6 +284,7 @@ export function CalendarView() {
               {event.activeTo ? ` · through ${formatDate(event.activeTo)}` : ""}
             </p>
             {event.status === "placeholder" && <small className="tbd-tag">TBD</small>}
+            {event.attendees && event.attendees.length > 0 && <small>Attendees: {attendeeNames(event.attendees)}</small>}
             <small>{event.notes}</small>
           </article>
         ))}
@@ -305,7 +308,44 @@ export function CalendarView() {
             <p>{event.timeLabel}</p>
             {event.status === "placeholder" && <small className="tbd-tag">TBD</small>}
             {isHeavyWeek(event, weeks) && <small className="heavy-tag">Heavy week</small>}
+            {event.coverageNeeded === "rover" && (
+              <small className="rover-tag">Rover × {event.roverVisits ?? 1} visit{(event.roverVisits ?? 1) === 1 ? "" : "s"}</small>
+            )}
             <small>{event.notes}</small>
+            {(event.prepSteps?.length || event.roverInstructions?.length || event.postSteps?.length) && (
+              <div className="rover-plan">
+                {!!event.prepSteps?.length && (
+                  <>
+                    <small className="rover-plan-heading">Before leaving</small>
+                    <ul>
+                      {event.prepSteps.map((step, i) => (
+                        <li key={i}>{step}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                {!!event.roverInstructions?.length && (
+                  <>
+                    <small className="rover-plan-heading">Rover visit(s)</small>
+                    <ul>
+                      {event.roverInstructions.map((step, i) => (
+                        <li key={i}>{step}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                {!!event.postSteps?.length && (
+                  <>
+                    <small className="rover-plan-heading">On return</small>
+                    <ul>
+                      {event.postSteps.map((step, i) => (
+                        <li key={i}>{step}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
           </article>
         ))}
       </div>
@@ -319,7 +359,16 @@ export function CalendarView() {
               if (eventModal === "new") {
                 calendarEvents.add(calendarEventFormValuesToEvent(values, makeId("event")));
               } else {
-                calendarEvents.update(eventModal.id, calendarEventFormValuesToEvent(values, eventModal.id));
+                calendarEvents.update(
+                  eventModal.id,
+                  calendarEventFormValuesToEvent(values, eventModal.id, {
+                    attendees: eventModal.attendees,
+                    roverVisits: eventModal.roverVisits,
+                    prepSteps: eventModal.prepSteps,
+                    roverInstructions: eventModal.roverInstructions,
+                    postSteps: eventModal.postSteps,
+                  }),
+                );
               }
               setEventModal(null);
             }}

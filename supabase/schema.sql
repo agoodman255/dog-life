@@ -178,7 +178,12 @@ create table if not exists calendar_events (
   coverage_needed text not null default 'none',
   status text not null default 'confirmed',
   importance text,
-  notes text not null default ''
+  notes text not null default '',
+  attendees uuid[] not null default '{}',
+  rover_visits int,
+  prep_steps text[] not null default '{}',
+  rover_instructions text[] not null default '{}',
+  post_steps text[] not null default '{}'
 );
 
 -- Logged instances of the puppy being left alone comfortably, compared

@@ -97,7 +97,7 @@ export const dogs: Dog[] = [
     insurance: "On file",
     breeder: "On file",
     healthSummary:
-      "Adult maintenance per care sheet (5/8/2024): Gabapentin + Carprofen 2x/day with meals, salmon oil + Dasuquin (breakfast) + FortiFlora probiotic (dinner). Paws prone to injury — proactive mud-buster/towel care after outdoor time. Decompression exercise, grooming, and relationship support during puppy integration.",
+      "Adult maintenance per care sheet (5/8/2024): Gabapentin + Carprofen 2x/day with meals, salmon oil + Dasuquin (breakfast) + FortiFlora probiotic (dinner). Paws prone to injury — proactive mud-buster/towel care after outdoor time. Decompression exercise, grooming, and relationship support during puppy integration. Schedule note: Griz is flexible on exact meal/potty timing, so his routine is merged onto the puppy's cadence (7:45 AM breakfast, 6:00 PM dinner, morning walk potty) rather than run separately — see the household daily schedule in docs/knowledge/puppy-life-knowledge.md.",
     medicalHistory: [
       "Adult wellness records on file",
       "No active restrictions logged",
@@ -159,10 +159,11 @@ export const todayTasks: Task[] = [
     supplies: ["Treat pouch", "Leash"],
     setting: "outdoor",
     difficulty: 1,
-    dogIds: ["puppy"],
+    dogIds: ["puppy", "griz"],
     checklist: ["Outside", "Reward", "Pee", "Poop", "No accidents"],
-    grizParticipation: "separate",
-    notes: "Keep it boring, reward fast, log how quickly the puppy goes. Real cadence once home: potty every ~2 hours (rule of thumb — hourly frequency roughly equals age in months), always right after eating or waking.",
+    grizParticipation: "yes",
+    notes:
+      "Keep it boring, reward fast, log how quickly the puppy goes. Real cadence once home: potty every ~2 hours (rule of thumb — hourly frequency roughly equals age in months), always right after eating or waking. Griz's morning-walk poop happens naturally in this same window, so this is one joint trip out rather than two separate ones — his schedule is flexible enough to slide onto the puppy's timing (see the merged-schedule note in the knowledge doc).",
   },
   {
     id: "breakfast-reset",
@@ -178,7 +179,25 @@ export const todayTasks: Task[] = [
     dogIds: ["puppy", "griz"],
     checklist: ["Separate meals", "Water refreshed", "Calm release", "Two-minute settle"],
     grizParticipation: "separate",
-    notes: "Feed separately until relationship score stays above 80 for two weeks. Real cadence once home: ~0.25 cup per serving, 4x/day total; water refreshed every ~2 hours (~1 oz per lb body weight/day total).",
+    notes:
+      "Feed separately until relationship score stays above 80 for two weeks. Real cadence once home: puppy ~0.25 cup per serving, 4x/day total; water refreshed every ~2 hours (~1 oz per lb body weight/day total). Griz's usual ~1 cup morning meal (+ Gabapentin, Carprofen, salmon oil, Dasuquin chew) is folded into this same slot instead of running on his own separate morning schedule.",
+  },
+  {
+    id: "evening-meal",
+    title: "Evening meal (both dogs)",
+    category: "care",
+    assignedTo: "andrew",
+    time: "6:00 PM",
+    duration: 10,
+    priority: "essential",
+    supplies: ["Food", "Water", "Crate", "Griz's meds"],
+    setting: "indoor",
+    difficulty: 1,
+    dogIds: ["puppy", "griz"],
+    checklist: ["Separate meals", "Griz's evening meds + FortiFlora given", "Water refreshed", "Calm release"],
+    grizParticipation: "separate",
+    notes:
+      "Griz's second daily meal (+ Gabapentin, Carprofen, FortiFlora probiotic) is scheduled here instead of on his own timetable, right before the 6:15 PM parallel walk — he's a flexible, chill adult who adapts easily to the puppy's cadence. This is one of the puppy's 4 daily feeds; the other two (midday) are puppy-only and don't need to move Griz's routine at all.",
   },
   {
     id: "name-recall",
@@ -1126,9 +1145,12 @@ export const calendarEvents: CalendarEvent[] = [
     activeTo: "2026-09-07",
     windowLabel: "",
     timeLabel: "~6:00 PM",
+    durationHours: 1.25,
     coverageNeeded: "none",
     status: "confirmed",
-    notes: "Through Labor Day (9/7/26).",
+    attendees: ["andrew", "bree"],
+    notes:
+      "Through Labor Day (9/7/26). Default: go together — a ~1-1.25 hr window is inside the crate-trained short-alone-time tier (no Rover needed). If schedules split some weeks, see the household overlap policy: stagger start times ~30-45 min so one person is always home, rather than both being out the full window.",
   },
   {
     id: "gym-hot-dogs",
@@ -1139,9 +1161,12 @@ export const calendarEvents: CalendarEvent[] = [
     activeTo: "2026-09-07",
     windowLabel: "",
     timeLabel: "~5:30 PM",
+    durationHours: 1.25,
     coverageNeeded: "none",
     status: "confirmed",
-    notes: "Through Labor Day (9/7/26).",
+    attendees: ["andrew", "bree"],
+    notes:
+      "Through Labor Day (9/7/26). Same overlap policy as the Wednesday concert-series class — go together by default; stagger if a given Monday doesn't allow both to leave at once.",
   },
   {
     id: "andrew-volleyball",
@@ -1154,7 +1179,9 @@ export const calendarEvents: CalendarEvent[] = [
     durationHours: 2.5,
     coverageNeeded: "none",
     status: "placeholder",
-    notes: "~2-3 hr blocks. Exact schedule to be uploaded.",
+    attendees: ["andrew"],
+    notes:
+      "~2-3 hr blocks. Exact schedule to be uploaded. Bree is solo with both dogs during this window — good slot for her personal downtime once the puppy settles, or a quieter training/relationship-building evening early on.",
   },
   {
     id: "curling",
@@ -1167,7 +1194,39 @@ export const calendarEvents: CalendarEvent[] = [
     durationHours: 2.5,
     coverageNeeded: "none",
     status: "placeholder",
-    notes: "League start date not yet set.",
+    attendees: ["andrew", "bree"],
+    notes:
+      "League start date not yet set. Treated as a shared couple activity (2.5 hrs, evening) — inside the medium alone-time tier once logged readiness supports it; no Rover needed if the puppy is already hitting 3-4 hr solo by fall.",
+  },
+  {
+    id: "andrew-personal-time",
+    title: "Andrew — personal time",
+    category: "downtime",
+    kind: "recurring",
+    dayOfWeek: "tuesday",
+    windowLabel: "estimated — confirm day/time",
+    timeLabel: "evening, during Bree's coverage of Andrew's volleyball window",
+    durationHours: 2,
+    coverageNeeded: "none",
+    status: "placeholder",
+    attendees: ["andrew"],
+    notes:
+      "Placeholder slot for Spanish practice, vibe-coding, or other solo hobbies. Proposed default: Tuesday evenings work themselves out since Andrew is already out at volleyball — this block is really about protecting a second, at-home slot later in the week (e.g. a weekend afternoon) once the puppy's routine settles. Adjust day/time to whatever actually sticks.",
+  },
+  {
+    id: "bree-personal-time",
+    title: "Bree — personal time",
+    category: "downtime",
+    kind: "recurring",
+    dayOfWeek: "tuesday",
+    windowLabel: "estimated — confirm day/time",
+    timeLabel: "evening, while Andrew is at volleyball",
+    durationHours: 2,
+    coverageNeeded: "none",
+    status: "placeholder",
+    attendees: ["bree"],
+    notes:
+      "Placeholder slot for art, house projects, or other solo hobbies — uses the Tuesday window Andrew is already out for volleyball. A second slot (e.g. a weekend morning) is worth adding once the together-time and nighttime routine settle into a fixed pattern.",
   },
 
   // One-off life events
@@ -1181,7 +1240,21 @@ export const calendarEvents: CalendarEvent[] = [
     durationHours: 3,
     coverageNeeded: "rover",
     status: "placeholder",
-    notes: "Several hours away (~3 hr estimate); Rover visit for 1-2 potty/walk breaks. Exact dates pending.",
+    roverVisits: 1,
+    prepSteps: [
+      "Potty walk ~30 min before leaving",
+      "Pick up the water bowl ~1 hr before departure to cut down on mid-outing accidents",
+      "Stuff and freeze a Kong, crate the puppy in the hardwood-floor room (easiest cleanup)",
+      "Keep Griz in a separate room or gated area from the crate rather than free-roaming with a stressed puppy",
+    ],
+    roverInstructions: [
+      "Arrive around the halfway point of the outing (~1.5 hrs in)",
+      "Leash the puppy out to the usual potty spot and wait for a full elimination",
+      "Refresh water, 10-15 min of low-key play or sniffing, then back in the crate with a fresh chew",
+      "Text a quick note on accidents, barking, or anxiety",
+    ],
+    postSteps: ["Full decompression walk with both dogs", "Refresh water and clear any Kong remnants", "Log the outing in Alone-Time Readiness"],
+    notes: "Several hours away (~3 hr estimate). Puppy's age at this point makes 1 Rover visit the right default — see Section 13 coverage tiers. Exact dates pending.",
   },
   {
     id: "comedy-shows",
@@ -1193,7 +1266,17 @@ export const calendarEvents: CalendarEvent[] = [
     durationHours: 3,
     coverageNeeded: "rover",
     status: "placeholder",
-    notes: "Several hours away (~3 hr estimate); Rover visit optional depending on length. Exact dates pending.",
+    roverVisits: 1,
+    prepSteps: [
+      "Potty walk ~30 min before leaving",
+      "Water bowl up ~1 hr before departure",
+      "Stuffed frozen Kong in the crate, hardwood-floor room",
+      "Griz kept separate from the crate for the first stretch",
+    ],
+    roverInstructions: ["One visit at the halfway mark: potty, fresh water, short play, fresh chew before re-crating", "Note any accidents or distress"],
+    postSteps: ["Decompression walk on return", "Refresh water", "Log the outing"],
+    notes:
+      "Several hours away (~3 hr estimate). Optional depending on how alone-time readiness is tracking by then — if the puppy's already comfortably past 3 hrs solo, this one can drop to no Rover. Exact dates pending.",
   },
   {
     id: "byu-notre-dame-tailgate",
@@ -1204,10 +1287,24 @@ export const calendarEvents: CalendarEvent[] = [
     windowLabel: "",
     timeLabel: "Kickoff TBA",
     durationHours: 4,
-    coverageNeeded: "none",
+    coverageNeeded: "rover",
     status: "confirmed",
     importance: "marquee",
-    notes: "LaVell Edwards Stadium, Provo. This is the ~4-hour alone-time milestone target — same date as Georgia @ Auburn and Clemson vs. Charleston Southern (stacked heavy week).",
+    roverVisits: 1,
+    prepSteps: [
+      "Potty walk ~30 min before leaving",
+      "Water bowl up ~1 hr before departure",
+      "Stuffed frozen Kong, puppy crated in the hardwood-floor room",
+      "Griz in a separate room/gated area, not free-roaming with the crate",
+    ],
+    roverInstructions: [
+      "Visit around the 2-hr mark",
+      "Potty break, fresh water, 15-20 min low-key play, fresh chew before re-crating",
+      "Note any accidents, barking, or anxiety",
+    ],
+    postSteps: ["Full decompression walk with both dogs", "Refresh water and food", "Log the outing — this is the marquee readiness checkpoint"],
+    notes:
+      "LaVell Edwards Stadium, Provo. This is the ~4-hour alone-time milestone target — same date as Georgia @ Auburn and Clemson vs. Charleston Southern (stacked heavy week). Section 4's cross-reference found this date-driven target is more aggressive than typical age-based crating guidance for a puppy this age, so booking 1 Rover visit as a safety net is the realistic default rather than assuming readiness from the calendar alone.",
   },
   {
     id: "mammoth-hockey",
@@ -1216,10 +1313,25 @@ export const calendarEvents: CalendarEvent[] = [
     kind: "one-off",
     windowLabel: "late October – early November 2026 onward",
     timeLabel: "evening, specific games TBD",
-    durationHours: 3.5,
-    coverageNeeded: "none",
+    durationHours: 4.5,
+    coverageNeeded: "rover",
     status: "placeholder",
-    notes: "Partial season ticket holder — full evening alone-time target. Specific games attended still TBD.",
+    roverVisits: 2,
+    prepSteps: [
+      "Potty walk ~30 min before leaving",
+      "Water bowl up ~1-1.5 hrs before departure",
+      "Stuffed frozen Kong, puppy crated in the hardwood-floor room",
+      "Griz separated from the crate for the first stretch",
+      "If the visit overlaps a scheduled meal, portion it out and label it for the sitter",
+    ],
+    roverInstructions: [
+      "Visit 1 (~90 min in): potty, fresh water, short play, fresh chew",
+      "Visit 2 (~3 hr in): potty, feed the labeled meal if one falls in this window, another short play session",
+      "Note any accidents, barking, or anxiety on each visit",
+    ],
+    postSteps: ["Full decompression walk", "Refresh water", "Log the outing in Alone-Time Readiness"],
+    notes:
+      "Partial season ticket holder — drive + game + drive realistically runs ~4.5 hrs, a full-evening alone-time target. 2 Rover visits is the realistic default until logged readiness clears this window solo. Specific games attended still TBD.",
   },
   {
     id: "mom-visiting",
@@ -1241,9 +1353,23 @@ export const calendarEvents: CalendarEvent[] = [
     windowLabel: "late December 2026",
     timeLabel: "full day, date TBD",
     durationHours: 7,
-    coverageNeeded: "none",
+    coverageNeeded: "rover",
     status: "placeholder",
-    notes: "Longest alone-time target of the year (~6-8 hrs).",
+    roverVisits: 3,
+    prepSteps: [
+      "Run the normal morning routine (potty, breakfast) before leaving",
+      "Portion out and label each remaining meal for the day",
+      "Puppy in the hardwood-floor room/crate; Griz has the run of the rest of the house — he's flexible enough for a full day on his own routine",
+      "Leave a rotation of 2-3 different chew toys so the sitter can swap them between visits",
+    ],
+    roverInstructions: [
+      "Visit 1 (mid-morning): potty, one full meal, 20-30 min play/enrichment",
+      "Visit 2 (midday): potty, meal if scheduled, fresh toy rotation",
+      "Visit 3 (afternoon): potty, meal if scheduled, calmer wind-down play",
+      "Note accidents, appetite, and energy level each visit so the day can be reconstructed on return",
+    ],
+    postSteps: ["Big decompression walk with both dogs", "Full evening meal", "Earlier bedtime/settle routine given the long day"],
+    notes: "Longest alone-time target of the year (~6-8 hrs). 3 Rover visits is the realistic default for a full day away this early in the puppy's alone-time progression.",
   },
 
   // Georgia Bulldogs 2026

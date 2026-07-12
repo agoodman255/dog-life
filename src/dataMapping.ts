@@ -342,6 +342,11 @@ export const calendarEvent = {
       status: row.status,
       importance: row.importance ?? undefined,
       notes: row.notes,
+      attendees: row.attendees ?? undefined,
+      roverVisits: row.rover_visits ?? undefined,
+      prepSteps: row.prep_steps ?? undefined,
+      roverInstructions: row.rover_instructions ?? undefined,
+      postSteps: row.post_steps ?? undefined,
     };
   },
   toRow(item: CalendarEvent, householdId: string) {
@@ -362,6 +367,11 @@ export const calendarEvent = {
       status: item.status,
       importance: item.importance ?? null,
       notes: item.notes,
+      attendees: item.attendees ?? [],
+      rover_visits: item.roverVisits ?? null,
+      prep_steps: item.prepSteps ?? [],
+      rover_instructions: item.roverInstructions ?? [],
+      post_steps: item.postSteps ?? [],
     };
   },
 };

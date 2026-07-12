@@ -763,7 +763,7 @@ export function RelationshipLogForm({
 
 const calendarEventSchema = z.object({
   title: z.string().min(1, "Title is required"),
-  category: z.enum(["gym", "sports", "concert", "comedy", "family", "travel", "curling", "volleyball", "other"]),
+  category: z.enum(["gym", "sports", "concert", "comedy", "family", "travel", "curling", "volleyball", "downtime", "other"]),
   kind: z.enum(["recurring", "one-off"]),
   dayOfWeek: z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", ""]),
   activeFrom: z.string(),
@@ -780,7 +780,11 @@ const calendarEventSchema = z.object({
 
 type CalendarEventFormValues = z.infer<typeof calendarEventSchema>;
 
-export function calendarEventFormValuesToEvent(values: CalendarEventFormValues, id: string): CalendarEvent {
+export function calendarEventFormValuesToEvent(
+  values: CalendarEventFormValues,
+  id: string,
+  extra?: Pick<CalendarEvent, "attendees" | "roverVisits" | "prepSteps" | "roverInstructions" | "postSteps">,
+): CalendarEvent {
   return {
     id,
     title: values.title,
@@ -797,6 +801,7 @@ export function calendarEventFormValuesToEvent(values: CalendarEventFormValues, 
     status: values.status,
     importance: values.importance || undefined,
     notes: values.notes,
+    ...extra,
   };
 }
 
@@ -840,7 +845,7 @@ export function CalendarEventForm({
         <label>
           Category
           <select {...register("category")}>
-            {["gym", "sports", "concert", "comedy", "family", "travel", "curling", "volleyball", "other"].map((option) => (
+            {["gym", "sports", "concert", "comedy", "family", "travel", "curling", "volleyball", "downtime", "other"].map((option) => (
               <option key={option} value={option}>
                 {option}
               </option>

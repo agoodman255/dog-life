@@ -174,9 +174,10 @@ lines.push("");
 
 for (const event of calendarEvents) {
   lines.push(
-    `insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes) values (`,
+    `insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (`,
     `  gen_random_uuid(), ${str(HOUSEHOLD_ID)}, ${str(event.title)}, ${str(event.category)}, ${str(event.kind)}, ${event.dayOfWeek ? str(event.dayOfWeek) : "NULL"}, ${event.activeFrom ? str(event.activeFrom) : "NULL"}, ${event.activeTo ? str(event.activeTo) : "NULL"}, ${event.date ? str(event.date) : "NULL"},`,
-    `  ${str(event.windowLabel)}, ${str(event.timeLabel)}, ${num(event.durationHours ?? null)}, ${str(event.coverageNeeded)}, ${str(event.status)}, ${event.importance ? str(event.importance) : "NULL"}, ${str(event.notes)}`,
+    `  ${str(event.windowLabel)}, ${str(event.timeLabel)}, ${num(event.durationHours ?? null)}, ${str(event.coverageNeeded)}, ${str(event.status)}, ${event.importance ? str(event.importance) : "NULL"}, ${str(event.notes)},`,
+    `  ${uuidArray((event.attendees ?? []).map(personRef))}, ${num(event.roverVisits ?? null)}, ${textArray(event.prepSteps ?? [])}, ${textArray(event.roverInstructions ?? [])}, ${textArray(event.postSteps ?? [])}`,
     ");",
   );
 }

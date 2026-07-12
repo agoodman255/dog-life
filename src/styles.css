@@ -1040,6 +1040,50 @@ textarea:focus-visible,
   color: #fff;
 }
 
+.rover-tag {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-weight: 800;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  background: var(--tint);
+  color: var(--teal);
+}
+
+.event.downtime {
+  border-style: dotted;
+}
+
+.rover-plan {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--soft);
+}
+
+.rover-plan-heading {
+  display: block;
+  margin-top: 6px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+.rover-plan ul {
+  margin: 2px 0 0;
+  padding-left: 16px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.rover-plan li {
+  margin-bottom: 2px;
+}
+
 .readiness-note {
   margin: 6px 0 0;
   padding: 10px 12px;
