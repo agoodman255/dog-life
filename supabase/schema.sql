@@ -186,6 +186,15 @@ create table if not exists calendar_events (
   post_steps text[] not null default '{}'
 );
 
+-- `create table if not exists` above is a no-op once the table already exists in
+-- production, so these columns are added explicitly for anyone re-running this file
+-- against a database that already had calendar_events from an earlier sync.
+alter table calendar_events add column if not exists attendees uuid[] not null default '{}';
+alter table calendar_events add column if not exists rover_visits int;
+alter table calendar_events add column if not exists prep_steps text[] not null default '{}';
+alter table calendar_events add column if not exists rover_instructions text[] not null default '{}';
+alter table calendar_events add column if not exists post_steps text[] not null default '{}';
+
 -- Logged instances of the puppy being left alone comfortably, compared
 -- against calendar_events that need coverage to flag readiness gaps early.
 create table if not exists alone_time_logs (
