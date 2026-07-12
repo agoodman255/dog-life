@@ -36,6 +36,7 @@ import {
 } from "./views";
 import { DataProvider, useStore } from "./store";
 import { AuthGate } from "./auth";
+import { NavigationProvider, useNavigation } from "./navigation";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: Home },
@@ -75,7 +76,8 @@ function loadLargeText(): boolean {
 
 function Shell() {
   const store = useStore();
-  const [active, setActive] = useState("dashboard");
+  const { view: active, navigate } = useNavigation();
+  const setActive = (id: string) => navigate(id as Parameters<typeof navigate>[0]);
   const [query, setQuery] = useState("");
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const [largeText, setLargeText] = useState<boolean>(loadLargeText);
@@ -238,7 +240,9 @@ export function App() {
   return (
     <AuthGate>
       <DataProvider>
-        <Shell />
+        <NavigationProvider>
+          <Shell />
+        </NavigationProvider>
       </DataProvider>
     </AuthGate>
   );

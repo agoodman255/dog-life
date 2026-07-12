@@ -71,8 +71,18 @@ create table if not exists tasks (
   dog_ids uuid[] not null default '{}',
   checklist text[] not null default '{}',
   griz_participation text not null default 'not yet',
-  notes text not null default ''
+  notes text not null default '',
+  location text,
+  formation text,
+  related_milestone_id text
 );
+
+-- `create table if not exists` above is a no-op once tasks already exists in
+-- production, so these columns are added explicitly for anyone re-running this
+-- file against a database synced before they were introduced.
+alter table tasks add column if not exists location text;
+alter table tasks add column if not exists formation text;
+alter table tasks add column if not exists related_milestone_id text;
 
 -- milestones keep human-readable slug ids ("sit", "marker-word", ...) since the
 -- dependency graph references them directly and that's much more legible than uuids.

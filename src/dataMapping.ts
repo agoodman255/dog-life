@@ -128,6 +128,9 @@ export const task = {
       checklist: row.checklist ?? [],
       grizParticipation: row.griz_participation,
       notes: row.notes,
+      location: row.location ?? undefined,
+      formation: row.formation ?? undefined,
+      relatedMilestoneId: row.related_milestone_id ?? undefined,
     };
   },
   toRow(item: Task, householdId: string) {
@@ -147,6 +150,9 @@ export const task = {
       checklist: item.checklist,
       griz_participation: item.grizParticipation,
       notes: item.notes,
+      location: item.location ?? null,
+      formation: item.formation ?? null,
+      related_milestone_id: item.relatedMilestoneId ?? null,
     };
   },
 };

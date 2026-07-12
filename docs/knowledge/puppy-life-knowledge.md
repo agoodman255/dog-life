@@ -65,8 +65,8 @@ Name, sex, birth date, color/coat, and microchip ID stay unset in the app until 
 | September (concerts) | Several hours; Rover visit for 1–2 potty/walk breaks |
 | Mid–late September (comedy shows) | Several hours; Rover optional |
 | **Oct 17 — BYU vs. Notre Dame tailgate** | **~4 hours home alone** (confirmed date, Provo) |
-| Late Oct–early Nov | Full evening (Mammoth hockey games) |
-| Late December | Full day (~6–8 hrs, ski days) — longest target of the year |
+| Late Oct–early Nov | Full evening (~4.5 hrs, Mammoth hockey games) |
+| Ski season (~Nov–April), as conditions allow | Variable — 45 min drive each way + 3–8 hrs on the mountain; total away time ~4.5–9.5 hrs depending on the day. Longest realistic target of the year, but it's a per-trip decision, not one fixed December week. |
 
 **Cross-reference found:** `Dog.xlsx` → "Key Item Schedule" sheet has an independent **age-based** crating tolerance table that lines up with this date-based list:
 
@@ -77,7 +77,7 @@ Name, sex, birth date, color/coat, and microchip ID stay unset in the app until 
 | 5–6 hrs | Sporting event | Medium | 7 months |
 | 8+ hrs | Day trip | High | 12 months |
 
-A puppy picked up 8/1/26 turns 5 months old right around late Dec/early Jan and 7 months around Feb/March — meaning the **date-driven targets (BYU/ND at ~4hrs in October, ski days at ~6–8hrs in December) are more aggressive than the age-based guidance suggests is typical.** Worth watching closely and building in a Rover safety net for October/November rather than assuming the puppy will be ready purely because the calendar says so.
+A puppy picked up 8/1/26 turns 5 months old right around late Dec/early Jan and 7 months around Feb/March — meaning the **date-driven targets (BYU/ND at ~4hrs in October, ski days ranging ~4.5–9.5hrs across the season) are more aggressive than the age-based guidance suggests is typical.** Worth watching closely and building in a Rover safety net for October/November rather than assuming the puppy will be ready purely because the calendar says so.
 
 **App feature:** a readiness tracker compares the latest logged alone-time achievement against the next upcoming commitment that requires it, flagging gaps early.
 
@@ -89,7 +89,7 @@ A puppy picked up 8/1/26 turns 5 months old right around late Dec/early Jan and 
 - **September concerts** — several hours away, possible Rover visit; exact dates TBD
 - **Mid–late September comedy shows** — similar coverage needs; exact dates TBD
 - **Mom visiting Sept 23–26** — stay local to Salt Lake City / day trips only, no overnight travel; Clemson @ Cal on Fri 9/25 is a late TV game (8:30 PM MT) with no conflict
-- **Ski days, late December** — full-day alone-time required
+- **Ski days, ski season (~Nov–April)** — SLC household, ~45 min drive each way; ski for as short as 3 hrs or up to a full 8-hour day depending on conditions/plans, on nights, weekends, or a good-powder weekday — not a fixed December week. Total away time (drive + ski + drive) realistically runs ~4.5–9.5 hrs
 
 ## 6. 2026 College Football Schedule
 
@@ -271,7 +271,9 @@ tiered plan — every calendar event that needs coverage now carries its own pre
 | Short | 1-1.5 hrs | 0 | Gym classes |
 | Medium | 3-4 hrs | 1 | September concerts, comedy shows, BYU/ND tailgate |
 | Long (evening) | ~4.5 hrs | 2 | Mammoth hockey games |
-| Full day | ~7 hrs | 3 | Ski days (December) |
+| Full day | ~7-9.5 hrs | 3 | Ski days — but treat as a per-trip decision (see below), not a fixed tier, since actual away time varies ~4.5-9.5 hrs |
+
+**Ski days are the one variable-duration case:** SLC's ~45 min drive each way plus 3-8 hrs on the mountain means total away time can land anywhere from the medium tier to the full-day tier depending on the specific trip. Rather than one fixed plan, decide the tier before leaving based on how long you'll actually be gone that day, and text the sitter a real ETA instead of a fixed clock time for the Rover visit(s).
 
 **Standard prep (before leaving), medium tier and up:**
 1. Potty walk ~30 min before departure
@@ -342,3 +344,4 @@ Still needed from the household before these can move from placeholder to confir
 - **Alone-time targets are more aggressive than typical age-based guidance** (see Section 4 cross-reference) — flagging as a real risk to plan around (Rover backup), not a data error.
 - **Griz's daily schedule (Care Sheet) vs. the puppy's daily schedule (Dog.xlsx "Daily Schedule" sheet) look very different** — this is expected, not a conflict: Griz is a trained adult on a simple routine, the puppy sheet is an intensive newborn-puppy hour-by-hour potty/crate/play rotation meant for the first weeks home only.
 - **Not a conflict, an added layer:** Sections 10-13 (merged daily schedule, gym overlap policy, downtime blocks, coverage tiers) don't come from a source document — they're household-logistics guidance built on top of the source data, added because the household asked for realistic Rover/coverage planning and a workable shared schedule rather than two independent dog routines. Several specifics (exact downtime days, which weeks need staggered gym trips) are intentionally left as placeholders to tune once the real post-pickup routine settles.
+- **Ski days correction (household-provided):** the original knowledge doc modeled ski days as a single ~6-8 hr full-day event fixed to late December. The household clarified it's actually a ~45-min-each-way SLC drive with variable 3-8 hr mountain time, happening on any night/weekend/powder weekday across the whole ski season — corrected throughout Sections 4, 5, and 13, and the Rover plan now treats it as a per-trip tiering decision rather than one fixed plan.

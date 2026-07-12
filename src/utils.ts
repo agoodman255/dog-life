@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { AloneTimeLog, CalendarEvent, DailyFeedback, HealthEvent, Milestone, NotificationItem, Task } from "./types";
+import { AloneTimeLog, CalendarEvent, DailyFeedback, DayOfWeek, HealthEvent, Milestone, NotificationItem, Task } from "./types";
 
 // `new Date("2026-08-01")` parses as UTC midnight per spec, which renders as
 // the previous day in any timezone behind UTC (e.g. Mountain) — exactly the
@@ -132,6 +132,78 @@ export function heavyWeeks(events: CalendarEvent[]): Set<string> {
 
 export function isHeavyWeek(event: CalendarEvent, weeks: Set<string>): boolean {
   return !!event.date && weeks.has(weekStart(event.date));
+}
+
+// --- Day/week/month calendar grid helpers -----------------------------------
+
+const DAY_NAMES: DayOfWeek[] = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+export function dayOfWeekName(date: Date): DayOfWeek {
+  return DAY_NAMES[date.getDay()];
+}
+
+export function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+export function addDays(date: Date, amount: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
+}
+
+export function addMonths(date: Date, amount: number): Date {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + amount);
+  return next;
+}
+
+export function toDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** Sunday that starts the week containing `date`. */
+export function weekStartDate(date: Date): Date {
+  return addDays(date, -date.getDay());
+}
+
+/** The 7 days (Sunday-Saturday) of the week containing `date`. */
+export function weekDays(date: Date): Date[] {
+  const start = weekStartDate(date);
+  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+}
+
+/** A 42-cell (6-week) grid covering the month containing `date`, including
+ * leading/trailing days from adjacent months so every row is a full week. */
+export function monthGridDays(date: Date): Date[] {
+  const firstOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  const gridStart = weekStartDate(firstOfMonth);
+  return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+}
+
+/** Best-effort extraction of minutes-since-midnight from a free-text time
+ * label like "~6:00 PM", "7:15 AM", or "Kickoff TBA". Returns null when no
+ * clock time can be found (placeholders, "TBA", ranges without a clear start). */
+export function parseTimeLabel(label: string): number | null {
+  const match = label.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!match) return null;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const meridiem = match[3].toUpperCase();
+  if (meridiem === "PM" && hours !== 12) hours += 12;
+  if (meridiem === "AM" && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+}
+
+export function formatMinutes(totalMinutes: number): string {
+  const hours24 = Math.floor(totalMinutes / 60) % 24;
+  const minutes = totalMinutes % 60;
+  const meridiem = hours24 >= 12 ? "PM" : "AM";
+  const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+  return `${hours12}:${String(minutes).padStart(2, "0")} ${meridiem}`;
 }
 
 export type AloneTimeReadiness = {

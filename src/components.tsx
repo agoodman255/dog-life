@@ -1,9 +1,18 @@
-import { Activity, Check, Lock, Play, X } from "lucide-react";
+import { Activity, Check, ChevronRight, Lock, Play, X } from "lucide-react";
 import { FormEvent, ReactNode, useState } from "react";
 import { useSession } from "./auth";
+import { useNavigation } from "./navigation";
 import { makeId, useStore } from "./store";
-import { DailyFeedback, Dog, FeedbackType, Milestone, Person, Task } from "./types";
+import { DailyFeedback, Dog, DogFormation, FeedbackType, Milestone, Person, Task } from "./types";
 import { computeMilestoneStatus, milestoneProgress, resolveDependencies } from "./utils";
+
+export const formationLabels: Record<DogFormation, string> = {
+  together: "Together",
+  "parallel-buffered": "Parallel — dog, human, human, dog",
+  "separate-rooms": "Separate rooms",
+  "separate-locations": "Separate locations",
+  solo: "Solo (other dog managed elsewhere)",
+};
 
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
@@ -227,6 +236,149 @@ export function TaskCard({
         </div>
       </div>
     </article>
+  );
+}
+
+export function TaskDetailModal({
+  task,
+  feedback,
+  onComplete,
+  onClose,
+}: {
+  task: Task;
+  feedback?: DailyFeedback;
+  onComplete: (task: Task, rating: number) => Promise<boolean> | boolean | void;
+  onClose: () => void;
+}) {
+  const { dogs, milestones, locations } = useStore();
+  const { navigate } = useNavigation();
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [failed, setFailed] = useState(false);
+
+  const involvedDogs = dogs.items.filter((dog) => task.dogIds.includes(dog.id));
+  const location = locations.find((loc) => loc.id === task.location);
+  const relatedMilestone = task.relatedMilestoneId ? milestones.items.find((item) => item.id === task.relatedMilestoneId) : undefined;
+
+  function toggleItem(item: string) {
+    setChecked((prev) => ({ ...prev, [item]: !prev[item] }));
+  }
+
+  async function handleRate(rating: number) {
+    setFailed(false);
+    const ok = await onComplete(task, rating);
+    if (ok === false) setFailed(true);
+  }
+
+  return (
+    <Modal title={task.title} onClose={onClose}>
+      <div className="task-detail">
+        <div className="task-detail-meta">
+          <span className={`priority ${task.priority}`}>{task.priority}</span>
+          <span>{task.category}</span>
+          <span>
+            {task.time} · {task.duration} min
+          </span>
+          <span>{task.setting}</span>
+          <span>Difficulty {task.difficulty}/5</span>
+          <span>
+            <PersonName id={task.assignedTo} />
+          </span>
+        </div>
+
+        <div className="task-detail-dogs">
+          <p className="eyebrow">Dogs involved</p>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            {involvedDogs.map((dog) => (
+              <button
+                key={dog.id}
+                type="button"
+                className="dog-chip"
+                onClick={() => {
+                  onClose();
+                  navigate("profile", { dogId: dog.id });
+                }}
+              >
+                {dog.name} <ChevronRight size={12} aria-hidden />
+              </button>
+            ))}
+            {involvedDogs.length === 0 && <span className="small">No dogs tagged</span>}
+          </div>
+          <p className="small">
+            Formation: {task.formation ? formationLabels[task.formation] : "Not specified"}
+            {location ? ` · Location: ${location.name}` : ""}
+          </p>
+          {location?.availability && <p className="small">{location.availability}</p>}
+        </div>
+
+        <p>{task.notes}</p>
+
+        <div className="checklist">
+          {task.checklist.map((item) => (
+            <label key={item} className={checked[item] ? "checked" : ""}>
+              <input type="checkbox" checked={!!checked[item]} onChange={() => toggleItem(item)} />
+              {item}
+            </label>
+          ))}
+        </div>
+
+        {relatedMilestone && (
+          <div className="task-detail-milestone">
+            <p className="eyebrow">Training focus</p>
+            <div className="row between">
+              <div>
+                <strong>{relatedMilestone.title}</strong>
+                <p className="small">
+                  {milestoneProgress(relatedMilestone)}% there · {computeMilestoneStatus(relatedMilestone, milestones.items)}
+                </p>
+              </div>
+              <button
+                className="text-button"
+                type="button"
+                onClick={() => {
+                  onClose();
+                  navigate("milestones", { milestoneId: relatedMilestone.id });
+                }}
+              >
+                Full milestone <ChevronRight size={14} aria-hidden />
+              </button>
+            </div>
+            <p className="small">{relatedMilestone.why}</p>
+            {relatedMilestone.sources.length > 0 && (
+              <div className="source-list">
+                {relatedMilestone.sources.map((source) => (
+                  <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
+                    {source.publisher}: {source.title}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="rating-label">
+          <span>{feedback?.completed ? "Logged — how did it go?" : "How did it go?"}</span>
+          {feedback?.completed && (
+            <strong>
+              <Check size={14} aria-hidden /> Rated {feedback.rating}/5
+            </strong>
+          )}
+        </div>
+        {failed && <p className="form-error">That didn't save — check the browser console and try again.</p>}
+        <div className="rating-row" aria-label={`Complete ${task.title}`}>
+          {[1, 2, 3, 4, 5].map((rating) => (
+            <button
+              key={rating}
+              type="button"
+              className={feedback?.rating === rating ? "selected" : ""}
+              aria-pressed={feedback?.rating === rating}
+              onClick={() => handleRate(rating)}
+            >
+              {rating}
+            </button>
+          ))}
+        </div>
+      </div>
+    </Modal>
   );
 }
 

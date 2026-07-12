@@ -58,6 +58,8 @@ export type TaskCategory =
   | "relationship"
   | "journal";
 
+export type DogFormation = "together" | "parallel-buffered" | "separate-rooms" | "separate-locations" | "solo";
+
 export type Task = {
   id: string;
   title: string;
@@ -73,6 +75,12 @@ export type Task = {
   checklist: string[];
   grizParticipation: "yes" | "separate" | "managed" | "not yet";
   notes: string;
+  /** Reference location id (see `locations` in data.ts). */
+  location?: string;
+  /** How the dogs are physically arranged during this activity. */
+  formation?: DogFormation;
+  /** Links a training task to its milestone for click-through (status, sources, next steps). */
+  relatedMilestoneId?: string;
 };
 
 export type TrainingSource = {
@@ -237,6 +245,16 @@ export type AloneTimeLog = {
   id: string;
   date: string;
   durationMinutes: number;
+  notes: string;
+};
+
+export type LocationType = "fenced-yard" | "school-yard" | "park" | "trail" | "vet" | "gym" | "indoor" | "other";
+
+export type Location = {
+  id: string;
+  name: string;
+  type: LocationType;
+  availability: string;
   notes: string;
 };
 

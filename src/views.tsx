@@ -3,6 +3,8 @@ import {
   AlertTriangle,
   Bell,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Download,
   HeartPulse,
   Import,
@@ -14,15 +16,17 @@ import {
   Target,
   Type as TypeIcon,
 } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, TouchEvent as ReactTouchEvent, useEffect, useRef, useState } from "react";
 import {
   AppMetric,
   DogProfile,
+  formationLabels,
   HumanProfile,
   MilestoneCard,
   ProgressBar,
   Sparkline,
   TaskCard,
+  TaskDetailModal,
 } from "./components";
 import { Modal } from "./components";
 import {
@@ -44,20 +48,31 @@ import {
   taskFormValuesToTask,
 } from "./forms";
 import { makeId, useStore } from "./store";
+import { useNavigation } from "./navigation";
 import { setPassword as setAccountPassword, signOut, useSession } from "./auth";
 import { isBackendConfigured } from "./supabaseClient";
-import { Dog, ExposureCategory, ExposureItem, FeedbackLoopRule, NotificationItem, Task } from "./types";
+import { CalendarEvent, Dog, ExposureCategory, ExposureItem, FeedbackLoopRule, HealthEvent, NotificationItem, Task } from "./types";
 import {
+  addDays,
+  addMonths,
   ageLabel,
   computeAloneTimeReadiness,
   computeNotifications,
+  dayOfWeekName,
   formatDate,
+  formatMinutes,
   heavyWeeks,
   isHeavyWeek,
+  isSameDay,
   milestoneProgress,
+  monthGridDays,
   parseLocalDate,
+  parseTimeLabel,
   readinessScore,
+  toDateKey,
   useAdaptivePlan,
+  weekDays,
+  weekStartDate,
 } from "./utils";
 
 export function NotificationBell() {
@@ -183,12 +198,390 @@ const dayLabels: Record<string, string> = {
   sunday: "Sun",
 };
 
+type AgendaItem = {
+  id: string;
+  title: string;
+  category: string;
+  startMinutes: number | null;
+  durationMinutes: number;
+  assignedTo?: string;
+  dogNames: string;
+  priority?: string;
+  placeholder: boolean;
+  source: "task" | "health" | "calendar";
+  task?: Task;
+  healthEvent?: HealthEvent;
+  calendarEvent?: CalendarEvent;
+};
+
+function buildAgendaForDate(
+  date: Date,
+  tasks: Task[],
+  healthEvents: HealthEvent[],
+  calendarEvents: CalendarEvent[],
+  dogs: Dog[],
+): AgendaItem[] {
+  const dateKey = toDateKey(date);
+  const dow = dayOfWeekName(date);
+  const dogName = (id: string) => dogs.find((dog) => dog.id === id)?.name ?? id;
+  const items: AgendaItem[] = [];
+
+  tasks.forEach((task) => {
+    items.push({
+      id: `task-${task.id}`,
+      title: task.title,
+      category: task.category,
+      startMinutes: parseTimeLabel(task.time),
+      durationMinutes: task.duration,
+      assignedTo: task.assignedTo,
+      dogNames: task.dogIds.map(dogName).join(" & "),
+      priority: task.priority,
+      placeholder: false,
+      source: "task",
+      task,
+    });
+  });
+
+  healthEvents.forEach((event) => {
+    if (event.date !== dateKey) return;
+    items.push({
+      id: `health-${event.id}`,
+      title: event.title,
+      category: event.kind,
+      startMinutes: parseTimeLabel(event.notes),
+      durationMinutes: 60,
+      dogNames: dogName(event.dogId),
+      placeholder: false,
+      source: "health",
+      healthEvent: event,
+    });
+  });
+
+  calendarEvents.forEach((event) => {
+    const isOneOffToday = event.kind === "one-off" && event.date === dateKey;
+    const activeFromOk = !event.activeFrom || event.activeFrom <= dateKey;
+    const activeToOk = !event.activeTo || event.activeTo >= dateKey;
+    const isRecurringToday = event.kind === "recurring" && event.dayOfWeek === dow && activeFromOk && activeToOk;
+    if (!isOneOffToday && !isRecurringToday) return;
+    items.push({
+      id: `event-${event.id}`,
+      title: event.title,
+      category: event.category,
+      startMinutes: parseTimeLabel(event.timeLabel),
+      durationMinutes: (event.durationHours ?? 1) * 60,
+      dogNames: "",
+      placeholder: event.status === "placeholder",
+      source: "calendar",
+      calendarEvent: event,
+    });
+  });
+
+  return items;
+}
+
+function monthDaySummary(day: Date, healthEvents: HealthEvent[], calendarEvents: CalendarEvent[]): { count: number; heavy: boolean } {
+  const key = toDateKey(day);
+  const dow = dayOfWeekName(day);
+  let count = 0;
+  let heavy = false;
+  healthEvents.forEach((event) => {
+    if (event.date === key) count++;
+  });
+  calendarEvents.forEach((event) => {
+    const isOneOff = event.kind === "one-off" && event.date === key;
+    const activeFromOk = !event.activeFrom || event.activeFrom <= key;
+    const activeToOk = !event.activeTo || event.activeTo >= key;
+    const isRecurring = event.kind === "recurring" && event.dayOfWeek === dow && activeFromOk && activeToOk;
+    if (isOneOff || isRecurring) {
+      count++;
+      if (event.importance === "marquee") heavy = true;
+    }
+  });
+  return { count, heavy };
+}
+
+// Assigns each item a track (column) and a trackCount scoped to its own cluster
+// of mutually-overlapping items, so unrelated non-overlapping items elsewhere in
+// the day stay full-width instead of shrinking to match the busiest moment.
+function assignTracks(items: AgendaItem[]): (AgendaItem & { track: number; trackCount: number })[] {
+  const sorted = [...items].sort((a, b) => a.startMinutes! - b.startMinutes!);
+  const result: (AgendaItem & { track: number; trackCount: number })[] = [];
+  let cluster: (AgendaItem & { track: number })[] = [];
+  let clusterEnd = -Infinity;
+  let trackEnds: number[] = [];
+
+  function flushCluster() {
+    if (cluster.length === 0) return;
+    const trackCount = Math.max(...cluster.map((item) => item.track)) + 1;
+    cluster.forEach((item) => result.push({ ...item, trackCount }));
+    cluster = [];
+  }
+
+  sorted.forEach((item) => {
+    const start = item.startMinutes!;
+    const end = start + item.durationMinutes;
+    if (start >= clusterEnd) {
+      flushCluster();
+      trackEnds = [];
+      clusterEnd = -Infinity;
+    }
+    let track = trackEnds.findIndex((trackEnd) => trackEnd <= start);
+    if (track === -1) {
+      track = trackEnds.length;
+      trackEnds.push(end);
+    } else {
+      trackEnds[track] = end;
+    }
+    clusterEnd = Math.max(clusterEnd, end);
+    cluster.push({ ...item, track });
+  });
+  flushCluster();
+
+  return result;
+}
+
+const DAY_START_MIN = 6 * 60;
+const DAY_END_MIN = 22 * 60;
+const HOUR_HEIGHT = 48;
+
+function CalendarMonthGrid({
+  cursor,
+  today,
+  healthEvents,
+  calendarEvents,
+  onSelectDay,
+}: {
+  cursor: Date;
+  today: Date;
+  healthEvents: HealthEvent[];
+  calendarEvents: CalendarEvent[];
+  onSelectDay: (date: Date) => void;
+}) {
+  const days = monthGridDays(cursor);
+  return (
+    <div className="month-grid">
+      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => (
+        <div key={label} className="month-grid-heading">
+          {label}
+        </div>
+      ))}
+      {days.map((day, index) => {
+        const info = monthDaySummary(day, healthEvents, calendarEvents);
+        const inMonth = day.getMonth() === cursor.getMonth();
+        return (
+          <button
+            key={index}
+            type="button"
+            className={`month-cell ${inMonth ? "" : "outside"} ${isSameDay(day, today) ? "is-today" : ""} ${info.heavy ? "heavy-week" : ""}`}
+            onClick={() => onSelectDay(day)}
+          >
+            <span className="month-cell-date">{day.getDate()}</span>
+            {info.count > 0 && (
+              <span className="month-cell-dots">
+                {Array.from({ length: Math.min(info.count, 5) }).map((_, dotIndex) => (
+                  <span key={dotIndex} className="month-dot" />
+                ))}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function CalendarWeekStrip({
+  cursor,
+  today,
+  agendaByDay,
+  onSelectDay,
+}: {
+  cursor: Date;
+  today: Date;
+  agendaByDay: { day: Date; items: AgendaItem[] }[];
+  onSelectDay: (date: Date) => void;
+}) {
+  return (
+    <div className="week-strip">
+      {agendaByDay.map(({ day, items }) => {
+        const scheduled = items.filter((item) => item.startMinutes !== null).sort((a, b) => a.startMinutes! - b.startMinutes!);
+        return (
+          <button
+            key={toDateKey(day)}
+            type="button"
+            className={`week-day ${isSameDay(day, today) ? "is-today" : ""}`}
+            onClick={() => onSelectDay(day)}
+          >
+            <span className="week-day-label">{day.toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}</span>
+            <div className="week-day-items">
+              {scheduled.slice(0, 4).map((item) => (
+                <small key={item.id} className={item.placeholder ? "placeholder" : ""}>
+                  {formatMinutes(item.startMinutes!)} · {item.title}
+                </small>
+              ))}
+              {items.length > 4 && <small className="week-day-more">+{items.length - 4} more</small>}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function CalendarDayAgenda({
+  items,
+  shouldDim,
+  onOpenTask,
+  onOpenEvent,
+  onOpenDog,
+}: {
+  items: AgendaItem[];
+  shouldDim: (item: AgendaItem) => boolean;
+  onOpenTask: (task: Task) => void;
+  onOpenEvent: (event: CalendarEvent) => void;
+  onOpenDog: (dogId: string) => void;
+}) {
+  const unscheduled = items.filter((item) => item.startMinutes === null);
+  const scheduled = assignTracks(items.filter((item) => item.startMinutes !== null));
+  const totalHours = (DAY_END_MIN - DAY_START_MIN) / 60;
+  const hours = Array.from({ length: totalHours + 1 }, (_, i) => DAY_START_MIN + i * 60);
+
+  function openItem(item: AgendaItem) {
+    if (item.task) onOpenTask(item.task);
+    else if (item.calendarEvent) onOpenEvent(item.calendarEvent);
+    else if (item.healthEvent) onOpenDog(item.healthEvent.dogId);
+  }
+
+  return (
+    <div className="day-agenda">
+      {unscheduled.length > 0 && (
+        <div className="day-agenda-unscheduled">
+          {unscheduled.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`agenda-chip ${item.placeholder ? "placeholder" : ""} ${shouldDim(item) ? "dimmed" : ""}`}
+              onClick={() => openItem(item)}
+            >
+              {item.title}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="day-timeline" style={{ height: totalHours * HOUR_HEIGHT }}>
+        {hours.map((minute) => (
+          <div key={minute} className="day-hour-row" style={{ top: ((minute - DAY_START_MIN) / 60) * HOUR_HEIGHT }}>
+            <span className="day-hour-label">{formatMinutes(minute)}</span>
+          </div>
+        ))}
+        {scheduled.map((item) => {
+          const top = Math.max(0, ((item.startMinutes! - DAY_START_MIN) / 60) * HOUR_HEIGHT);
+          const height = Math.max(26, (item.durationMinutes / 60) * HOUR_HEIGHT);
+          const width = 100 / item.trackCount;
+          const left = width * item.track;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={`day-block ${item.source} ${item.placeholder ? "placeholder" : ""} ${shouldDim(item) ? "dimmed" : ""}`}
+              style={{ top, height, width: `calc(${width}% - 6px)`, left: `${left}%` }}
+              onClick={() => openItem(item)}
+            >
+              <strong>{item.title}</strong>
+              <span>{formatMinutes(item.startMinutes!)}</span>
+              {item.priority && <span className={`priority ${item.priority}`}>{item.priority}</span>}
+              {item.dogNames && <span className="day-block-dogs">{item.dogNames}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const viewerStorageKey = "dog-life-os-viewer";
+
+function loadViewerId(fallback: string): string {
+  try {
+    return localStorage.getItem(viewerStorageKey) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function CalendarView() {
-  const { healthEvents, milestones, tasks, dogs, calendarEvents, aloneTimeLogs, people } = useStore();
+  const { healthEvents, milestones, tasks, dogs, calendarEvents, aloneTimeLogs, people, feedback, completeTask } = useStore();
+  const { navigate } = useNavigation();
   const attendeeNames = (ids?: string[]) =>
     !ids || ids.length === 0 ? "" : ids.map((id) => people.items.find((person) => person.id === id)?.name ?? id).join(" & ");
   const [eventModal, setEventModal] = useState<"new" | (typeof calendarEvents.items)[number] | null>(null);
   const [aloneTimeModal, setAloneTimeModal] = useState(false);
+  const [viewMode, setViewMode] = useState<"day" | "week" | "month">("day");
+  const [cursorDate, setCursorDate] = useState<Date>(() => new Date());
+  const [viewerId, setViewerId] = useState<string>(() => loadViewerId(people.items[0]?.id ?? ""));
+  const [filterMode, setFilterMode] = useState<"all" | "mine" | "other">("all");
+  const [detailTask, setDetailTask] = useState<Task | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const today = new Date();
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(viewerStorageKey, viewerId);
+    } catch {
+      // ignore
+    }
+  }, [viewerId]);
+
+  const feedbackByTask = new Map(feedback.map((item) => [item.taskId, item]));
+
+  function shouldDim(item: AgendaItem): boolean {
+    if (filterMode === "all" || !item.assignedTo) return false;
+    if (filterMode === "mine") return item.assignedTo !== viewerId;
+    return item.assignedTo === viewerId;
+  }
+
+  function goPrev() {
+    setCursorDate((d) => (viewMode === "day" ? addDays(d, -1) : viewMode === "week" ? addDays(d, -7) : addMonths(d, -1)));
+  }
+  function goNext() {
+    setCursorDate((d) => (viewMode === "day" ? addDays(d, 1) : viewMode === "week" ? addDays(d, 7) : addMonths(d, 1)));
+  }
+  function goToday() {
+    setCursorDate(new Date());
+  }
+  function selectDay(day: Date) {
+    setCursorDate(day);
+    setViewMode("day");
+  }
+
+  function handleTouchStart(event: ReactTouchEvent) {
+    touchStartX.current = event.touches[0].clientX;
+  }
+  function handleTouchEnd(event: ReactTouchEvent) {
+    if (touchStartX.current === null) return;
+    const deltaX = event.changedTouches[0].clientX - touchStartX.current;
+    if (deltaX > 60) goPrev();
+    else if (deltaX < -60) goNext();
+    touchStartX.current = null;
+  }
+
+  function openDog(dogId: string) {
+    setDetailTask(null);
+    navigate("profile", { dogId });
+  }
+
+  const dayAgenda = buildAgendaForDate(cursorDate, tasks.items, healthEvents.items, calendarEvents.items, dogs.items);
+  const weekAgenda = weekDays(cursorDate).map((day) => ({
+    day,
+    items: buildAgendaForDate(day, tasks.items, healthEvents.items, calendarEvents.items, dogs.items),
+  }));
+
+  const headingLabel =
+    viewMode === "day"
+      ? cursorDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })
+      : viewMode === "week"
+        ? `Week of ${weekStartDate(cursorDate).toLocaleDateString(undefined, { month: "long", day: "numeric" })}`
+        : cursorDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 
   const recurring = calendarEvents.items.filter((event) => event.kind === "recurring");
   const upcoming = calendarEvents.items
@@ -202,43 +595,85 @@ export function CalendarView() {
     <section className="panel">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Three-layer calendar</p>
-          <h2>Static, adaptive, and recurring plans</h2>
+          <p className="eyebrow">Household calendar</p>
+          <h2>{headingLabel}</h2>
+        </div>
+        <div className="calendar-controls">
+          <div className="subtabs" role="tablist">
+            {(["day", "week", "month"] as const).map((mode) => (
+              <button key={mode} role="tab" aria-selected={viewMode === mode} className={viewMode === mode ? "active" : ""} type="button" onClick={() => setViewMode(mode)}>
+                {mode[0].toUpperCase() + mode.slice(1)}
+              </button>
+            ))}
+          </div>
+          <div className="calendar-nav">
+            <button className="icon-button" type="button" onClick={goPrev} aria-label="Previous">
+              <ChevronLeft size={18} aria-hidden />
+            </button>
+            <button className="text-button" type="button" onClick={goToday}>
+              Today
+            </button>
+            <button className="icon-button" type="button" onClick={goNext} aria-label="Next">
+              <ChevronRight size={18} aria-hidden />
+            </button>
+          </div>
         </div>
       </div>
-      <div className="calendar-grid">
-        {healthEvents.items.map((event) => (
-          <article className="event" key={event.id}>
-            <span>{formatDate(event.date)}</span>
-            <strong>{event.title}</strong>
-            <p>
-              {event.kind} · {dogs.items.find((dog) => dog.id === event.dogId)?.name}
-            </p>
-            <small>{event.notes}</small>
-          </article>
-        ))}
-        {milestones.items
-          .filter((milestone) => milestone.status !== "completed")
-          .slice(0, 4)
-          .map((milestone) => (
-            <article className="event adaptive" key={milestone.id}>
-              <span>{milestone.status}</span>
-              <strong>{milestone.title}</strong>
-              <p>Adaptive milestone · {milestoneProgress(milestone)}%</p>
-              <small>{milestone.why}</small>
-            </article>
+
+      <div className="row between calendar-filter-row">
+        <div className="viewer-select" role="group" aria-label="Viewing as">
+          <span className="small">Viewing as</span>
+          {people.items.map((person) => (
+            <button
+              key={person.id}
+              type="button"
+              className={viewerId === person.id ? "active" : ""}
+              style={viewerId === person.id ? { borderColor: person.color, color: person.color } : undefined}
+              onClick={() => setViewerId(person.id)}
+            >
+              {person.name}
+            </button>
           ))}
-        {tasks.items
-          .filter((task) => task.category === "care" || task.category === "exercise" || task.category === "health")
-          .map((task) => (
-            <article className="event recurring" key={task.id}>
-              <span>Daily</span>
-              <strong>{task.title}</strong>
-              <p>recurring · {task.time}</p>
-              <small>{task.notes}</small>
-            </article>
+        </div>
+        <div className="subtabs" role="group" aria-label="Filter tasks">
+          {(["all", "mine", "other"] as const).map((mode) => (
+            <button key={mode} className={filterMode === mode ? "active" : ""} type="button" onClick={() => setFilterMode(mode)}>
+              {mode === "all" ? "All" : mode === "mine" ? "Mine" : "Assigned to other"}
+            </button>
           ))}
+        </div>
       </div>
+
+      <div className="calendar-swipe-area" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+        {viewMode === "day" && (
+          <CalendarDayAgenda
+            items={dayAgenda}
+            shouldDim={shouldDim}
+            onOpenTask={(task) => setDetailTask(task)}
+            onOpenEvent={(event) => setEventModal(event)}
+            onOpenDog={openDog}
+          />
+        )}
+        {viewMode === "week" && <CalendarWeekStrip cursor={cursorDate} today={today} agendaByDay={weekAgenda} onSelectDay={selectDay} />}
+        {viewMode === "month" && (
+          <CalendarMonthGrid
+            cursor={cursorDate}
+            today={today}
+            healthEvents={healthEvents.items}
+            calendarEvents={calendarEvents.items}
+            onSelectDay={selectDay}
+          />
+        )}
+      </div>
+
+      {detailTask && (
+        <TaskDetailModal
+          task={detailTask}
+          feedback={feedbackByTask.get(detailTask.id)}
+          onComplete={completeTask}
+          onClose={() => setDetailTask(null)}
+        />
+      )}
 
       <div className="row between" style={{ marginTop: 24 }}>
         <div>
@@ -309,7 +744,11 @@ export function CalendarView() {
             {event.status === "placeholder" && <small className="tbd-tag">TBD</small>}
             {isHeavyWeek(event, weeks) && <small className="heavy-tag">Heavy week</small>}
             {event.coverageNeeded === "rover" && (
-              <small className="rover-tag">Rover × {event.roverVisits ?? 1} visit{(event.roverVisits ?? 1) === 1 ? "" : "s"}</small>
+              <small className="rover-tag">
+                {event.roverVisits === undefined
+                  ? "Rover — varies by trip length"
+                  : `Rover × ${event.roverVisits} visit${event.roverVisits === 1 ? "" : "s"}`}
+              </small>
             )}
             <small>{event.notes}</small>
             {(event.prepSteps?.length || event.roverInstructions?.length || event.postSteps?.length) && (
@@ -394,6 +833,15 @@ export function ProfileView() {
   const { dogs, people } = useStore();
   const [dogModal, setDogModal] = useState<"new" | Dog | null>(null);
   const [personModal, setPersonModal] = useState(false);
+  const { focus, clearFocus } = useNavigation();
+
+  useEffect(() => {
+    if (!focus?.dogId) return;
+    const el = document.getElementById(`dog-profile-${focus.dogId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timeout = setTimeout(clearFocus, 2500);
+    return () => clearTimeout(timeout);
+  }, [focus?.dogId]);
 
   return (
     <section className="profile-page">
@@ -409,7 +857,9 @@ export function ProfileView() {
         </div>
         <div className="dog-grid">
           {dogs.items.map((dog) => (
-            <DogProfile dog={dog} key={dog.id} onEdit={(target) => setDogModal(target)} onDelete={(target) => dogs.remove(target.id)} />
+            <div id={`dog-profile-${dog.id}`} className={focus?.dogId === dog.id ? "focus-target" : ""} key={dog.id}>
+              <DogProfile dog={dog} onEdit={(target) => setDogModal(target)} onDelete={(target) => dogs.remove(target.id)} />
+            </div>
           ))}
         </div>
       </div>
@@ -554,10 +1004,22 @@ export function TrainingView() {
 
 export function MilestonesView() {
   const { milestones } = useStore();
+  const { focus, clearFocus } = useNavigation();
+
+  useEffect(() => {
+    if (!focus?.milestoneId) return;
+    const el = document.getElementById(`milestone-${focus.milestoneId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timeout = setTimeout(clearFocus, 2500);
+    return () => clearTimeout(timeout);
+  }, [focus?.milestoneId]);
+
   return (
     <section className="roadmap">
       {milestones.items.map((milestone) => (
-        <MilestoneCard key={milestone.id} milestone={milestone} />
+        <div id={`milestone-${milestone.id}`} className={focus?.milestoneId === milestone.id ? "focus-target" : ""} key={milestone.id}>
+          <MilestoneCard milestone={milestone} />
+        </div>
       ))}
     </section>
   );

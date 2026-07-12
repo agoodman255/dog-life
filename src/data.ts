@@ -7,6 +7,7 @@ import {
   HealthEvent,
   Household,
   JournalEntry,
+  Location,
   Milestone,
   Person,
   RelationshipLog,
@@ -147,6 +148,64 @@ export const dogs: Dog[] = [
   },
 ];
 
+// Reference locations for tasks/events — not a Supabase-synced collection, just a
+// shared lookup so activities can point at a consistent place. Update the
+// school-yard availability rule once the real 2026-27 SLCSD/Parkside Elementary
+// calendar and bell schedule are confirmed — this is a placeholder rule, not
+// verified against the district's actual calendar.
+export const locations: Location[] = [
+  {
+    id: "home-fenced-yard",
+    name: "Home — fenced yard",
+    type: "fenced-yard",
+    availability: "Always available",
+    notes: "Primary off-leash potty and play space. Safe for solo puppy use once reliably contained.",
+  },
+  {
+    id: "home-indoor",
+    name: "Home — indoor",
+    type: "indoor",
+    availability: "Always available",
+    notes: "Meals, crate time, handling/grooming reps, and settle practice. Hardwood-floor room is the go-to for crating during outings (easiest cleanup).",
+  },
+  {
+    id: "parkside-elementary-yard",
+    name: "Parkside Elementary yard",
+    type: "school-yard",
+    availability:
+      "Placeholder rule — confirm against the real 2026-27 SLCSD calendar and bell schedule: unavailable weekdays during the school year (~7:45 AM-3:00 PM, kids present); available on weekday evenings, weekends, holidays, and summer break. Currently summer break, so open now.",
+    notes: "Large open grass, good for recall and off-leash practice once school is back in session and timing is respected.",
+  },
+  {
+    id: "public-park",
+    name: "Public park",
+    type: "park",
+    availability: "Always available; busier on weekends/evenings",
+    notes: "Good for socialization exposure — other dogs, kids, novel surfaces.",
+  },
+  {
+    id: "walking-paths",
+    name: "Neighborhood walking paths",
+    type: "trail",
+    availability: "Always available",
+    notes: "Default route for parallel decompression walks and leash training.",
+  },
+  {
+    id: "hiking-trail",
+    name: "Local hiking trail",
+    type: "trail",
+    availability: "Always available; weather/season dependent",
+    notes: "Griz-only until the puppy is old enough and vaccinated for trail exposure — good solo-dog-time option while the puppy is elsewhere (e.g. at the vet).",
+  },
+  {
+    id: "canyons-vet",
+    name: "Canyons Vet",
+    type: "vet",
+    availability: "By appointment",
+    notes: "Shared vet for both dogs.",
+  },
+];
+
 export const todayTasks: Task[] = [
   {
     id: "morning-potty",
@@ -162,6 +221,8 @@ export const todayTasks: Task[] = [
     dogIds: ["puppy", "griz"],
     checklist: ["Outside", "Reward", "Pee", "Poop", "No accidents"],
     grizParticipation: "yes",
+    location: "home-fenced-yard",
+    formation: "together",
     notes:
       "Keep it boring, reward fast, log how quickly the puppy goes. Real cadence once home: potty every ~2 hours (rule of thumb — hourly frequency roughly equals age in months), always right after eating or waking. Griz's morning-walk poop happens naturally in this same window, so this is one joint trip out rather than two separate ones — his schedule is flexible enough to slide onto the puppy's timing (see the merged-schedule note in the knowledge doc).",
   },
@@ -179,6 +240,8 @@ export const todayTasks: Task[] = [
     dogIds: ["puppy", "griz"],
     checklist: ["Separate meals", "Water refreshed", "Calm release", "Two-minute settle"],
     grizParticipation: "separate",
+    location: "home-indoor",
+    formation: "separate-rooms",
     notes:
       "Feed separately until relationship score stays above 80 for two weeks. Real cadence once home: puppy ~0.25 cup per serving, 4x/day total; water refreshed every ~2 hours (~1 oz per lb body weight/day total). Griz's usual ~1 cup morning meal (+ Gabapentin, Carprofen, salmon oil, Dasuquin chew) is folded into this same slot instead of running on his own separate morning schedule.",
   },
@@ -196,6 +259,8 @@ export const todayTasks: Task[] = [
     dogIds: ["puppy", "griz"],
     checklist: ["Separate meals", "Griz's evening meds + FortiFlora given", "Water refreshed", "Calm release"],
     grizParticipation: "separate",
+    location: "home-indoor",
+    formation: "separate-rooms",
     notes:
       "Griz's second daily meal (+ Gabapentin, Carprofen, FortiFlora probiotic) is scheduled here instead of on his own timetable, right before the 6:15 PM parallel walk — he's a flexible, chill adult who adapts easily to the puppy's cadence. This is one of the puppy's 4 daily feeds; the other two (midday) are puppy-only and don't need to move Griz's routine at all.",
   },
@@ -213,6 +278,9 @@ export const todayTasks: Task[] = [
     dogIds: ["puppy"],
     checklist: ["Say name once", "Mark eye contact", "Treat at leg", "Five happy recalls"],
     grizParticipation: "managed",
+    location: "home-indoor",
+    formation: "solo",
+    relatedMilestoneId: "name-recognition",
     notes: "End before attention fades. Griz can practice place for parallel rewards. Week 1 focus per the real training schedule: Name/Look at Me, Leash, Leave It, and Sit are taught in parallel starting pickup week.",
   },
   {
@@ -229,7 +297,9 @@ export const todayTasks: Task[] = [
     dogIds: ["puppy", "griz"],
     checklist: ["Start with distance", "Reward check-ins", "No shared toy", "Log body language"],
     grizParticipation: "yes",
-    notes: "Keep dogs parallel, not face-to-face. Increase distance if either dog stiffens.",
+    location: "walking-paths",
+    formation: "parallel-buffered",
+    notes: "Keep dogs parallel, not face-to-face — ideally a human walking each dog with a person-width gap between them (dog, human, human, dog), not dog-to-dog. Increase distance if either dog stiffens.",
   },
   {
     id: "handling",
@@ -245,6 +315,9 @@ export const todayTasks: Task[] = [
     dogIds: ["puppy"],
     checklist: ["Touch paws", "Lift lips", "Brush one stroke", "End with play"],
     grizParticipation: "managed",
+    location: "home-indoor",
+    formation: "solo",
+    relatedMilestoneId: "grooming-desensitizing",
     notes: "Consent-based pace. If the puppy withdraws twice, stop and make tomorrow easier. Real cadence once home: brush hair daily (evenings), dental treats 2x/week (Mon, Thu), ear cleaning + teeth brushing weekly (Sunday), bath bi-weekly.",
   },
 ];
@@ -1334,6 +1407,20 @@ export const calendarEvents: CalendarEvent[] = [
       "Partial season ticket holder — drive + game + drive realistically runs ~4.5 hrs, a full-evening alone-time target. 2 Rover visits is the realistic default until logged readiness clears this window solo. Specific games attended still TBD.",
   },
   {
+    id: "griz-hike-during-vet-visit",
+    title: "Griz decompression hike (splits with puppy's vet visit)",
+    category: "other",
+    kind: "one-off",
+    date: "2026-08-03",
+    windowLabel: "",
+    timeLabel: "~2:00 PM, overlapping the vet appointment",
+    coverageNeeded: "none",
+    status: "confirmed",
+    attendees: ["bree"],
+    notes:
+      "Illustrates the general split pattern: when one dog has an appointment, the other doesn't have to sit it out. Bree takes Griz to the local hiking trail (puppy isn't cleared for trail exposure yet) while Andrew takes the puppy to the first vet appointment at Canyons Vet — two separate activities, two separate humans, same time window, instead of the whole household being tied to the vet trip. Swap people as makes sense on the actual day; the pattern is the point.",
+  },
+  {
     id: "mom-visiting",
     title: "Mom visiting",
     category: "family",
@@ -1346,30 +1433,34 @@ export const calendarEvents: CalendarEvent[] = [
     notes: "Stay in Salt Lake City or day-trip distance only — no overnight travel or camping. Clemson @ Cal Fri 9/25 (8:30 PM MT) is a late TV game, no conflict with staying local.",
   },
   {
-    id: "ski-days-december",
-    title: "Ski days",
+    id: "ski-days",
+    title: "Ski days (as conditions allow)",
     category: "travel",
     kind: "one-off",
-    windowLabel: "late December 2026",
-    timeLabel: "full day, date TBD",
-    durationHours: 7,
+    windowLabel: "ski season, ~November 2026 – April 2027",
+    timeLabel: "variable — 45 min drive each way + 3-8 hrs on the mountain",
+    durationHours: 6,
     coverageNeeded: "rover",
     status: "placeholder",
-    roverVisits: 3,
     prepSteps: [
-      "Run the normal morning routine (potty, breakfast) before leaving",
-      "Portion out and label each remaining meal for the day",
-      "Puppy in the hardwood-floor room/crate; Griz has the run of the rest of the house — he's flexible enough for a full day on his own routine",
-      "Leave a rotation of 2-3 different chew toys so the sitter can swap them between visits",
+      "Decide the away-time tier before leaving: total away time (drive + ski + drive) under ~4.5 hrs needs no Rover once that alone-time milestone is cleared; ~4.5-7 hrs = 1 Rover visit; ~7-9.5 hrs = 2 visits",
+      "Potty walk ~30 min before leaving",
+      "Water bowl up ~1 hr before departure",
+      "Stuffed frozen Kong, puppy crated in the hardwood-floor room",
+      "Griz kept separate from the crate for the first stretch — he's fine solo for a full day if the trip runs long",
     ],
     roverInstructions: [
-      "Visit 1 (mid-morning): potty, one full meal, 20-30 min play/enrichment",
-      "Visit 2 (midday): potty, meal if scheduled, fresh toy rotation",
-      "Visit 3 (afternoon): potty, meal if scheduled, calmer wind-down play",
-      "Note accidents, appetite, and energy level each visit so the day can be reconstructed on return",
+      "Time the visit(s) around the middle of however long you'll actually be gone — text the sitter your real ETA before leaving rather than a fixed clock time",
+      "Standard visit: potty, fresh water, a meal if one falls in the window, 15-20 min play, fresh chew before re-crating",
+      "Note accidents, appetite, and energy level",
     ],
-    postSteps: ["Big decompression walk with both dogs", "Full evening meal", "Earlier bedtime/settle routine given the long day"],
-    notes: "Longest alone-time target of the year (~6-8 hrs). 3 Rover visits is the realistic default for a full day away this early in the puppy's alone-time progression.",
+    postSteps: [
+      "Decompression walk with both dogs",
+      "Refresh food and water",
+      "Log the actual away-time (drive + ski + drive) in Alone-Time Readiness so future tiering stays accurate",
+    ],
+    notes:
+      "SLC household — ~45 min drive each way to the mountain, skiing for as long as conditions and plans call for (as short as 3 hrs, up to a full 8-hour day), on nights, weekends, or a good-powder weekday — not a fixed December week. Total away time really ranges ~4.5-9.5 hrs including the drive, so treat the Rover call as a per-trip decision using the tiers above rather than one fixed plan.",
   },
 
   // Georgia Bulldogs 2026

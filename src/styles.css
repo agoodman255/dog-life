@@ -1057,6 +1057,17 @@ textarea:focus-visible,
   border-style: dotted;
 }
 
+.focus-target {
+  animation: focus-pulse 1.8s ease-out 2;
+  border-radius: 12px;
+}
+
+@keyframes focus-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(47, 111, 100, 0.55); }
+  70% { box-shadow: 0 0 0 10px rgba(47, 111, 100, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(47, 111, 100, 0); }
+}
+
 .rover-plan {
   margin-top: 6px;
   padding-top: 6px;
@@ -1099,6 +1110,348 @@ textarea:focus-visible,
 .readiness-note.gap {
   background: #f7e4dc;
   color: #7a3b26;
+}
+
+/* --- True calendar: day/week/month grid ------------------------------- */
+
+.calendar-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-filter-row {
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.viewer-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.viewer-select button {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.viewer-select button.active {
+  border-width: 2px;
+  font-weight: 800;
+}
+
+.calendar-swipe-area {
+  touch-action: pan-y;
+}
+
+/* Month view */
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.month-grid-heading {
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+}
+
+.month-cell {
+  aspect-ratio: 1 / 0.85;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 6px 4px;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.month-cell.outside {
+  color: var(--muted);
+  background: var(--soft);
+  opacity: 0.6;
+}
+
+.month-cell.is-today {
+  border-color: var(--teal);
+  border-width: 2px;
+  font-weight: 800;
+}
+
+.month-cell.heavy-week {
+  background: rgba(212, 122, 94, 0.1);
+  border-color: var(--coral);
+}
+
+.month-cell-date {
+  font-weight: 700;
+}
+
+.month-cell-dots {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.month-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--teal);
+}
+
+/* Week view */
+
+.week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.week-day {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  padding: 10px 8px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 140px;
+}
+
+.week-day.is-today {
+  border-color: var(--teal);
+  border-width: 2px;
+}
+
+.week-day-label {
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.week-day-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.week-day-items small {
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+.week-day-items small.placeholder {
+  font-style: italic;
+}
+
+.week-day-more {
+  color: var(--teal);
+  font-weight: 700;
+}
+
+/* Day view */
+
+.day-agenda-unscheduled {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.agenda-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--tag);
+  color: var(--tag-ink);
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.agenda-chip.placeholder {
+  border-style: dashed;
+}
+
+.agenda-chip.dimmed {
+  opacity: 0.4;
+}
+
+.day-timeline {
+  position: relative;
+  border-top: 1px solid var(--line);
+  margin-left: 64px;
+}
+
+.day-hour-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--line);
+  height: 0;
+}
+
+.day-hour-label {
+  position: absolute;
+  left: -64px;
+  top: -8px;
+  width: 56px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+.day-block {
+  position: absolute;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  padding: 4px 8px;
+  text-align: left;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: var(--shadow);
+}
+
+.day-block strong {
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+.day-block span {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.day-block.task {
+  border-left: 4px solid var(--teal);
+}
+
+.day-block.health {
+  border-left: 4px solid var(--coral);
+}
+
+.day-block.calendar {
+  border-left: 4px solid var(--blue);
+}
+
+.day-block.placeholder {
+  border-style: dashed;
+}
+
+.day-block.dimmed {
+  opacity: 0.35;
+}
+
+.day-block-dogs {
+  font-style: italic;
+}
+
+/* Task detail modal */
+
+.task-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.task-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.task-detail-meta span:not(.priority) {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.task-detail-dogs .eyebrow {
+  margin-bottom: 4px;
+}
+
+.dog-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  background: var(--tag);
+  color: var(--tag-ink);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.task-detail-milestone {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--tint);
+}
+
+@media (max-width: 760px) {
+  .month-grid-heading {
+    font-size: 0.65rem;
+  }
+
+  .month-cell {
+    font-size: 0.7rem;
+  }
+
+  .week-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .day-timeline {
+    margin-left: 48px;
+  }
+
+  .day-hour-label {
+    left: -48px;
+    width: 42px;
+  }
+
+  .section-heading {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .calendar-controls {
+    align-items: flex-start;
+    width: 100%;
+  }
 }
 
 .exposure-grid {
