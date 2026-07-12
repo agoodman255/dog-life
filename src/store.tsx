@@ -5,13 +5,18 @@ import {
   dogs as seedDogs,
   exposureItems as seedExposureItems,
   feedbackLoopRules,
+  groceryList as seedGroceryList,
   healthEvents as seedHealthEvents,
   households as seedHouseholds,
+  inventory as seedInventory,
   journalEntries as seedJournalEntries,
   locations,
+  meals as seedMeals,
   milestones as seedMilestones,
   people as seedPeople,
+  recipeIngredients as seedRecipeIngredients,
   relationshipLogs as seedRelationshipLogs,
+  shelfLifeDefaultsDays,
   todayTasks as seedTasks,
 } from "./data";
 import * as mapping from "./dataMapping";
@@ -19,19 +24,27 @@ import { getSupabaseClient, isBackendConfigured } from "./supabaseClient";
 import {
   AloneTimeLog,
   CalendarEvent,
+  ChecklistItemValue,
   DailyFeedback,
   Dog,
   ExposureItem,
+  GroceryListItem,
   HealthEvent,
   Household,
+  InboxRequest,
+  InventoryItem,
   JournalEntry,
+  Meal,
   Milestone,
   Person,
   ProductFeedback,
+  RecipeIngredient,
   RelationshipLog,
   Task,
+  TaskHistoryEntry,
+  TaskInstance,
 } from "./types";
-import { computeMilestoneStatus } from "./utils";
+import { buildDefaultChecklist, computeMilestoneStatus } from "./utils";
 
 const PREFIX = "dog-life-os";
 
@@ -235,6 +248,12 @@ function useDataStore() {
   const productFeedback = useCollection<ProductFeedback>("product-feedback", [], "product_feedback", mapping.productFeedback);
   const calendarEvents = useCollection<CalendarEvent>("calendar-events", seedCalendarEvents, "calendar_events", mapping.calendarEvent);
   const aloneTimeLogs = useCollection<AloneTimeLog>("alone-time-logs", seedAloneTimeLogs, "alone_time_logs", mapping.aloneTimeLog);
+  const taskInstances = useCollection<TaskInstance>("task-instances", [], "task_instances", mapping.taskInstance, "client");
+  const inboxRequests = useCollection<InboxRequest>("inbox-requests", [], "inbox_requests", mapping.inboxRequest, "client");
+  const meals = useCollection<Meal>("meals", seedMeals, "meals", mapping.meal);
+  const recipeIngredients = useCollection<RecipeIngredient>("recipe-ingredients", seedRecipeIngredients, "recipe_ingredients", mapping.recipeIngredient);
+  const inventory = useCollection<InventoryItem>("inventory", seedInventory, "inventory", mapping.inventoryItem);
+  const groceryList = useCollection<GroceryListItem>("grocery-list", seedGroceryList, "grocery_list", mapping.groceryListItem);
 
   const backend = isBackendConfigured();
   const local = usePersistedCollection<DailyFeedback & { id: string }>(
@@ -340,6 +359,142 @@ function useDataStore() {
     exposureItems.update(itemId, { log: [...current.log, entry], status });
   }
 
+  // --- Task lifecycle workflow (start/stop/delegate/reschedule/skip) --------
+
+  // Looks up by originalDate (the template's natural recurring slot), not the
+  // possibly-rescheduled current `date`, so a moved instance is still found when
+  // re-visiting the day it was originally supposed to happen.
+  function getInstance(templateId: string, originalDate: string): TaskInstance | undefined {
+    return taskInstances.items.find((instance) => instance.templateId === templateId && instance.originalDate === originalDate);
+  }
+
+  function ensureInstance(template: Task, date: string): TaskInstance {
+    return (
+      getInstance(template.id, date) ?? {
+        id: makeId("instance"),
+        templateId: template.id,
+        originalDate: date,
+        date,
+        state: "not_started",
+        assignedTo: template.assignedTo,
+        originalAssignedTo: template.assignedTo,
+        scheduledTime: template.time,
+        checklist: buildDefaultChecklist(template),
+        history: [],
+      }
+    );
+  }
+
+  // Instances currently scheduled on `date` due to a reschedule that moved them
+  // in from a different original day — used so the destination day's agenda
+  // shows them too, not just the day they were originally supposed to happen.
+  function getRescheduledInto(date: string): TaskInstance[] {
+    return taskInstances.items.filter((instance) => instance.date === date && instance.originalDate !== date);
+  }
+
+  function withHistory(instance: TaskInstance, entry: Omit<TaskHistoryEntry, "id" | "timestamp">): TaskHistoryEntry[] {
+    return [...instance.history, { ...entry, id: makeId("hist"), timestamp: new Date().toISOString() }];
+  }
+
+  async function persistInstance(instance: TaskInstance) {
+    const exists = taskInstances.items.some((item) => item.id === instance.id);
+    return exists ? taskInstances.update(instance.id, instance) : taskInstances.add(instance);
+  }
+
+  async function startTask(template: Task, date: string, startTime: string, startTimeZone: string) {
+    const instance = ensureInstance(template, date);
+    return persistInstance({
+      ...instance,
+      state: "in_progress",
+      startTime,
+      startTimeZone,
+      history: withHistory(instance, { type: "start", oldValue: "", newValue: startTime, reason: "" }),
+    });
+  }
+
+  async function endTask(instanceId: string, endTime: string, endTimeZone: string, checklist: ChecklistItemValue[], rating?: number) {
+    const instance = taskInstances.items.find((item) => item.id === instanceId);
+    if (!instance) return false;
+    return persistInstance({
+      ...instance,
+      state: "completed",
+      endTime,
+      endTimeZone,
+      checklist,
+      rating,
+      history: withHistory(instance, { type: "end", oldValue: instance.startTime ?? "", newValue: endTime, reason: "" }),
+    });
+  }
+
+  async function rescheduleTask(template: Task, date: string, newDate: string, newTime: string, reason: string) {
+    const instance = ensureInstance(template, date);
+    return persistInstance({
+      ...instance,
+      state: "rescheduled",
+      date: newDate,
+      scheduledTime: newTime,
+      history: withHistory(instance, {
+        type: "reschedule",
+        oldValue: `${instance.date} ${instance.scheduledTime}`,
+        newValue: `${newDate} ${newTime}`,
+        reason,
+      }),
+    });
+  }
+
+  async function skipTask(template: Task, date: string, reason: string) {
+    const instance = ensureInstance(template, date);
+    return persistInstance({
+      ...instance,
+      state: "skipped",
+      history: withHistory(instance, { type: "skip", oldValue: instance.state, newValue: "skipped", reason }),
+    });
+  }
+
+  async function delegateTask(template: Task, date: string, fromPersonId: string, toPersonId: string) {
+    const instance = ensureInstance(template, date);
+    const updated: TaskInstance = {
+      ...instance,
+      state: "assigned_pending",
+      history: withHistory(instance, { type: "delegate", oldValue: fromPersonId, newValue: toPersonId, reason: "" }),
+    };
+    const ok = await persistInstance(updated);
+    if (!ok) return false;
+    return inboxRequests.add({
+      id: makeId("inbox"),
+      taskInstanceId: updated.id,
+      fromPersonId,
+      toPersonId,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  // Declined delegations silently fall back to the original assignee rather than
+  // prompting the requester — simplest default until the household says otherwise.
+  async function respondToDelegation(requestId: string, accept: boolean) {
+    const request = inboxRequests.items.find((item) => item.id === requestId);
+    if (!request) return false;
+    const responded = await inboxRequests.update(requestId, { status: accept ? "accepted" : "declined", respondedAt: new Date().toISOString() });
+    if (!responded) return false;
+    const instance = taskInstances.items.find((item) => item.id === request.taskInstanceId);
+    if (!instance) return true;
+    if (accept) {
+      return persistInstance({
+        ...instance,
+        state: "reassigned",
+        assignedTo: request.toPersonId,
+        history: withHistory(instance, { type: "accept", oldValue: instance.assignedTo, newValue: request.toPersonId, reason: "" }),
+      });
+    }
+    return persistInstance({
+      ...instance,
+      state: "not_started",
+      assignedTo: instance.originalAssignedTo,
+      history: withHistory(instance, { type: "decline", oldValue: request.toPersonId, newValue: instance.originalAssignedTo, reason: "" }),
+    });
+  }
+
   function snapshot() {
     return {
       households: households.items,
@@ -401,12 +556,28 @@ function useDataStore() {
     productFeedback,
     calendarEvents,
     aloneTimeLogs,
+    taskInstances,
+    inboxRequests,
+    meals,
+    recipeIngredients,
+    inventory,
+    groceryList,
     feedback,
     feedbackLoopRules,
     locations,
+    shelfLifeDefaultsDays,
     completeTask,
     logMilestoneSession,
     logExposure,
+    getInstance,
+    ensureInstance,
+    getRescheduledInto,
+    startTask,
+    endTask,
+    rescheduleTask,
+    skipTask,
+    delegateTask,
+    respondToDelegation,
     snapshot,
     restore,
   };

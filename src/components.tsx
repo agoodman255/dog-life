@@ -3,8 +3,54 @@ import { FormEvent, ReactNode, useState } from "react";
 import { useSession } from "./auth";
 import { useNavigation } from "./navigation";
 import { makeId, useStore } from "./store";
-import { DailyFeedback, Dog, DogFormation, FeedbackType, Milestone, Person, Task } from "./types";
-import { computeMilestoneStatus, milestoneProgress, resolveDependencies } from "./utils";
+import { ChecklistItemValue, DailyFeedback, Dog, DogFormation, FeedbackType, Milestone, Person, Task } from "./types";
+import { formatInZone, isoToZonedParts, searchTimezones, zonedTimeToUtcIso, zoneLabel } from "./timezones";
+import { buildDefaultChecklist, computeMilestoneStatus, formatMinutes, milestoneProgress, resolveDependencies, taskStateLabels } from "./utils";
+
+function to12Hour(time24: string): string {
+  const [hours, minutes] = time24.split(":").map(Number);
+  return formatMinutes(hours * 60 + minutes);
+}
+
+export function TimezonePicker({ value, onChange }: { value: string; onChange: (zoneId: string) => void }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const matches = searchTimezones(query);
+  return (
+    <div className="timezone-picker">
+      <button type="button" className="text-button" onClick={() => setOpen((prev) => !prev)}>
+        {zoneLabel(value)}
+      </button>
+      {open && (
+        <div className="timezone-picker-panel">
+          <input
+            autoFocus
+            placeholder="Search city or zone (e.g. Denver, Eastern)"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <div className="timezone-picker-list">
+            {matches.map((tz) => (
+              <button
+                key={tz.id}
+                type="button"
+                className={tz.id === value ? "active" : ""}
+                onClick={() => {
+                  onChange(tz.id);
+                  setOpen(false);
+                  setQuery("");
+                }}
+              >
+                {tz.label} ({tz.abbreviation}) — {tz.cities.slice(0, 2).join(", ")}
+              </button>
+            ))}
+            {matches.length === 0 && <p className="small">No match. Only the four US zones are supported for now.</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export const formationLabels: Record<DogFormation, string> = {
   together: "Together",
@@ -157,11 +203,13 @@ export function TaskCard({
   feedback,
   onComplete,
   onDelete,
+  onOpenDetail,
 }: {
   task: Task;
   feedback?: DailyFeedback;
   onComplete: (task: Task, rating: number) => Promise<boolean> | boolean | void;
   onDelete?: (task: Task) => void;
+  onOpenDetail?: (task: Task) => void;
 }) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [failed, setFailed] = useState(false);
@@ -187,6 +235,11 @@ export function TaskCard({
           </div>
           <div className="row" style={{ gap: 8 }}>
             <span className={`priority ${task.priority}`}>{task.priority}</span>
+            {onOpenDetail && (
+              <button className="text-button" type="button" onClick={() => onOpenDetail(task)}>
+                Manage
+              </button>
+            )}
             {onDelete && (
               <button className="text-button" type="button" onClick={() => onDelete(task)} aria-label={`Delete ${task.title}`}>
                 Remove
@@ -239,34 +292,197 @@ export function TaskCard({
   );
 }
 
-export function TaskDetailModal({
-  task,
-  feedback,
-  onComplete,
-  onClose,
-}: {
-  task: Task;
-  feedback?: DailyFeedback;
-  onComplete: (task: Task, rating: number) => Promise<boolean> | boolean | void;
-  onClose: () => void;
-}) {
-  const { dogs, milestones, locations } = useStore();
-  const { navigate } = useNavigation();
-  const [checked, setChecked] = useState<Record<string, boolean>>({});
-  const [failed, setFailed] = useState(false);
+function ChecklistItemEditor({ item, onChange }: { item: ChecklistItemValue; onChange: (next: ChecklistItemValue) => void }) {
+  return (
+    <div className="checklist-item-editor">
+      <div className="row between">
+        <strong>{item.itemName}</strong>
+        {item.dataType === "boolean" && (
+          <input type="checkbox" checked={!!item.value} onChange={(event) => onChange({ ...item, value: event.target.checked })} />
+        )}
+        {(item.dataType === "counter" || item.dataType === "duration_minutes") && (
+          <input
+            type="number"
+            min={0}
+            value={typeof item.value === "number" ? item.value : 0}
+            onChange={(event) => onChange({ ...item, value: Number(event.target.value) })}
+            style={{ width: 70 }}
+          />
+        )}
+      </div>
+      {item.dataType === "free_text" ? (
+        <textarea
+          rows={2}
+          value={typeof item.value === "string" ? item.value : ""}
+          onChange={(event) => onChange({ ...item, value: event.target.value })}
+          placeholder="Notes…"
+        />
+      ) : (
+        <input
+          className="checklist-item-note"
+          placeholder="Commentary (optional)"
+          value={item.notes}
+          onChange={(event) => onChange({ ...item, notes: event.target.value })}
+        />
+      )}
+    </div>
+  );
+}
+
+export function TaskDetailModal({ task, date, onClose }: { task: Task; date: string; onClose: () => void }) {
+  const { dogs, milestones, locations, people, getInstance, startTask, endTask, rescheduleTask, skipTask, delegateTask } = useStore();
+  const { navigate, timezone } = useNavigation();
+  const [activePanel, setActivePanel] = useState<null | "start" | "end" | "reschedule" | "skip" | "delegate">(null);
+  const [error, setError] = useState(false);
+
+  const instance = getInstance(task.id, date);
+  const state = instance?.state ?? "not_started";
 
   const involvedDogs = dogs.items.filter((dog) => task.dogIds.includes(dog.id));
   const location = locations.find((loc) => loc.id === task.location);
   const relatedMilestone = task.relatedMilestoneId ? milestones.items.find((item) => item.id === task.relatedMilestoneId) : undefined;
 
-  function toggleItem(item: string) {
-    setChecked((prev) => ({ ...prev, [item]: !prev[item] }));
+  const [startManual, setStartManual] = useState(false);
+  const [startDate, setStartDate] = useState(date);
+  const [startClock, setStartClock] = useState("12:00");
+  const [startZone, setStartZone] = useState(timezone);
+
+  function openStart() {
+    setError(false);
+    setActivePanel("start");
+    setStartManual(false);
+    setStartDate(date);
+    setStartClock(new Date().toTimeString().slice(0, 5));
+    setStartZone(timezone);
   }
 
-  async function handleRate(rating: number) {
-    setFailed(false);
-    const ok = await onComplete(task, rating);
-    if (ok === false) setFailed(true);
+  async function confirmStartNow() {
+    setError(false);
+    const ok = await startTask(task, date, new Date().toISOString(), timezone);
+    if (!ok) setError(true);
+    else setActivePanel(null);
+  }
+
+  async function confirmStartManual() {
+    setError(false);
+    const iso = zonedTimeToUtcIso(startDate, startClock, startZone);
+    const ok = await startTask(task, date, iso, startZone);
+    if (!ok) setError(true);
+    else setActivePanel(null);
+  }
+
+  const [endManual, setEndManual] = useState(false);
+  const [endDate, setEndDate] = useState(date);
+  const [endClock, setEndClock] = useState("12:00");
+  const [endZone, setEndZone] = useState(timezone);
+  const [checklistDraft, setChecklistDraft] = useState<ChecklistItemValue[]>([]);
+  const [ratingDraft, setRatingDraft] = useState<number | undefined>(undefined);
+
+  function openEnd() {
+    setError(false);
+    setActivePanel("end");
+    setEndManual(false);
+    setEndDate(date);
+    setEndClock(new Date().toTimeString().slice(0, 5));
+    setEndZone(instance?.startTimeZone ?? timezone);
+    setChecklistDraft(instance?.checklist ?? buildDefaultChecklist(task));
+    setRatingDraft(instance?.rating);
+  }
+
+  async function finishEnd(endIso: string, endTz: string) {
+    if (!instance) return;
+    setError(false);
+    const ok = await endTask(instance.id, endIso, endTz, checklistDraft, ratingDraft);
+    if (!ok) setError(true);
+    else setActivePanel(null);
+  }
+
+  async function quickComplete(rating: number) {
+    setError(false);
+    const nowIso = new Date().toISOString();
+    const started = await startTask(task, date, nowIso, timezone);
+    if (!started) {
+      setError(true);
+      return;
+    }
+    const fresh = getInstance(task.id, date);
+    if (!fresh) {
+      setError(true);
+      return;
+    }
+    const ok = await endTask(fresh.id, nowIso, timezone, buildDefaultChecklist(task), rating);
+    if (!ok) setError(true);
+  }
+
+  const [rescheduleReason, setRescheduleReason] = useState("");
+  const [rescheduleDate, setRescheduleDate] = useState(date);
+  const [rescheduleClock, setRescheduleClock] = useState("12:00");
+
+  function openReschedule() {
+    setError(false);
+    setActivePanel("reschedule");
+    setRescheduleReason("");
+    setRescheduleDate(date);
+    setRescheduleClock("12:00");
+  }
+
+  async function confirmReschedule() {
+    if (!rescheduleReason.trim()) {
+      setError(true);
+      return;
+    }
+    setError(false);
+    const ok = await rescheduleTask(task, date, rescheduleDate, to12Hour(rescheduleClock), rescheduleReason.trim());
+    if (!ok) setError(true);
+    else {
+      setActivePanel(null);
+      onClose();
+    }
+  }
+
+  const [skipReason, setSkipReason] = useState("");
+
+  function openSkip() {
+    setError(false);
+    setActivePanel("skip");
+    setSkipReason("");
+  }
+
+  async function confirmSkip() {
+    if (!skipReason.trim()) {
+      setError(true);
+      return;
+    }
+    setError(false);
+    const ok = await skipTask(task, date, skipReason.trim());
+    if (!ok) setError(true);
+    else {
+      setActivePanel(null);
+      onClose();
+    }
+  }
+
+  const [delegateTo, setDelegateTo] = useState("");
+
+  function openDelegate() {
+    setError(false);
+    setActivePanel("delegate");
+    setDelegateTo("");
+  }
+
+  async function confirmDelegate() {
+    if (!delegateTo) {
+      setError(true);
+      return;
+    }
+    setError(false);
+    const fromId = instance?.assignedTo ?? task.assignedTo;
+    const ok = await delegateTask(task, date, fromId, delegateTo);
+    if (!ok) setError(true);
+    else {
+      setActivePanel(null);
+      onClose();
+    }
   }
 
   return (
@@ -276,13 +492,14 @@ export function TaskDetailModal({
           <span className={`priority ${task.priority}`}>{task.priority}</span>
           <span>{task.category}</span>
           <span>
-            {task.time} · {task.duration} min
+            {instance?.scheduledTime ?? task.time} · {task.duration} min
           </span>
           <span>{task.setting}</span>
           <span>Difficulty {task.difficulty}/5</span>
           <span>
-            <PersonName id={task.assignedTo} />
+            <PersonName id={instance?.assignedTo ?? task.assignedTo} />
           </span>
+          <span className={`state-tag ${state}`}>{taskStateLabels[state]}</span>
         </div>
 
         <div className="task-detail-dogs">
@@ -311,15 +528,6 @@ export function TaskDetailModal({
         </div>
 
         <p>{task.notes}</p>
-
-        <div className="checklist">
-          {task.checklist.map((item) => (
-            <label key={item} className={checked[item] ? "checked" : ""}>
-              <input type="checkbox" checked={!!checked[item]} onChange={() => toggleItem(item)} />
-              {item}
-            </label>
-          ))}
-        </div>
 
         {relatedMilestone && (
           <div className="task-detail-milestone">
@@ -355,28 +563,286 @@ export function TaskDetailModal({
           </div>
         )}
 
-        <div className="rating-label">
-          <span>{feedback?.completed ? "Logged — how did it go?" : "How did it go?"}</span>
-          {feedback?.completed && (
-            <strong>
-              <Check size={14} aria-hidden /> Rated {feedback.rating}/5
-            </strong>
-          )}
-        </div>
-        {failed && <p className="form-error">That didn't save — check the browser console and try again.</p>}
-        <div className="rating-row" aria-label={`Complete ${task.title}`}>
-          {[1, 2, 3, 4, 5].map((rating) => (
-            <button
-              key={rating}
-              type="button"
-              className={feedback?.rating === rating ? "selected" : ""}
-              aria-pressed={feedback?.rating === rating}
-              onClick={() => handleRate(rating)}
-            >
-              {rating}
+        {error && <p className="form-error">That didn't save — check any required fields (and the browser console) and try again.</p>}
+
+        {activePanel === null && (state === "not_started" || state === "reassigned" || state === "rescheduled") && (
+          <div className="task-lifecycle-actions">
+            <button className="primary-button" type="button" onClick={openStart}>
+              Start Task
             </button>
-          ))}
-        </div>
+            <button className="text-button" type="button" onClick={openDelegate}>
+              Ask someone else to complete this
+            </button>
+            <button className="text-button" type="button" onClick={openReschedule}>
+              Reschedule
+            </button>
+            <button className="text-button" type="button" onClick={openSkip}>
+              Skip
+            </button>
+          </div>
+        )}
+
+        {activePanel === null && state === "in_progress" && (
+          <div className="task-lifecycle-actions">
+            <p className="small">
+              Started{" "}
+              {instance?.startTime && instance.startTimeZone ? formatInZone(instance.startTime, instance.startTimeZone) : "—"}
+            </p>
+            <button className="primary-button" type="button" onClick={openEnd}>
+              End Task
+            </button>
+            <button className="text-button" type="button" onClick={openReschedule}>
+              Reschedule
+            </button>
+            <button className="text-button" type="button" onClick={openSkip}>
+              Skip
+            </button>
+          </div>
+        )}
+
+        {state === "assigned_pending" && (
+          <p className="small">
+            Waiting for <PersonName id={instance?.assignedTo ?? task.assignedTo} /> to accept or decline.
+          </p>
+        )}
+
+        {state === "completed" && instance && (
+          <div className="task-lifecycle-summary">
+            <p className="small">
+              {instance.startTime && instance.startTimeZone ? formatInZone(instance.startTime, instance.startTimeZone) : "—"}
+              {" → "}
+              {instance.endTime && instance.endTimeZone ? formatInZone(instance.endTime, instance.endTimeZone) : "—"}
+              {instance.rating ? ` · Rated ${instance.rating}/5` : ""}
+            </p>
+            <div className="checklist">
+              {instance.checklist.map((item) => (
+                <div key={item.itemName} className="checklist-summary-item">
+                  <strong>{item.itemName}:</strong> {item.dataType === "boolean" ? (item.value ? "Yes" : "No") : String(item.value)}
+                  {item.notes ? ` — ${item.notes}` : ""}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {state === "skipped" && instance && (
+          <p className="small">Skipped — {instance.history.filter((entry) => entry.type === "skip").slice(-1)[0]?.reason}</p>
+        )}
+
+        {activePanel === "start" && (
+          <div className="task-lifecycle-panel">
+            {!startManual ? (
+              <>
+                <p>Is now the correct time this task started?</p>
+                <div className="form-actions">
+                  <button className="text-button" type="button" onClick={() => setStartManual(true)}>
+                    No, pick a time
+                  </button>
+                  <button className="primary-button" type="button" onClick={confirmStartNow}>
+                    Yes, starting now
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="form-grid">
+                  <label>
+                    Start date
+                    <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                  </label>
+                  <label>
+                    Start time
+                    <input type="time" value={startClock} onChange={(event) => setStartClock(event.target.value)} />
+                  </label>
+                  <label>
+                    Time zone
+                    <TimezonePicker value={startZone} onChange={setStartZone} />
+                  </label>
+                </div>
+                <div className="form-actions">
+                  <button className="text-button" type="button" onClick={() => setActivePanel(null)}>
+                    Cancel
+                  </button>
+                  <button className="primary-button" type="button" onClick={confirmStartManual}>
+                    Confirm start
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {activePanel === "end" && (
+          <div className="task-lifecycle-panel">
+            {!endManual ? (
+              <>
+                <p>Is now the correct time this task ended?</p>
+                <div className="form-actions">
+                  <button className="text-button" type="button" onClick={() => setEndManual(true)}>
+                    No, pick a time
+                  </button>
+                  <button className="primary-button" type="button" onClick={() => finishEnd(new Date().toISOString(), timezone)}>
+                    Yes, ending now
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="form-grid">
+                  <label>
+                    End date
+                    <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+                  </label>
+                  <label>
+                    End time
+                    <input type="time" value={endClock} onChange={(event) => setEndClock(event.target.value)} />
+                  </label>
+                  <label>
+                    Time zone
+                    <TimezonePicker value={endZone} onChange={setEndZone} />
+                  </label>
+                </div>
+                <div className="form-actions">
+                  <button className="text-button" type="button" onClick={() => setActivePanel(null)}>
+                    Cancel
+                  </button>
+                  <button className="primary-button" type="button" onClick={() => finishEnd(zonedTimeToUtcIso(endDate, endClock, endZone), endZone)}>
+                    Confirm end
+                  </button>
+                </div>
+              </>
+            )}
+
+            <p className="eyebrow" style={{ marginTop: 12 }}>
+              Checklist review
+            </p>
+            <div className="checklist-editor-list">
+              {checklistDraft.map((item, index) => (
+                <ChecklistItemEditor
+                  key={item.itemName}
+                  item={item}
+                  onChange={(next) => setChecklistDraft((prev) => prev.map((existing, i) => (i === index ? next : existing)))}
+                />
+              ))}
+            </div>
+
+            <p className="eyebrow" style={{ marginTop: 12 }}>
+              How did it go?
+            </p>
+            <div className="rating-row">
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <button
+                  key={rating}
+                  type="button"
+                  className={ratingDraft === rating ? "selected" : ""}
+                  onClick={() => setRatingDraft(rating)}
+                >
+                  {rating}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activePanel === "reschedule" && (
+          <div className="task-lifecycle-panel">
+            <label>
+              Reason (required)
+              <textarea rows={2} value={rescheduleReason} onChange={(event) => setRescheduleReason(event.target.value)} />
+            </label>
+            <div className="form-grid">
+              <label>
+                New date
+                <input type="date" value={rescheduleDate} onChange={(event) => setRescheduleDate(event.target.value)} />
+              </label>
+              <label>
+                New time
+                <input type="time" value={rescheduleClock} onChange={(event) => setRescheduleClock(event.target.value)} />
+              </label>
+            </div>
+            <div className="form-actions">
+              <button className="text-button" type="button" onClick={() => setActivePanel(null)}>
+                Cancel
+              </button>
+              <button className="primary-button" type="button" onClick={confirmReschedule}>
+                Confirm reschedule
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activePanel === "skip" && (
+          <div className="task-lifecycle-panel">
+            <label>
+              Reason (required)
+              <textarea rows={2} value={skipReason} onChange={(event) => setSkipReason(event.target.value)} />
+            </label>
+            <div className="form-actions">
+              <button className="text-button" type="button" onClick={() => setActivePanel(null)}>
+                Cancel
+              </button>
+              <button className="primary-button" type="button" onClick={confirmSkip}>
+                Confirm skip
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activePanel === "delegate" && (
+          <div className="task-lifecycle-panel">
+            <label>
+              Ask
+              <select value={delegateTo} onChange={(event) => setDelegateTo(event.target.value)}>
+                <option value="">Select a person…</option>
+                {people.items
+                  .filter((person) => person.id !== (instance?.assignedTo ?? task.assignedTo))
+                  .map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <div className="form-actions">
+              <button className="text-button" type="button" onClick={() => setActivePanel(null)}>
+                Cancel
+              </button>
+              <button className="primary-button" type="button" onClick={confirmDelegate}>
+                Send request
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activePanel === null && (state === "not_started" || state === "in_progress") && (
+          <div className="rating-row" aria-label={`Quick-complete ${task.title}`} style={{ marginTop: 12 }}>
+            <span className="small" style={{ marginRight: 8 }}>
+              Quick complete:
+            </span>
+            {[1, 2, 3, 4, 5].map((rating) => (
+              <button key={rating} type="button" onClick={() => quickComplete(rating)}>
+                {rating}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {instance && instance.history.length > 0 && (
+          <div className="task-history">
+            <p className="eyebrow">History</p>
+            <ul>
+              {instance.history
+                .slice()
+                .reverse()
+                .map((entry) => (
+                  <li key={entry.id}>
+                    <strong>{entry.type}</strong> — {new Date(entry.timestamp).toLocaleString()}
+                    {entry.reason ? `: ${entry.reason}` : ""}
+                  </li>
+                ))}
+            </ul>
+          </div>
+        )}
       </div>
     </Modal>
   );

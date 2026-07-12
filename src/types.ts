@@ -81,6 +81,81 @@ export type Task = {
   formation?: DogFormation;
   /** Links a training task to its milestone for click-through (status, sources, next steps). */
   relatedMilestoneId?: string;
+  /** Structured checklist definition for the lifecycle workflow (Start/End Task).
+   * Falls back to treating every `checklist` string as a boolean item when absent. */
+  checklistSchema?: ChecklistItemDef[];
+};
+
+// --- Task lifecycle workflow (start/stop/delegate/reschedule/skip) ---------
+
+export type ChecklistDataType = "boolean" | "counter" | "duration_minutes" | "free_text";
+
+export type ChecklistItemDef = {
+  itemName: string;
+  dataType: ChecklistDataType;
+};
+
+export type ChecklistItemValue = {
+  itemName: string;
+  dataType: ChecklistDataType;
+  value: boolean | number | string | null;
+  notes: string;
+};
+
+export type TaskState =
+  | "not_started"
+  | "in_progress"
+  | "completed"
+  | "skipped"
+  | "rescheduled"
+  | "assigned_pending"
+  | "reassigned";
+
+export type TaskHistoryEntryType = "start" | "end" | "reschedule" | "skip" | "delegate" | "accept" | "decline";
+
+export type TaskHistoryEntry = {
+  id: string;
+  type: TaskHistoryEntryType;
+  oldValue: string;
+  newValue: string;
+  reason: string;
+  timestamp: string;
+};
+
+export type TaskInstance = {
+  id: string;
+  templateId: string;
+  /** YYYY-MM-DD — the template's natural recurring slot this instance was generated
+   * for. Fixed at creation; used as the lookup key so a reschedule can move `date`
+   * away without losing track of which day it was originally supposed to happen. */
+  originalDate: string;
+  /** YYYY-MM-DD — the day this instance is currently scheduled for. Equals
+   * `originalDate` unless it's been rescheduled. */
+  date: string;
+  state: TaskState;
+  assignedTo: string;
+  originalAssignedTo: string;
+  /** Wall-clock label for the day, e.g. "7:15 AM" — copied from the template, changes on reschedule. */
+  scheduledTime: string;
+  startTime?: string;
+  startTimeZone?: string;
+  endTime?: string;
+  endTimeZone?: string;
+  rating?: number;
+  checklist: ChecklistItemValue[];
+  history: TaskHistoryEntry[];
+};
+
+export type InboxRequestStatus = "pending" | "accepted" | "declined";
+
+export type InboxRequest = {
+  id: string;
+  taskInstanceId: string;
+  fromPersonId: string;
+  toPersonId: string;
+  status: InboxRequestStatus;
+  createdAt: string;
+  respondedAt?: string;
 };
 
 export type TrainingSource = {
@@ -256,6 +331,65 @@ export type Location = {
   type: LocationType;
   availability: string;
   notes: string;
+};
+
+// --- Meal planning, inventory, and grocery list -----------------------------
+
+export type MealSource = "manual_entry" | "claude_code_import" | "ai_generated";
+
+export type Meal = {
+  id: string;
+  name: string;
+  description: string;
+  source: MealSource;
+  prepMinutes: number;
+  cookMinutes: number;
+  /** YYYY-MM-DD — unassigned (shows in the meal-idea pool) until scheduled to a day. */
+  plannedDate?: string;
+};
+
+export type RecipeIngredient = {
+  id: string;
+  mealId: string;
+  ingredientName: string;
+  quantity: number;
+  unit: string;
+};
+
+export type InventoryLocation = "fridge" | "freezer" | "pantry";
+
+export type InventoryCategory =
+  | "produce"
+  | "dairy"
+  | "meat"
+  | "seafood"
+  | "eggs"
+  | "bread"
+  | "frozen"
+  | "pantry-staple"
+  | "leftovers"
+  | "other";
+
+export type InventoryItem = {
+  id: string;
+  itemName: string;
+  category: InventoryCategory;
+  location: InventoryLocation;
+  quantity: number;
+  unit: string;
+  purchaseDate: string;
+  estimatedExpirationDate: string;
+};
+
+export type GroceryItemStatus = "needed" | "already_have" | "ordered";
+
+export type GroceryListItem = {
+  id: string;
+  itemName: string;
+  quantityNeeded: number;
+  unit: string;
+  linkedMealIds: string[];
+  status: GroceryItemStatus;
 };
 
 export type FeedbackLoopRule = {

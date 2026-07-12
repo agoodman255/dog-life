@@ -323,7 +323,50 @@ target (~4 hrs) that lands before the age-based guidance suggests a puppy that a
 - 30 Day Perfect Pup — PDF booklet: https://s3.us-east-2.amazonaws.com/30-day-perfect-pup-manual/30-Day-Perfect-Pup-With-Zak-George.pdf
 - The Dog Training Experience (Inertia, day-by-day): https://www.youtube.com/watch?v=mIot0mHLemQ&list=PLMssKIjsDxXl_ZXQgcHlEY_fC-yL5P76N
 
-## 15. Open Items / Follow-Ups
+## 15. Parkview Elementary / Salt Lake City School District Calendar (2026-27, confirmed)
+
+Real calendar from the district (`2026-27_calendars-3_1.pdf`, SLC School District) — used for the
+Parkview Elementary yard location's availability rule. Only the exact daily bell time (~7:45 AM-3:00 PM)
+is still an estimate; every date below is confirmed.
+
+| Quarter | Dates |
+|---|---|
+| 1st | August 18, 2026 – October 23, 2026 |
+| 2nd | October 26, 2026 – January 8, 2027 |
+| 3rd | January 11, 2027 – March 19, 2027 |
+| 4th | March 22, 2027 – May 27, 2027 |
+
+- **First day of school:** Tuesday, August 18, 2026
+- **Last day of elementary school:** Wednesday, May 26, 2027 (middle/high school: Thursday, May 27; emergency make-up day Friday, May 28, if needed)
+- **Non-student days (teacher workdays, no students):** Friday, September 25, 2026 · Wednesday, November 25, 2026 · Friday, February 26, 2027
+- **Holidays/breaks:** 4th of July observed Fri 7/3/26 · Pioneer Day Fri 7/24/26 · Labor Day Mon 9/7/26 · Fall Break Thu-Fri 10/15-16/26 · Thanksgiving Break Thu-Fri 11/26-27/26 · Winter Break Mon 12/21/26 - Fri 1/1/27 (school resumes Mon 1/4/27) · MLK Jr. Day Mon 1/18/27 · Presidents Day Mon 2/15/27 · Spring Break Mon 3/29/27 - Fri 4/2/27 · Memorial Day Mon 5/31/27 · Juneteenth observed Mon 6/21/27
+
+## 16. Calendar/Task-Workflow/Meal-Planning Spec (second document)
+
+A second spec doc (`puppy-app-calendar-task-meal-spec.md`) added three areas on top of everything above —
+implemented in the app, not re-documented fact-by-fact here since the app code is the source of truth for
+UI behavior:
+
+- **Full calendar UI** (day/week/month, tap-to-drill-down, confirmed-vs-placeholder styling) — already built
+  in Sections 10-13 above before this spec arrived; matches what it asked for.
+- **Time zone handling** — app-wide active zone (default Mountain), searchable by city/zone name, currently
+  supports the 4 US zones named in the spec (Eastern/Central/Mountain/Pacific). Task start/end times store a
+  normalized UTC instant plus the zone used, so "true" local time always displays correctly regardless of
+  which zone was active when logged.
+- **Full task lifecycle** — Not Started → In Progress → Completed, plus Skipped/Rescheduled/Assigned-Pending/
+  Reassigned. Start/End Task both ask "is now correct?" with a manual time+zone fallback. Reschedule and Skip
+  require a reason and log a full audit trail. Delegation creates an Inbox request; decline silently falls
+  back to the original assignee (a default choice, not specified by the household). Checklist items are
+  now typed (boolean/counter/duration/free-text) per the "Morning Potty" worked example, with the old 1-5
+  rating kept as a fast-path shortcut rather than removed.
+- **Meal planning, inventory, and grocery list** — manual meal entry with per-day assignment (cross-referenced
+  against that day's calendar load to flag busy nights), fridge/freezer/pantry inventory with shelf-life-based
+  expiration flagging, and a grocery list generator that diffs planned-meal ingredients against inventory.
+  **Not implemented:** a live in-app "AI-generate meal ideas" button — that needs a backend function holding
+  an API key (unsafe to call an LLM directly from the client) and has real usage cost, so it was flagged
+  rather than built silently. Manual entry and conversational entry (asking Claude Code to add meals) both work today.
+
+## 17. Open Items / Follow-Ups
 
 Still needed from the household before these can move from placeholder to confirmed:
 
@@ -336,12 +379,15 @@ Still needed from the household before these can move from placeholder to confir
 7. Rover-sitter logistics (existing sitter vs. new search, default visit duration)
 8. TBA kickoff times to fill in as the season approaches: Georgia 11/14, 11/21, 11/28; Clemson 10/3, 10/17, 10/24, 10/31, 11/7, 11/14, 11/28
 9. BYU vs. Notre Dame kickoff time (date is confirmed: 10/17/26)
+10. Exact Parkview bell schedule start/end time (currently estimated ~7:45 AM-3:00 PM)
+11. Delegation notification method beyond in-app (push/SMS/email?), whether declined delegations should prompt for a new assignee instead of silently falling back, and any dietary preferences/target meals-per-week/recurring favorites for meal planning
 
-## 16. Conflicts / Notable Cross-References Found During Consolidation
+## 18. Conflicts / Notable Cross-References Found During Consolidation
 
 - **Timeline conflict (fixed in app data):** the app's previous seed data assumed the puppy had already been home since late June 2026 (fake weight logs, a journal entry, a vet visit, relationship logs with Griz) — this contradicted the real 8/1/26 pickup date and has been cleared out.
 - **Griz's command list has two versions:** the 2024 Care Sheet lists ~11 basic commands; `Dog.xlsx`'s "Known Commands" sheet lists ~22, clearly a more complete/current list. Treated the xlsx list as authoritative and merged both into Griz's profile — no real conflict, just an update over time. Per the original knowledge doc's own instruction, this same command list is mirrored as the new puppy's training target list too.
 - **Alone-time targets are more aggressive than typical age-based guidance** (see Section 4 cross-reference) — flagging as a real risk to plan around (Rover backup), not a data error.
 - **Griz's daily schedule (Care Sheet) vs. the puppy's daily schedule (Dog.xlsx "Daily Schedule" sheet) look very different** — this is expected, not a conflict: Griz is a trained adult on a simple routine, the puppy sheet is an intensive newborn-puppy hour-by-hour potty/crate/play rotation meant for the first weeks home only.
+- **School name correction:** an earlier pass referred to the school as "Parkside Elementary" based on a generic mention; the household's follow-up message and the attached district calendar confirm it's **Parkview Elementary**, using the Salt Lake City School District's real 2026-27 calendar (Section 15). Corrected throughout the app.
 - **Not a conflict, an added layer:** Sections 10-13 (merged daily schedule, gym overlap policy, downtime blocks, coverage tiers) don't come from a source document — they're household-logistics guidance built on top of the source data, added because the household asked for realistic Rover/coverage planning and a workable shared schedule rather than two independent dog routines. Several specifics (exact downtime days, which weeks need staggered gym trips) are intentionally left as placeholders to tune once the real post-pickup routine settles.
 - **Ski days correction (household-provided):** the original knowledge doc modeled ski days as a single ~6-8 hr full-day event fixed to late December. The household clarified it's actually a ~45-min-each-way SLC drive with variable 3-8 hr mountain time, happening on any night/weekend/powder weekday across the whole ski season — corrected throughout Sections 4, 5, and 13, and the Rover plan now treats it as a per-trip tiering decision rather than one fixed plan.

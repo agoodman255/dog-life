@@ -123,9 +123,9 @@ for (const dog of dogs) {
 
 for (const task of todayTasks) {
   lines.push(
-    `insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id) values (`,
+    `insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id, checklist_schema) values (`,
     `  ${str(HOUSEHOLD_ID)}, ${str(task.title)}, ${str(task.category)}, ${str(personRef(task.assignedTo))}, ${str(task.time)}, ${num(task.duration)}, ${str(task.priority)}, ${textArray(task.supplies)}, ${str(task.setting)}, ${num(task.difficulty)}, ${uuidArray(task.dogIds.map(dogRef))}, ${textArray(task.checklist)}, ${str(task.grizParticipation)}, ${str(task.notes)},`,
-    `  ${task.location ? str(task.location) : "NULL"}, ${task.formation ? str(task.formation) : "NULL"}, ${task.relatedMilestoneId ? str(task.relatedMilestoneId) : "NULL"}`,
+    `  ${task.location ? str(task.location) : "NULL"}, ${task.formation ? str(task.formation) : "NULL"}, ${task.relatedMilestoneId ? str(task.relatedMilestoneId) : "NULL"}, ${jsonb(task.checklistSchema ?? [])}`,
     ");",
     "",
   );

@@ -4,14 +4,20 @@ import {
   DailyFeedback,
   Dog,
   ExposureItem,
+  GroceryListItem,
   HealthEvent,
   Household,
+  InboxRequest,
+  InventoryItem,
   JournalEntry,
+  Meal,
   Milestone,
   Person,
   ProductFeedback,
+  RecipeIngredient,
   RelationshipLog,
   Task,
+  TaskInstance,
 } from "./types";
 
 // Each entity gets a fromRow (DB snake_case -> app camelCase) and toRow
@@ -131,6 +137,7 @@ export const task = {
       location: row.location ?? undefined,
       formation: row.formation ?? undefined,
       relatedMilestoneId: row.related_milestone_id ?? undefined,
+      checklistSchema: row.checklist_schema ?? undefined,
     };
   },
   toRow(item: Task, householdId: string) {
@@ -153,6 +160,7 @@ export const task = {
       location: item.location ?? null,
       formation: item.formation ?? null,
       related_milestone_id: item.relatedMilestoneId ?? null,
+      checklist_schema: item.checklistSchema ?? null,
     };
   },
 };
@@ -393,6 +401,174 @@ export const aloneTimeLog = {
       date: item.date,
       duration_minutes: item.durationMinutes,
       notes: item.notes,
+    };
+  },
+};
+
+export const taskInstance = {
+  fromRow(row: any): TaskInstance {
+    return {
+      id: row.id,
+      templateId: row.template_id,
+      originalDate: row.original_date,
+      date: row.date,
+      state: row.state,
+      assignedTo: row.assigned_to,
+      originalAssignedTo: row.original_assigned_to,
+      scheduledTime: row.scheduled_time,
+      startTime: row.start_time ?? undefined,
+      startTimeZone: row.start_time_zone ?? undefined,
+      endTime: row.end_time ?? undefined,
+      endTimeZone: row.end_time_zone ?? undefined,
+      rating: row.rating ?? undefined,
+      checklist: row.checklist ?? [],
+      history: row.history ?? [],
+    };
+  },
+  toRow(item: TaskInstance, householdId: string) {
+    return {
+      id: item.id,
+      household_id: householdId,
+      template_id: item.templateId,
+      original_date: item.originalDate,
+      date: item.date,
+      state: item.state,
+      assigned_to: item.assignedTo,
+      original_assigned_to: item.originalAssignedTo,
+      scheduled_time: item.scheduledTime,
+      start_time: item.startTime ?? null,
+      start_time_zone: item.startTimeZone ?? null,
+      end_time: item.endTime ?? null,
+      end_time_zone: item.endTimeZone ?? null,
+      rating: item.rating ?? null,
+      checklist: item.checklist,
+      history: item.history,
+    };
+  },
+};
+
+export const inboxRequest = {
+  fromRow(row: any): InboxRequest {
+    return {
+      id: row.id,
+      taskInstanceId: row.task_instance_id,
+      fromPersonId: row.from_person_id,
+      toPersonId: row.to_person_id,
+      status: row.status,
+      createdAt: row.created_at,
+      respondedAt: row.responded_at ?? undefined,
+    };
+  },
+  toRow(item: InboxRequest, householdId: string) {
+    return {
+      id: item.id,
+      household_id: householdId,
+      task_instance_id: item.taskInstanceId,
+      from_person_id: item.fromPersonId,
+      to_person_id: item.toPersonId,
+      status: item.status,
+      created_at: item.createdAt,
+      responded_at: item.respondedAt ?? null,
+    };
+  },
+};
+
+export const meal = {
+  fromRow(row: any): Meal {
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      source: row.source,
+      prepMinutes: row.prep_minutes,
+      cookMinutes: row.cook_minutes,
+      plannedDate: row.planned_date ?? undefined,
+    };
+  },
+  toRow(item: Meal, householdId: string) {
+    return {
+      id: item.id,
+      household_id: householdId,
+      name: item.name,
+      description: item.description,
+      source: item.source,
+      prep_minutes: item.prepMinutes,
+      cook_minutes: item.cookMinutes,
+      planned_date: item.plannedDate || null,
+    };
+  },
+};
+
+export const recipeIngredient = {
+  fromRow(row: any): RecipeIngredient {
+    return {
+      id: row.id,
+      mealId: row.meal_id,
+      ingredientName: row.ingredient_name,
+      quantity: row.quantity,
+      unit: row.unit,
+    };
+  },
+  toRow(item: RecipeIngredient, householdId: string) {
+    return {
+      id: item.id,
+      household_id: householdId,
+      meal_id: item.mealId,
+      ingredient_name: item.ingredientName,
+      quantity: item.quantity,
+      unit: item.unit,
+    };
+  },
+};
+
+export const inventoryItem = {
+  fromRow(row: any): InventoryItem {
+    return {
+      id: row.id,
+      itemName: row.item_name,
+      category: row.category,
+      location: row.location,
+      quantity: row.quantity,
+      unit: row.unit,
+      purchaseDate: row.purchase_date,
+      estimatedExpirationDate: row.estimated_expiration_date,
+    };
+  },
+  toRow(item: InventoryItem, householdId: string) {
+    return {
+      id: item.id,
+      household_id: householdId,
+      item_name: item.itemName,
+      category: item.category,
+      location: item.location,
+      quantity: item.quantity,
+      unit: item.unit,
+      purchase_date: item.purchaseDate,
+      estimated_expiration_date: item.estimatedExpirationDate,
+    };
+  },
+};
+
+export const groceryListItem = {
+  fromRow(row: any): GroceryListItem {
+    return {
+      id: row.id,
+      itemName: row.item_name,
+      quantityNeeded: row.quantity_needed,
+      unit: row.unit,
+      linkedMealIds: row.linked_meal_ids ?? [],
+      status: row.status,
+    };
+  },
+  toRow(item: GroceryListItem, householdId: string) {
+    return {
+      id: item.id,
+      household_id: householdId,
+      item_name: item.itemName,
+      quantity_needed: item.quantityNeeded,
+      unit: item.unit,
+      linked_meal_ids: item.linkedMealIds,
+      status: item.status,
     };
   },
 };

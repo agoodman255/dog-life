@@ -5,6 +5,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Download,
   HeartPulse,
   Import,
@@ -23,10 +24,12 @@ import {
   formationLabels,
   HumanProfile,
   MilestoneCard,
+  PersonName,
   ProgressBar,
   Sparkline,
   TaskCard,
   TaskDetailModal,
+  TimezonePicker,
 } from "./components";
 import { Modal } from "./components";
 import {
@@ -51,17 +54,21 @@ import { makeId, useStore } from "./store";
 import { useNavigation } from "./navigation";
 import { setPassword as setAccountPassword, signOut, useSession } from "./auth";
 import { isBackendConfigured } from "./supabaseClient";
-import { CalendarEvent, Dog, ExposureCategory, ExposureItem, FeedbackLoopRule, HealthEvent, NotificationItem, Task } from "./types";
+import { CalendarEvent, Dog, ExposureCategory, ExposureItem, FeedbackLoopRule, HealthEvent, InboxRequest, InventoryItem, NotificationItem, Task, TaskInstance, TaskState } from "./types";
 import {
   addDays,
   addMonths,
   ageLabel,
   computeAloneTimeReadiness,
   computeNotifications,
+  dayLoadMinutes,
   dayOfWeekName,
   formatDate,
   formatMinutes,
+  generateGroceryList,
   heavyWeeks,
+  isExpired,
+  isExpiringSoon,
   isHeavyWeek,
   isSameDay,
   milestoneProgress,
@@ -69,6 +76,7 @@ import {
   parseLocalDate,
   parseTimeLabel,
   readinessScore,
+  taskStateLabels,
   toDateKey,
   useAdaptivePlan,
   weekDays,
@@ -105,6 +113,8 @@ export function DashboardView() {
   const { tasks, feedback, healthEvents, milestones, dogs, completeTask } = useStore();
   const adaptive = useAdaptivePlan(tasks.items, feedback);
   const feedbackByTask = new Map(feedback.map((item) => [item.taskId, item]));
+  const [detailTask, setDetailTask] = useState<Task | null>(null);
+  const todayKey = toDateKey(new Date());
   const puppy = dogs.items.find((dog) => dog.status === "puppy") ?? dogs.items[0];
   const overdue = healthEvents.items.filter((event) => parseLocalDate(event.date) < new Date()).length;
   const currentMilestone =
@@ -146,9 +156,16 @@ export function DashboardView() {
           </div>
           <div className="task-list">
             {adaptive.visibleTasks.map((task) => (
-              <TaskCard key={task.id} task={task} feedback={feedbackByTask.get(task.id)} onComplete={completeTask} />
+              <TaskCard
+                key={task.id}
+                task={task}
+                feedback={feedbackByTask.get(task.id)}
+                onComplete={completeTask}
+                onOpenDetail={setDetailTask}
+              />
             ))}
           </div>
+          {detailTask && <TaskDetailModal task={detailTask} date={todayKey} onClose={() => setDetailTask(null)} />}
         </div>
 
         <div className="stack">
@@ -210,6 +227,10 @@ type AgendaItem = {
   placeholder: boolean;
   source: "task" | "health" | "calendar";
   task?: Task;
+  /** The date (YYYY-MM-DD) this task item is being rendered for — needed to
+   * resolve the right TaskInstance, since a template has no date of its own. */
+  date?: string;
+  state?: TaskState;
   healthEvent?: HealthEvent;
   calendarEvent?: CalendarEvent;
 };
@@ -220,6 +241,7 @@ function buildAgendaForDate(
   healthEvents: HealthEvent[],
   calendarEvents: CalendarEvent[],
   dogs: Dog[],
+  instances: TaskInstance[],
 ): AgendaItem[] {
   const dateKey = toDateKey(date);
   const dow = dayOfWeekName(date);
@@ -227,20 +249,46 @@ function buildAgendaForDate(
   const items: AgendaItem[] = [];
 
   tasks.forEach((task) => {
+    const natural = instances.find((instance) => instance.templateId === task.id && instance.originalDate === dateKey);
+    if (natural && natural.date !== dateKey) return; // rescheduled away from this date
     items.push({
-      id: `task-${task.id}`,
+      id: `task-${task.id}-${dateKey}`,
       title: task.title,
       category: task.category,
-      startMinutes: parseTimeLabel(task.time),
+      startMinutes: parseTimeLabel(natural?.scheduledTime ?? task.time),
       durationMinutes: task.duration,
-      assignedTo: task.assignedTo,
+      assignedTo: natural?.assignedTo ?? task.assignedTo,
       dogNames: task.dogIds.map(dogName).join(" & "),
       priority: task.priority,
       placeholder: false,
       source: "task",
       task,
+      date: dateKey,
+      state: natural?.state ?? "not_started",
     });
   });
+
+  instances
+    .filter((instance) => instance.date === dateKey && instance.originalDate !== dateKey)
+    .forEach((instance) => {
+      const template = tasks.find((item) => item.id === instance.templateId);
+      if (!template) return;
+      items.push({
+        id: `task-${template.id}-${dateKey}-rescheduled`,
+        title: `${template.title} (rescheduled)`,
+        category: template.category,
+        startMinutes: parseTimeLabel(instance.scheduledTime),
+        durationMinutes: template.duration,
+        assignedTo: instance.assignedTo,
+        dogNames: template.dogIds.map(dogName).join(" & "),
+        priority: template.priority,
+        placeholder: false,
+        source: "task",
+        task: template,
+        date: dateKey,
+        state: instance.state,
+      });
+    });
 
   healthEvents.forEach((event) => {
     if (event.date !== dateKey) return;
@@ -437,7 +485,7 @@ function CalendarDayAgenda({
 }: {
   items: AgendaItem[];
   shouldDim: (item: AgendaItem) => boolean;
-  onOpenTask: (task: Task) => void;
+  onOpenTask: (task: Task, date: string) => void;
   onOpenEvent: (event: CalendarEvent) => void;
   onOpenDog: (dogId: string) => void;
 }) {
@@ -447,7 +495,7 @@ function CalendarDayAgenda({
   const hours = Array.from({ length: totalHours + 1 }, (_, i) => DAY_START_MIN + i * 60);
 
   function openItem(item: AgendaItem) {
-    if (item.task) onOpenTask(item.task);
+    if (item.task) onOpenTask(item.task, item.date ?? toDateKey(new Date()));
     else if (item.calendarEvent) onOpenEvent(item.calendarEvent);
     else if (item.healthEvent) onOpenDog(item.healthEvent.dogId);
   }
@@ -483,7 +531,7 @@ function CalendarDayAgenda({
             <button
               key={item.id}
               type="button"
-              className={`day-block ${item.source} ${item.placeholder ? "placeholder" : ""} ${shouldDim(item) ? "dimmed" : ""}`}
+              className={`day-block ${item.source} ${item.placeholder ? "placeholder" : ""} ${shouldDim(item) ? "dimmed" : ""} state-${item.state ?? ""}`}
               style={{ top, height, width: `calc(${width}% - 6px)`, left: `${left}%` }}
               onClick={() => openItem(item)}
             >
@@ -491,6 +539,7 @@ function CalendarDayAgenda({
               <span>{formatMinutes(item.startMinutes!)}</span>
               {item.priority && <span className={`priority ${item.priority}`}>{item.priority}</span>}
               {item.dogNames && <span className="day-block-dogs">{item.dogNames}</span>}
+              {item.state && item.state !== "not_started" && <span className={`state-tag ${item.state}`}>{taskStateLabels[item.state]}</span>}
             </button>
           );
         })}
@@ -510,7 +559,7 @@ function loadViewerId(fallback: string): string {
 }
 
 export function CalendarView() {
-  const { healthEvents, milestones, tasks, dogs, calendarEvents, aloneTimeLogs, people, feedback, completeTask } = useStore();
+  const { healthEvents, milestones, tasks, dogs, calendarEvents, aloneTimeLogs, taskInstances, people } = useStore();
   const { navigate } = useNavigation();
   const attendeeNames = (ids?: string[]) =>
     !ids || ids.length === 0 ? "" : ids.map((id) => people.items.find((person) => person.id === id)?.name ?? id).join(" & ");
@@ -520,7 +569,7 @@ export function CalendarView() {
   const [cursorDate, setCursorDate] = useState<Date>(() => new Date());
   const [viewerId, setViewerId] = useState<string>(() => loadViewerId(people.items[0]?.id ?? ""));
   const [filterMode, setFilterMode] = useState<"all" | "mine" | "other">("all");
-  const [detailTask, setDetailTask] = useState<Task | null>(null);
+  const [detailTask, setDetailTask] = useState<{ task: Task; date: string } | null>(null);
   const touchStartX = useRef<number | null>(null);
   const today = new Date();
 
@@ -531,8 +580,6 @@ export function CalendarView() {
       // ignore
     }
   }, [viewerId]);
-
-  const feedbackByTask = new Map(feedback.map((item) => [item.taskId, item]));
 
   function shouldDim(item: AgendaItem): boolean {
     if (filterMode === "all" || !item.assignedTo) return false;
@@ -570,10 +617,10 @@ export function CalendarView() {
     navigate("profile", { dogId });
   }
 
-  const dayAgenda = buildAgendaForDate(cursorDate, tasks.items, healthEvents.items, calendarEvents.items, dogs.items);
+  const dayAgenda = buildAgendaForDate(cursorDate, tasks.items, healthEvents.items, calendarEvents.items, dogs.items, taskInstances.items);
   const weekAgenda = weekDays(cursorDate).map((day) => ({
     day,
-    items: buildAgendaForDate(day, tasks.items, healthEvents.items, calendarEvents.items, dogs.items),
+    items: buildAgendaForDate(day, tasks.items, healthEvents.items, calendarEvents.items, dogs.items, taskInstances.items),
   }));
 
   const headingLabel =
@@ -649,7 +696,7 @@ export function CalendarView() {
           <CalendarDayAgenda
             items={dayAgenda}
             shouldDim={shouldDim}
-            onOpenTask={(task) => setDetailTask(task)}
+            onOpenTask={(task, date) => setDetailTask({ task, date })}
             onOpenEvent={(event) => setEventModal(event)}
             onOpenDog={openDog}
           />
@@ -668,9 +715,8 @@ export function CalendarView() {
 
       {detailTask && (
         <TaskDetailModal
-          task={detailTask}
-          feedback={feedbackByTask.get(detailTask.id)}
-          onComplete={completeTask}
+          task={detailTask.task}
+          date={detailTask.date}
           onClose={() => setDetailTask(null)}
         />
       )}
@@ -1110,7 +1156,9 @@ export function HealthView() {
 export function TasksView() {
   const { tasks, feedback, people, dogs, completeTask } = useStore();
   const [open, setOpen] = useState(false);
+  const [detailTask, setDetailTask] = useState<Task | null>(null);
   const feedbackByTask = new Map(feedback.map((item) => [item.taskId, item]));
+  const todayKey = toDateKey(new Date());
   return (
     <section className="panel">
       <div className="section-heading">
@@ -1124,7 +1172,14 @@ export function TasksView() {
       </div>
       <div className="task-list">
         {tasks.items.map((task: Task) => (
-          <TaskCard key={task.id} task={task} feedback={feedbackByTask.get(task.id)} onComplete={completeTask} onDelete={(target) => tasks.remove(target.id)} />
+          <TaskCard
+            key={task.id}
+            task={task}
+            feedback={feedbackByTask.get(task.id)}
+            onComplete={completeTask}
+            onDelete={(target) => tasks.remove(target.id)}
+            onOpenDetail={setDetailTask}
+          />
         ))}
       </div>
       {open && (
@@ -1139,6 +1194,96 @@ export function TasksView() {
             }}
           />
         </Modal>
+      )}
+      {detailTask && <TaskDetailModal task={detailTask} date={todayKey} onClose={() => setDetailTask(null)} />}
+    </section>
+  );
+}
+
+export function InboxView() {
+  const { inboxRequests, taskInstances, tasks, people, respondToDelegation } = useStore();
+  const [error, setError] = useState<string | null>(null);
+
+  const pending = inboxRequests.items
+    .filter((request) => request.status === "pending")
+    .slice()
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const resolved = inboxRequests.items
+    .filter((request) => request.status !== "pending")
+    .slice()
+    .sort((a, b) => (b.respondedAt ?? "").localeCompare(a.respondedAt ?? ""));
+
+  function taskTitleFor(taskInstanceId: string) {
+    const instance = taskInstances.items.find((item) => item.id === taskInstanceId);
+    const template = instance ? tasks.items.find((item) => item.id === instance.templateId) : undefined;
+    return { title: template?.title ?? "Unknown task", date: instance?.date };
+  }
+
+  async function respond(requestId: string, accept: boolean) {
+    setError(null);
+    const ok = await respondToDelegation(requestId, accept);
+    if (!ok) setError("That didn't save — check the browser console and try again.");
+  }
+
+  return (
+    <section className="panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Inbox</p>
+          <h2>Delegation requests</h2>
+        </div>
+      </div>
+      {error && <p className="form-error">{error}</p>}
+      <div className="inbox-list">
+        {pending.length === 0 && <p className="small">Nothing pending.</p>}
+        {pending.map((request) => {
+          const { title, date } = taskTitleFor(request.taskInstanceId);
+          return (
+            <article className="inbox-card" key={request.id}>
+              <div>
+                <strong>{title}</strong>
+                <p className="small">
+                  <PersonName id={request.fromPersonId} /> asked <PersonName id={request.toPersonId} /> to take this
+                  {date ? ` (${date})` : ""}.
+                </p>
+              </div>
+              <div className="row">
+                <button className="text-button" type="button" onClick={() => respond(request.id, false)}>
+                  Decline
+                </button>
+                <button className="primary-button" type="button" onClick={() => respond(request.id, true)}>
+                  Accept
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {resolved.length > 0 && (
+        <>
+          <div className="section-heading" style={{ marginTop: 24 }}>
+            <div>
+              <p className="eyebrow">Resolved</p>
+              <h2>History</h2>
+            </div>
+          </div>
+          <div className="inbox-list">
+            {resolved.map((request) => {
+              const { title } = taskTitleFor(request.taskInstanceId);
+              return (
+                <article className="inbox-card" key={request.id}>
+                  <div>
+                    <strong>{title}</strong>
+                    <p className="small">
+                      <PersonName id={request.fromPersonId} /> → <PersonName id={request.toPersonId} />:{" "}
+                      <span className={`state-tag ${request.status}`}>{request.status}</span>
+                    </p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </>
       )}
     </section>
   );
@@ -1380,6 +1525,392 @@ function AccountSection() {
   );
 }
 
+const inventoryLocationLabels: Record<string, string> = { fridge: "Fridge", freezer: "Freezer", pantry: "Pantry" };
+const inventoryCategoryOptions = [
+  "produce",
+  "dairy",
+  "meat",
+  "seafood",
+  "eggs",
+  "bread",
+  "frozen",
+  "pantry-staple",
+  "leftovers",
+  "other",
+] as const;
+
+function MealForm({ onCancel, onSubmit }: { onCancel: () => void; onSubmit: (values: { name: string; description: string; prepMinutes: number; cookMinutes: number; ingredients: { name: string; quantity: number; unit: string }[] }) => void }) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [prepMinutes, setPrepMinutes] = useState(15);
+  const [cookMinutes, setCookMinutes] = useState(30);
+  const [ingredientsText, setIngredientsText] = useState("");
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) return;
+    const ingredients = ingredientsText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [ingName, qty, unit] = line.split(",").map((part) => part.trim());
+        return { name: ingName ?? line, quantity: Number(qty) || 1, unit: unit ?? "" };
+      });
+    onSubmit({ name: name.trim(), description: description.trim(), prepMinutes, cookMinutes, ingredients });
+  }
+
+  return (
+    <form className="entity-form" onSubmit={handleSubmit}>
+      <label>
+        Meal name
+        <input value={name} onChange={(event) => setName(event.target.value)} required />
+      </label>
+      <label>
+        Description
+        <textarea rows={2} value={description} onChange={(event) => setDescription(event.target.value)} />
+      </label>
+      <div className="form-grid">
+        <label>
+          Prep minutes
+          <input type="number" min={0} value={prepMinutes} onChange={(event) => setPrepMinutes(Number(event.target.value))} />
+        </label>
+        <label>
+          Cook minutes
+          <input type="number" min={0} value={cookMinutes} onChange={(event) => setCookMinutes(Number(event.target.value))} />
+        </label>
+      </div>
+      <label>
+        Ingredients — one per line: name, quantity, unit
+        <textarea rows={4} value={ingredientsText} onChange={(event) => setIngredientsText(event.target.value)} placeholder={"chicken breast, 2, lb\nrice, 1, cup"} />
+      </label>
+      <div className="form-actions">
+        <button className="text-button" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="primary-button" type="submit">
+          Save meal
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function InventoryItemForm({
+  onCancel,
+  onSubmit,
+}: {
+  onCancel: () => void;
+  onSubmit: (values: { itemName: string; category: string; location: string; quantity: number; unit: string; purchaseDate: string; estimatedExpirationDate: string }) => void;
+}) {
+  const { shelfLifeDefaultsDays } = useStore();
+  const [itemName, setItemName] = useState("");
+  const [category, setCategory] = useState<(typeof inventoryCategoryOptions)[number]>("produce");
+  const [location, setLocation] = useState("fridge");
+  const [quantity, setQuantity] = useState(1);
+  const [unit, setUnit] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState(toDateKey(new Date()));
+  const [expiration, setExpiration] = useState(() => toDateKey(addDays(new Date(), shelfLifeDefaultsDays.produce)));
+  const [expirationTouched, setExpirationTouched] = useState(false);
+
+  function handleCategoryChange(next: (typeof inventoryCategoryOptions)[number]) {
+    setCategory(next);
+    if (!expirationTouched) {
+      setExpiration(toDateKey(addDays(parseLocalDate(purchaseDate), shelfLifeDefaultsDays[next])));
+    }
+  }
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!itemName.trim()) return;
+    onSubmit({ itemName: itemName.trim(), category, location, quantity, unit: unit.trim(), purchaseDate, estimatedExpirationDate: expiration });
+  }
+
+  return (
+    <form className="entity-form" onSubmit={handleSubmit}>
+      <label>
+        Item name
+        <input value={itemName} onChange={(event) => setItemName(event.target.value)} required />
+      </label>
+      <div className="form-grid">
+        <label>
+          Category
+          <select value={category} onChange={(event) => handleCategoryChange(event.target.value as (typeof inventoryCategoryOptions)[number])}>
+            {inventoryCategoryOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Location
+          <select value={location} onChange={(event) => setLocation(event.target.value)}>
+            <option value="fridge">Fridge</option>
+            <option value="freezer">Freezer</option>
+            <option value="pantry">Pantry</option>
+          </select>
+        </label>
+        <label>
+          Quantity
+          <input type="number" min={0} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} />
+        </label>
+        <label>
+          Unit
+          <input value={unit} onChange={(event) => setUnit(event.target.value)} placeholder="lb, cup, each…" />
+        </label>
+        <label>
+          Purchase date
+          <input
+            type="date"
+            value={purchaseDate}
+            onChange={(event) => {
+              setPurchaseDate(event.target.value);
+              if (!expirationTouched) setExpiration(toDateKey(addDays(parseLocalDate(event.target.value), shelfLifeDefaultsDays[category])));
+            }}
+          />
+        </label>
+        <label>
+          Estimated expiration
+          <input
+            type="date"
+            value={expiration}
+            onChange={(event) => {
+              setExpiration(event.target.value);
+              setExpirationTouched(true);
+            }}
+          />
+        </label>
+      </div>
+      <div className="form-actions">
+        <button className="text-button" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="primary-button" type="submit">
+          Add to inventory
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export function MealsView() {
+  const { meals, recipeIngredients, inventory, groceryList, tasks, calendarEvents } = useStore();
+  const [mealModal, setMealModal] = useState(false);
+  const [inventoryModal, setInventoryModal] = useState(false);
+  const [weekStart, setWeekStart] = useState<Date>(() => weekStartDate(new Date()));
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+
+  const week = weekDays(weekStart);
+  const weekKeys = week.map((day) => toDateKey(day));
+  const unassignedMeals = meals.items.filter((meal) => !meal.plannedDate);
+
+  function assignMeal(mealId: string, dateKey: string) {
+    meals.update(mealId, { plannedDate: dateKey });
+  }
+
+  function unassignMeal(mealId: string) {
+    meals.update(mealId, { plannedDate: undefined });
+  }
+
+  function addMeal(values: { name: string; description: string; prepMinutes: number; cookMinutes: number; ingredients: { name: string; quantity: number; unit: string }[] }) {
+    const id = makeId("meal");
+    meals.add({ id, name: values.name, description: values.description, source: "manual_entry", prepMinutes: values.prepMinutes, cookMinutes: values.cookMinutes });
+    values.ingredients.forEach((ingredient) => {
+      recipeIngredients.add({ id: makeId("ingredient"), mealId: id, ingredientName: ingredient.name, quantity: ingredient.quantity, unit: ingredient.unit });
+    });
+    setMealModal(false);
+  }
+
+  function addInventoryItem(values: { itemName: string; category: string; location: string; quantity: number; unit: string; purchaseDate: string; estimatedExpirationDate: string }) {
+    inventory.add({
+      id: makeId("inventory"),
+      itemName: values.itemName,
+      category: values.category as InventoryItem["category"],
+      location: values.location as InventoryItem["location"],
+      quantity: values.quantity,
+      unit: values.unit,
+      purchaseDate: values.purchaseDate,
+      estimatedExpirationDate: values.estimatedExpirationDate,
+    });
+    setInventoryModal(false);
+  }
+
+  function handleGenerateGroceryList() {
+    const generated = generateGroceryList(weekKeys, meals.items, recipeIngredients.items, inventory.items, makeId);
+    groceryList.setItems(generated);
+  }
+
+  function toggleGroceryStatus(item: (typeof groceryList.items)[number]) {
+    const next = item.status === "needed" ? "ordered" : item.status === "ordered" ? "already_have" : "needed";
+    groceryList.update(item.id, { status: next });
+  }
+
+  async function copyGroceryList() {
+    const lines = groceryList.items
+      .filter((item) => item.status === "needed")
+      .map((item) => `${item.itemName} x${item.quantityNeeded}${item.unit ? ` ${item.unit}` : ""}`)
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(lines);
+      setCopyStatus("Copied — paste into your Walmart order.");
+    } catch {
+      setCopyStatus("Couldn't copy automatically — select and copy the list manually.");
+    }
+    setTimeout(() => setCopyStatus(null), 3000);
+  }
+
+  return (
+    <div className="stack">
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Weekly plan</p>
+            <h2>Week of {weekStart.toLocaleDateString(undefined, { month: "long", day: "numeric" })}</h2>
+          </div>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="icon-button" type="button" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="Previous week">
+              <ChevronLeft size={18} aria-hidden />
+            </button>
+            <button className="icon-button" type="button" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="Next week">
+              <ChevronRight size={18} aria-hidden />
+            </button>
+            <button className="primary-button" type="button" onClick={() => setMealModal(true)}>
+              <Plus size={16} aria-hidden /> Add meal idea
+            </button>
+          </div>
+        </div>
+
+        <div className="week-strip">
+          {week.map((day) => {
+            const dateKey = toDateKey(day);
+            const dayMeals = meals.items.filter((meal) => meal.plannedDate === dateKey);
+            const load = dayLoadMinutes(dateKey, tasks.items, calendarEvents.items);
+            const busy = load >= 120;
+            return (
+              <div key={dateKey} className="week-day meal-day">
+                <span className="week-day-label">{day.toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}</span>
+                {busy && <small className="tbd-tag">Busy night — {Math.round(load / 60)}h already scheduled</small>}
+                <div className="week-day-items">
+                  {dayMeals.map((meal) => (
+                    <div key={meal.id} className="meal-chip">
+                      <strong>{meal.name}</strong>
+                      <span className="small">
+                        {meal.prepMinutes + meal.cookMinutes} min total
+                        {busy && meal.prepMinutes + meal.cookMinutes > 45 ? " · consider a shorter meal tonight" : ""}
+                      </span>
+                      <button className="text-button" type="button" onClick={() => unassignMeal(meal.id)}>
+                        Unassign
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {unassignedMeals.length > 0 && (
+          <>
+            <p className="eyebrow" style={{ marginTop: 16 }}>
+              Unassigned meal ideas
+            </p>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              {unassignedMeals.map((meal) => (
+                <div key={meal.id} className="meal-chip">
+                  <strong>{meal.name}</strong>
+                  <select defaultValue="" onChange={(event) => event.target.value && assignMeal(meal.id, event.target.value)}>
+                    <option value="">Assign to day…</option>
+                    {week.map((day) => (
+                      <option key={toDateKey(day)} value={toDateKey(day)}>
+                        {day.toLocaleDateString(undefined, { weekday: "short" })}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Inventory</p>
+            <h2>Fridge, freezer, pantry</h2>
+          </div>
+          <button className="primary-button" type="button" onClick={() => setInventoryModal(true)}>
+            <Plus size={16} aria-hidden /> Add item
+          </button>
+        </div>
+        <div className="calendar-grid">
+          {(["fridge", "freezer", "pantry"] as const).map((loc) => (
+            <div key={loc}>
+              <p className="eyebrow">{inventoryLocationLabels[loc]}</p>
+              {inventory.items
+                .filter((item) => item.location === loc)
+                .map((item) => (
+                  <article key={item.id} className={`event ${isExpired(item) ? "heavy-week" : isExpiringSoon(item) ? "placeholder" : ""}`}>
+                    <strong>{item.itemName}</strong>
+                    <p>
+                      {item.quantity} {item.unit}
+                    </p>
+                    <small>
+                      {isExpired(item) ? "Expired" : isExpiringSoon(item) ? "Expiring soon" : "Fresh"} — est. {formatDate(item.estimatedExpirationDate)}
+                    </small>
+                  </article>
+                ))}
+              {inventory.items.filter((item) => item.location === loc).length === 0 && <p className="small">Nothing logged.</p>}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Grocery list</p>
+            <h2>This week's shopping</h2>
+          </div>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="text-button" type="button" onClick={handleGenerateGroceryList}>
+              Generate from this week's meals
+            </button>
+            <button className="primary-button" type="button" onClick={copyGroceryList}>
+              Copy needed items
+            </button>
+          </div>
+        </div>
+        {copyStatus && <p className="small">{copyStatus}</p>}
+        {groceryList.items.length === 0 && <p className="small">Nothing generated yet — plan some meals for the week, then generate.</p>}
+        <div className="task-list">
+          {groceryList.items.map((item) => (
+            <article key={item.id} className={`event ${item.status === "already_have" ? "" : item.status === "ordered" ? "placeholder" : "recurring"}`} onClick={() => toggleGroceryStatus(item)} style={{ cursor: "pointer" }}>
+              <span>{item.status}</span>
+              <strong>
+                {item.itemName} × {item.quantityNeeded} {item.unit}
+              </strong>
+              <small>Tap to cycle: needed → ordered → already have</small>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {mealModal && (
+        <Modal title="Add meal idea" onClose={() => setMealModal(false)}>
+          <MealForm onCancel={() => setMealModal(false)} onSubmit={addMeal} />
+        </Modal>
+      )}
+      {inventoryModal && (
+        <Modal title="Add inventory item" onClose={() => setInventoryModal(false)}>
+          <InventoryItemForm onCancel={() => setInventoryModal(false)} onSubmit={addInventoryItem} />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 export function SettingsView({
   theme,
   onToggleTheme,
@@ -1396,6 +1927,7 @@ export function SettingsView({
   onImportClick: () => void;
 }) {
   const { people } = useStore();
+  const { timezone, setTimezone } = useNavigation();
   const [personModal, setPersonModal] = useState(false);
   return (
     <div className="stack settings">
@@ -1420,6 +1952,11 @@ export function SettingsView({
           <button className="icon-button" type="button" onClick={onToggleLargeText} aria-label="Toggle large text">
             <TypeIcon size={largeText ? 22 : 16} aria-hidden />
           </button>
+        </div>
+        <div className="settings-row">
+          <Clock size={18} aria-hidden />
+          <p>App-wide time zone (used for task start/end logging).</p>
+          <TimezonePicker value={timezone} onChange={setTimezone} />
         </div>
       </section>
       <section className="panel">

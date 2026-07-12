@@ -6,6 +6,7 @@ import {
   Download,
   Home,
   Import,
+  Inbox as InboxIcon,
   ListTodo,
   MessageSquarePlus,
   Moon,
@@ -16,6 +17,7 @@ import {
   Stethoscope,
   Sun,
   Target,
+  UtensilsCrossed,
   Users,
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -27,7 +29,9 @@ import {
   DashboardView,
   CalendarView,
   HealthView,
+  InboxView,
   JournalView,
+  MealsView,
   MilestonesView,
   ProfileView,
   SettingsView,
@@ -47,6 +51,8 @@ const navItems = [
   { id: "journal", label: "Journal", icon: ClipboardList },
   { id: "milestones", label: "Milestones", icon: ShieldCheck },
   { id: "tasks", label: "Tasks", icon: ListTodo },
+  { id: "inbox", label: "Inbox", icon: InboxIcon },
+  { id: "meals", label: "Meals", icon: UtensilsCrossed },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "settings", label: "Settings", icon: SettingsIcon },
 ];
@@ -218,6 +224,8 @@ function Shell() {
         {active === "journal" && <JournalView />}
         {active === "milestones" && <MilestonesView />}
         {active === "tasks" && <TasksView />}
+        {active === "inbox" && <InboxView />}
+        {active === "meals" && <MealsView />}
         {active === "analytics" && <AnalyticsView />}
         {active === "settings" && (
           <SettingsView

@@ -4,12 +4,17 @@ import {
   Dog,
   ExposureItem,
   FeedbackLoopRule,
+  GroceryListItem,
   HealthEvent,
   Household,
+  InventoryCategory,
+  InventoryItem,
   JournalEntry,
   Location,
+  Meal,
   Milestone,
   Person,
+  RecipeIngredient,
   RelationshipLog,
   Task,
 } from "./types";
@@ -149,10 +154,9 @@ export const dogs: Dog[] = [
 ];
 
 // Reference locations for tasks/events — not a Supabase-synced collection, just a
-// shared lookup so activities can point at a consistent place. Update the
-// school-yard availability rule once the real 2026-27 SLCSD/Parkside Elementary
-// calendar and bell schedule are confirmed — this is a placeholder rule, not
-// verified against the district's actual calendar.
+// shared lookup so activities can point at a consistent place. School-yard dates
+// below are the real 2026-27 Salt Lake City School District calendar; only the
+// exact bell time (~7:45 AM-3:00 PM) is still an estimate.
 export const locations: Location[] = [
   {
     id: "home-fenced-yard",
@@ -169,11 +173,11 @@ export const locations: Location[] = [
     notes: "Meals, crate time, handling/grooming reps, and settle practice. Hardwood-floor room is the go-to for crating during outings (easiest cleanup).",
   },
   {
-    id: "parkside-elementary-yard",
-    name: "Parkside Elementary yard",
+    id: "parkview-elementary-yard",
+    name: "Parkview Elementary yard",
     type: "school-yard",
     availability:
-      "Placeholder rule — confirm against the real 2026-27 SLCSD calendar and bell schedule: unavailable weekdays during the school year (~7:45 AM-3:00 PM, kids present); available on weekday evenings, weekends, holidays, and summer break. Currently summer break, so open now.",
+      "Real 2026-27 Salt Lake City School District calendar. Unavailable on school days (~7:45 AM-3:00 PM, exact bell time still TBD) — school days run Aug 18 - Oct 23, 2026 (Q1); Oct 26, 2026 - Jan 8, 2027 (Q2, excluding Nov 25 non-student day and Nov 26-27 Thanksgiving Break and Dec 21, 2026 - Jan 1, 2027 Winter Break); Jan 11 - Mar 19, 2027 (Q3, excluding Jan 18 MLK Day, Feb 15 Presidents Day, and Feb 26 non-student day); Mar 22 - May 27, 2027 (Q4, excluding Mar 29 - Apr 2 Spring Break). Available evenings, weekends, all listed breaks/holidays, and summer (school out May 26-28, 2027 through summer). Currently summer break, so open now.",
     notes: "Large open grass, good for recall and off-leash practice once school is back in session and timing is respected.",
   },
   {
@@ -220,11 +224,19 @@ export const todayTasks: Task[] = [
     difficulty: 1,
     dogIds: ["puppy", "griz"],
     checklist: ["Outside", "Reward", "Pee", "Poop", "No accidents"],
+    checklistSchema: [
+      { itemName: "Peed", dataType: "counter" },
+      { itemName: "Pooped", dataType: "counter" },
+      { itemName: "Playtime occurred", dataType: "boolean" },
+      { itemName: "Playtime duration (min)", dataType: "duration_minutes" },
+      { itemName: "Treats given", dataType: "counter" },
+      { itemName: "Notes", dataType: "free_text" },
+    ],
     grizParticipation: "yes",
     location: "home-fenced-yard",
     formation: "together",
     notes:
-      "Keep it boring, reward fast, log how quickly the puppy goes. Real cadence once home: potty every ~2 hours (rule of thumb — hourly frequency roughly equals age in months), always right after eating or waking. Griz's morning-walk poop happens naturally in this same window, so this is one joint trip out rather than two separate ones — his schedule is flexible enough to slide onto the puppy's timing (see the merged-schedule note in the knowledge doc).",
+      "Keep it boring, reward fast, log how quickly the puppy goes. Real cadence once home: potty every ~2 hours (rule of thumb — hourly frequency roughly equals age in months), always right after eating or waking. Griz's morning-walk poop happens naturally in this same window, so this is one joint trip out rather than two separate ones — his schedule is flexible enough to slide onto the puppy's timing (see the merged-schedule note in the knowledge doc). No playtime or extra praise during the potty trip itself — calm acknowledgment only when the behavior happens, then a short play reward after.",
   },
   {
     id: "breakfast-reset",
@@ -1093,6 +1105,29 @@ export const exposureItems: ExposureItem[] = [
 // Empty until the puppy is actually picked up (8/1/26) and the two dogs meet —
 // no real relationship data exists yet. Log the first parallel walk here once it happens.
 export const relationshipLogs: RelationshipLog[] = [];
+
+// General food-safety shelf-life defaults (days, refrigerated/pantry as typical
+// for the category) — a starting point the Meals view uses to suggest an
+// expiration date from a purchase date; always user-adjustable per item.
+export const shelfLifeDefaultsDays: Record<InventoryCategory, number> = {
+  produce: 7,
+  dairy: 14,
+  meat: 3,
+  seafood: 2,
+  eggs: 21,
+  bread: 7,
+  frozen: 90,
+  "pantry-staple": 365,
+  leftovers: 4,
+  other: 14,
+};
+
+// Meal planning starts empty — no dietary preferences, target meal count, or
+// recurring favorites were specified, so there's nothing real to seed yet.
+export const meals: Meal[] = [];
+export const recipeIngredients: RecipeIngredient[] = [];
+export const inventory: InventoryItem[] = [];
+export const groceryList: GroceryListItem[] = [];
 
 export const feedbackLoopRules: FeedbackLoopRule[] = [
   {

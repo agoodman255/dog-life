@@ -74,7 +74,8 @@ create table if not exists tasks (
   notes text not null default '',
   location text,
   formation text,
-  related_milestone_id text
+  related_milestone_id text,
+  checklist_schema jsonb not null default '[]'
 );
 
 -- `create table if not exists` above is a no-op once tasks already exists in
@@ -83,6 +84,86 @@ create table if not exists tasks (
 alter table tasks add column if not exists location text;
 alter table tasks add column if not exists formation text;
 alter table tasks add column if not exists related_milestone_id text;
+alter table tasks add column if not exists checklist_schema jsonb not null default '[]';
+
+-- Dated instances of a task template (Section 3 of the calendar/task-workflow
+-- spec) — this is what actually carries the start/stop/reschedule/skip/delegate
+-- lifecycle and its audit trail, since a template alone has no notion of "today".
+-- Uses a client-generated text id (matching makeId()) rather than a DB-generated
+-- uuid, same pattern as milestones/exposure_items.
+create table if not exists task_instances (
+  id text primary key,
+  household_id uuid not null references households (id) on delete cascade,
+  template_id uuid not null references tasks (id) on delete cascade,
+  original_date date not null,
+  date date not null,
+  state text not null default 'not_started',
+  assigned_to uuid references people (id) on delete set null,
+  original_assigned_to uuid references people (id) on delete set null,
+  scheduled_time text not null default '',
+  start_time timestamptz,
+  start_time_zone text,
+  end_time timestamptz,
+  end_time_zone text,
+  rating int,
+  checklist jsonb not null default '[]',
+  history jsonb not null default '[]'
+);
+
+-- Delegation requests (Section 3.3) — accept/decline inbox tied to a task instance.
+create table if not exists inbox_requests (
+  id text primary key,
+  household_id uuid not null references households (id) on delete cascade,
+  task_instance_id text not null references task_instances (id) on delete cascade,
+  from_person_id uuid references people (id) on delete set null,
+  to_person_id uuid references people (id) on delete set null,
+  status text not null default 'pending',
+  created_at timestamptz not null default now(),
+  responded_at timestamptz
+);
+
+-- Meal planning, inventory, and grocery list (spec Section 4).
+create table if not exists meals (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households (id) on delete cascade,
+  name text not null,
+  description text not null default '',
+  source text not null default 'manual_entry',
+  prep_minutes int not null default 0,
+  cook_minutes int not null default 0,
+  planned_date date
+);
+
+create table if not exists recipe_ingredients (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households (id) on delete cascade,
+  meal_id uuid not null references meals (id) on delete cascade,
+  ingredient_name text not null,
+  quantity numeric not null default 0,
+  unit text not null default ''
+);
+
+create table if not exists inventory (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households (id) on delete cascade,
+  item_name text not null,
+  category text not null default 'other',
+  location text not null default 'pantry',
+  quantity numeric not null default 0,
+  unit text not null default '',
+  purchase_date date not null default current_date,
+  estimated_expiration_date date not null default current_date
+);
+
+create table if not exists grocery_list (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households (id) on delete cascade,
+  item_name text not null,
+  quantity_needed numeric not null default 0,
+  unit text not null default '',
+  linked_meal_ids uuid[] not null default '{}',
+  status text not null default 'needed'
+);
 
 -- milestones keep human-readable slug ids ("sit", "marker-word", ...) since the
 -- dependency graph references them directly and that's much more legible than uuids.
@@ -253,6 +334,12 @@ alter table feedback enable row level security;
 alter table product_feedback enable row level security;
 alter table calendar_events enable row level security;
 alter table alone_time_logs enable row level security;
+alter table task_instances enable row level security;
+alter table inbox_requests enable row level security;
+alter table meals enable row level security;
+alter table recipe_ingredients enable row level security;
+alter table inventory enable row level security;
+alter table grocery_list enable row level security;
 
 do $$
 declare
@@ -262,7 +349,8 @@ begin
     'households', 'people', 'dogs', 'tasks', 'milestones',
     'health_events', 'journal_entries', 'exposure_items',
     'relationship_logs', 'feedback', 'product_feedback',
-    'calendar_events', 'alone_time_logs'
+    'calendar_events', 'alone_time_logs', 'task_instances', 'inbox_requests',
+    'meals', 'recipe_ingredients', 'inventory', 'grocery_list'
   ])
   loop
     if not exists (
@@ -288,7 +376,8 @@ begin
     'households', 'people', 'dogs', 'tasks', 'milestones',
     'health_events', 'journal_entries', 'exposure_items',
     'relationship_logs', 'feedback', 'product_feedback',
-    'calendar_events', 'alone_time_logs'
+    'calendar_events', 'alone_time_logs', 'task_instances', 'inbox_requests',
+    'meals', 'recipe_ingredients', 'inventory', 'grocery_list'
   ])
   loop
     if not exists (

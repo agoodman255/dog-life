@@ -1,5 +1,45 @@
 import { useMemo } from "react";
-import { AloneTimeLog, CalendarEvent, DailyFeedback, DayOfWeek, HealthEvent, Milestone, NotificationItem, Task } from "./types";
+import {
+  AloneTimeLog,
+  CalendarEvent,
+  ChecklistItemValue,
+  DailyFeedback,
+  DayOfWeek,
+  GroceryListItem,
+  HealthEvent,
+  InventoryItem,
+  Meal,
+  Milestone,
+  NotificationItem,
+  RecipeIngredient,
+  Task,
+  TaskState,
+} from "./types";
+
+export const taskStateLabels: Record<TaskState, string> = {
+  not_started: "Not started",
+  in_progress: "In progress",
+  completed: "Completed",
+  skipped: "Skipped",
+  rescheduled: "Rescheduled",
+  assigned_pending: "Pending",
+  reassigned: "Reassigned",
+};
+
+/** Builds the default (all-empty) checklist values for a task instance from its
+ * template — used both when a lifecycle action first materializes an instance
+ * and when the End Task review step needs a starting point to edit. */
+export function buildDefaultChecklist(template: Task): ChecklistItemValue[] {
+  if (template.checklistSchema && template.checklistSchema.length > 0) {
+    return template.checklistSchema.map((def) => ({
+      itemName: def.itemName,
+      dataType: def.dataType,
+      value: def.dataType === "boolean" ? false : def.dataType === "free_text" ? "" : 0,
+      notes: "",
+    }));
+  }
+  return template.checklist.map((item) => ({ itemName: item, dataType: "boolean" as const, value: false, notes: "" }));
+}
 
 // `new Date("2026-08-01")` parses as UTC midnight per spec, which renders as
 // the previous day in any timezone behind UTC (e.g. Mountain) — exactly the
@@ -290,5 +330,80 @@ export function computeNotifications(
   return notifications.sort((a, b) => {
     const order = { critical: 0, warning: 1, info: 2 };
     return order[a.severity] - order[b.severity];
+  });
+}
+
+// --- Meal planning / inventory / grocery list -------------------------------
+
+export function isExpiringSoon(item: InventoryItem, withinDays = 3): boolean {
+  const expiration = parseLocalDate(item.estimatedExpirationDate).getTime();
+  const cutoff = Date.now() + withinDays * 24 * 60 * 60 * 1000;
+  return expiration <= cutoff;
+}
+
+export function isExpired(item: InventoryItem): boolean {
+  return parseLocalDate(item.estimatedExpirationDate).getTime() < Date.now();
+}
+
+/** Rough total-scheduled-minutes for a day, used to warn when assigning a meal
+ * with a long combined prep+cook time to an already-packed evening. */
+export function dayLoadMinutes(dateKey: string, tasks: Task[], calendarEvents: CalendarEvent[]): number {
+  const taskMinutes = tasks.reduce((sum, task) => sum + task.duration, 0);
+  const dow = dayOfWeekName(parseLocalDate(dateKey));
+  const eventMinutes = calendarEvents
+    .filter((event) => {
+      const isOneOff = event.kind === "one-off" && event.date === dateKey;
+      const activeFromOk = !event.activeFrom || event.activeFrom <= dateKey;
+      const activeToOk = !event.activeTo || event.activeTo >= dateKey;
+      const isRecurring = event.kind === "recurring" && event.dayOfWeek === dow && activeFromOk && activeToOk;
+      return isOneOff || isRecurring;
+    })
+    .reduce((sum, event) => sum + (event.durationHours ?? 0) * 60, 0);
+  return taskMinutes + eventMinutes;
+}
+
+/** Diffs the ingredients needed for meals planned within `dateKeys` against
+ * current inventory, producing a fresh grocery list (new ids each time this
+ * runs — callers persist it via `groceryList.setItems(...)` to replace the
+ * previous list). Matches ingredients to inventory by case-insensitive name
+ * + unit; anything already on hand in sufficient quantity is marked
+ * `already_have`, everything else `needed`. */
+export function generateGroceryList(
+  dateKeys: string[],
+  meals: Meal[],
+  recipeIngredients: RecipeIngredient[],
+  inventory: InventoryItem[],
+  makeId: (prefix: string) => string,
+): GroceryListItem[] {
+  const relevantMealIds = new Set(meals.filter((meal) => meal.plannedDate && dateKeys.includes(meal.plannedDate)).map((meal) => meal.id));
+  const needed = new Map<string, { itemName: string; unit: string; quantity: number; mealIds: string[] }>();
+
+  recipeIngredients
+    .filter((ingredient) => relevantMealIds.has(ingredient.mealId))
+    .forEach((ingredient) => {
+      const key = `${ingredient.ingredientName.trim().toLowerCase()}|${ingredient.unit.trim().toLowerCase()}`;
+      const existing = needed.get(key);
+      if (existing) {
+        existing.quantity += ingredient.quantity;
+        existing.mealIds.push(ingredient.mealId);
+      } else {
+        needed.set(key, { itemName: ingredient.ingredientName, unit: ingredient.unit, quantity: ingredient.quantity, mealIds: [ingredient.mealId] });
+      }
+    });
+
+  return Array.from(needed.values()).map((entry) => {
+    const onHand = inventory.filter(
+      (item) => item.itemName.trim().toLowerCase() === entry.itemName.trim().toLowerCase() && item.unit.trim().toLowerCase() === entry.unit.trim().toLowerCase(),
+    );
+    const onHandQuantity = onHand.reduce((sum, item) => sum + item.quantity, 0);
+    const remaining = Math.max(0, entry.quantity - onHandQuantity);
+    return {
+      id: makeId("grocery"),
+      itemName: entry.itemName,
+      quantityNeeded: remaining,
+      unit: entry.unit,
+      linkedMealIds: entry.mealIds,
+      status: remaining > 0 ? "needed" : "already_have",
+    };
   });
 }
