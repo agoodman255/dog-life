@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "dog-life-dev-offline",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/dev-offline.mjs"],
+      "port": 5173
     }
   ]
 }
