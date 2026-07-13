@@ -14,6 +14,7 @@ Vision shift noted here: Dog Life OS is expanding from a dog-training app into a
 | 6 | Guided multi-day trip/event planner (manual wizard) | Medium-High | High | ~7h | #2 |
 | 7 | AI-assisted natural-language idea capture | Medium | Very High | ~10-14h | #6, **and a decision on which LLM/API to wire up** |
 | 8 | "Full life" reframe of nav/profiles for humans | Low-Medium | Medium | ~3h | #1-3 give it substance |
+| 9 | In-app file upload (dog photos + vet receipts/records), private storage | Medium-High | Medium-High | ~6-8h | Decision on anonymization (see notes) |
 
 ## Details
 
@@ -40,3 +41,28 @@ The version you actually described: type or paste free text ("for my trip next w
 
 ### 8. "Full life" reframe of nav/profiles for humans
 Once humans have health/chores/spending of their own (#1-3), the Profile/Dashboard framing should stop being pet-centric-with-humans-as-an-afterthought and treat both symmetrically. Mostly a UI/IA pass once the underlying data exists.
+
+### 9. In-app file upload (dog photos + vet receipts/records), private storage
+Came up 2026-07-12 while triaging feedback (dog photo upload + vet receipt storage, see Feedback backlog below). Original plan was a backend-only script (I run it manually, hand back a URL to paste into the existing Photo URL text field) using a **public** Supabase Storage bucket — Andrew redirected this: he'd rather have real in-app upload for both photos and receipts, not a manual round-trip through me, and since receipts can carry personal info (address, payment details), the bucket should be **private**, not public. Notes for whoever builds this:
+- **Storage**: one private Supabase Storage bucket (or two — photos vs. receipts — if that ends up simpler for RLS policy scoping). Private means reads need either a signed URL (time-limited — bad for a persisted `photo` field that should never break) or an authenticated fetch through the app itself (better: the app holds the session, so it can request the file directly rather than storing a bare URL that has to stay valid forever).
+- **Upload UI**: a real `<input type="file">` in DogForm (photo) and HealthEventForm (receipt/record), replacing the current "paste a URL" fields — those free-text URL fields already exist and work fine as a fallback/manual option, so this is additive, not a breaking change.
+- **Receipt anonymization**: Andrew's idea — before storing a vet receipt, strip personal info (address, phone, card/payment details) and keep only what's clinically useful, possibly via a Python OCR/text-extraction package run server-side (not client-side, since that'd need the file uploaded somewhere to run Python on it anyway). This needs a concrete decision on: which fields count as "personal" vs. "keep," whether OCR is reliable enough to trust unsupervised, and whether it runs automatically on upload or as a manual "clean this up" step Andrew triggers per receipt. Flagged as unresolved — don't assume an approach, ask when this gets picked up.
+- Do not default to a public bucket for anything in this app going forward without explicitly confirming with Andrew first — that was the wrong call once already.
+
+## Feedback backlog
+
+In-app product feedback (`scripts/export-feedback.ts` / `FEEDBACK.md`), triaged. Each row already has the research done — don't re-investigate an item listed here unless its status changes. Only feedback that hasn't been triaged yet needs a fresh source-code check before it can be summarized.
+
+| Feedback (page / note) | Status | Assessment |
+|---|---|---|
+| Dashboard / "Action needed" — "Unable to read action needed. Half the text is off the screen. The text color is white on a tan background." | **Blocked — needs screenshot** | Could not reproduce from source alone (2026-07-12 review): no section literally labeled "Action needed" was found by search, and the priority/status badge CSS ([styles.css:382](src/styles.css:382)) uses fixed hex color pairs (dark text on light bg) that don't shift with dark mode but are internally readable either way. Likely either a spot not covered by that search, or a dark-mode-specific rendering issue that only shows up live behind Bree's login. **Next step when a screenshot arrives: locate the exact element/class from the screenshot, then fix directly — no need to re-derive the rest of this assessment.** |
+| Calendar — alone-time readiness shouldn't be on the calendar; filter by Day/Month, Upcoming events, Milestones | **Shipped 2026-07-12** | Readiness panel moved to Dashboard. Calendar view switcher extended to Day / Week / Month / Upcoming / Milestones. |
+| Calendar — daily view too small on mobile | **Shipped 2026-07-12** | Day timeline now uses a taller hour row + larger text under the 760px breakpoint. |
+| Calendar — visually overloaded; needs a countdown banner + auto care-guidance for big appointments | **Not started — deferred by Andrew this round** | Decluttering itself landed as a side effect of the Upcoming/Milestones split above. The banner ("5 days until neuter appointment") + auto-generated prep/booking/aftercare guidance was explicitly not selected for this round — still open. |
+| Dashboard/Profile — track everything given to a dog (daily meds, supplements, injections) for vet visits | **Shipped 2026-07-12** | `Dog.medications: string[]` replaced with structured `medicationEntries` (name, kind: medication/supplement/injection/preventive, dosage, frequency, notes). Griz's real regimen (Gabapentin, Carprofen, monthly preventive, salmon oil, Dasuquin, FortiFlora) converted from prose into structured entries. |
+| Dashboard/Profile — log vet visits, store vaccine records & receipts | **Partially shipped 2026-07-12** | `HealthEvent` already supported `kind: "vaccine"`; added a `documentUrl` link field plus a real editable History list in HealthView (previously health events had no list view at all, add-only into a void). Storing an actual **uploaded file** (vs. pasting a link) is deferred — see item 9 above; the link field works today with any external URL. |
+| Profile — can't upload a dog photo | **Deferred by Andrew 2026-07-12** | `photo` is a plain URL text field, no file picker. Andrew initially said backend-only (I upload, hand back a URL) was fine, then reconsidered mid-session and asked for real in-app upload for both photos and receipts together, privately stored — see backlog item 9. Nothing shipped for this one; the URL field still works as a manual fallback. |
+| Dashboard — one-tap "log what just happened" (accident, good potty break) | **Shipped 2026-07-12** | New "Quick log" button on Dashboard opens a modal (Accident / Good potty break / Other + dog picker + note), saved as a tagged `JournalEntry` (`tags: ["quick-log", kind]`) rather than a new table. |
+| Dark mode toggle in top-right corner | **Already existed, no action needed** | Confirmed present at [App.tsx:189](src/App.tsx:189) before this feedback was filed. |
+
+

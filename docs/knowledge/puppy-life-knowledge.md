@@ -366,6 +366,18 @@ UI behavior:
   an API key (unsafe to call an LLM directly from the client) and has real usage cost, so it was flagged
   rather than built silently. Manual entry and conversational entry (asking Claude Code to add meals) both work today.
 
+## 16.5. In-App Feedback Round 1 (2026-07-12)
+
+Bree and Andrew used the in-app feedback wizard; the following shipped this round in response:
+
+- **Alone-time readiness moved off the Calendar view onto the Dashboard** — it was cluttering the calendar and wasn't calendar-specific. Calendar's Day/Week/Month tabs got two new sibling modes: **Upcoming** (recurring commitments + one-off events, previously always-visible below the grid, now its own tab) and **Milestones** (current-focus milestones in full detail, everything else as compact grouped rows — up next / delayed / skipped / completed — each click-through to Training).
+- **Mobile day-view sizing fixed** — the hour-row height and text size were fixed constants regardless of viewport; now doubles (48px → 96px) under 760px width via a `matchMedia` hook, with larger block text/padding to match.
+- **Dog medications restructured** — `Dog.medications` was a flat string list; replaced with structured `medicationEntries` (name, kind: medication/supplement/injection/preventive, dosage, frequency, notes) so "everything given to a dog" is queryable, not just a free-text blob. Griz's real regimen (Section 2) was converted into structured entries as the worked example.
+- **Health events got a real list view + edit + document links** — previously `HealthEvent`s could only be *added* into a void (no list rendered anywhere except a bare title in the dog profile's Health column). HealthView now shows a full sortable history list, each entry editable, with an optional `documentUrl` field to link a vet receipt or vaccine record.
+- **Dashboard quick-log button** — one-tap Accident / Good potty break / Other logger with a dog picker and optional note, saved as a tagged `JournalEntry` (`tags: ["quick-log", <kind>]`) rather than a new table, so it shows up in the existing Journal view too.
+- **Dog photo upload and true file-upload for receipts were explicitly deferred**, not built. See `BACKLOG.md` item 9 for the full writeup — short version: Andrew wants real in-app upload for both, privately stored (not a public bucket), possibly with receipt anonymization before storage. Both fields still work today as plain paste-a-URL inputs.
+- Two feedback items were **not actioned this round by explicit choice**: the "5 days until [appointment]" countdown banner + auto-generated prep/aftercare guidance (BACKLOG.md item under Calendar decluttering), and one item ("Action needed" text unreadable / white-on-tan) is **blocked on a screenshot** — see `BACKLOG.md`'s Feedback backlog table for the full triage notes so it doesn't need re-research next time.
+
 ## 17. Open Items / Follow-Ups
 
 Still needed from the household before these can move from placeholder to confirmed:

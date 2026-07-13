@@ -65,7 +65,7 @@ export const dog = {
       healthSummary: row.health_summary,
       medicalHistory: row.medical_history ?? [],
       allergies: row.allergies ?? [],
-      medications: row.medications ?? [],
+      medicationEntries: row.medication_entries ?? [],
       energy: row.energy,
       confidence: row.confidence,
       fearfulness: row.fearfulness,
@@ -100,7 +100,7 @@ export const dog = {
       health_summary: item.healthSummary,
       medical_history: item.medicalHistory,
       allergies: item.allergies,
-      medications: item.medications,
+      medication_entries: item.medicationEntries,
       energy: item.energy,
       confidence: item.confidence,
       fearfulness: item.fearfulness,
@@ -199,7 +199,15 @@ export const milestone = {
 
 export const healthEvent = {
   fromRow(row: any): HealthEvent {
-    return { id: row.id, dogId: row.dog_id, title: row.title, date: row.date, kind: row.kind, notes: row.notes };
+    return {
+      id: row.id,
+      dogId: row.dog_id,
+      title: row.title,
+      date: row.date,
+      kind: row.kind,
+      notes: row.notes,
+      documentUrl: row.document_url ?? undefined,
+    };
   },
   toRow(item: HealthEvent, householdId: string) {
     return {
@@ -210,6 +218,7 @@ export const healthEvent = {
       date: item.date,
       kind: item.kind,
       notes: item.notes,
+      document_url: item.documentUrl ?? null,
     };
   },
 };

@@ -54,7 +54,7 @@ import { makeId, useStore } from "./store";
 import { useNavigation } from "./navigation";
 import { setPassword as setAccountPassword, signOut, useSession } from "./auth";
 import { isBackendConfigured } from "./supabaseClient";
-import { CalendarEvent, Dog, ExposureCategory, ExposureItem, FeedbackLoopRule, HealthEvent, InboxRequest, InventoryItem, NotificationItem, Task, TaskInstance, TaskState } from "./types";
+import { CalendarEvent, Dog, ExposureCategory, ExposureItem, FeedbackLoopRule, HealthEvent, InboxRequest, InventoryItem, Milestone, NotificationItem, Task, TaskInstance, TaskState } from "./types";
 import {
   addDays,
   addMonths,
@@ -110,15 +110,18 @@ export function NotificationBell() {
 }
 
 export function DashboardView() {
-  const { tasks, feedback, healthEvents, milestones, dogs, completeTask } = useStore();
+  const { tasks, feedback, healthEvents, milestones, dogs, completeTask, aloneTimeLogs, calendarEvents, journalEntries } = useStore();
   const adaptive = useAdaptivePlan(tasks.items, feedback);
   const feedbackByTask = new Map(feedback.map((item) => [item.taskId, item]));
   const [detailTask, setDetailTask] = useState<Task | null>(null);
+  const [aloneTimeModal, setAloneTimeModal] = useState(false);
+  const [quickLogModal, setQuickLogModal] = useState(false);
   const todayKey = toDateKey(new Date());
   const puppy = dogs.items.find((dog) => dog.status === "puppy") ?? dogs.items[0];
   const overdue = healthEvents.items.filter((event) => parseLocalDate(event.date) < new Date()).length;
   const currentMilestone =
     milestones.items.find((item) => item.status !== "completed" && item.dependencies.length > 0) ?? milestones.items[0];
+  const readiness = computeAloneTimeReadiness(aloneTimeLogs.items, calendarEvents.items);
 
   return (
     <div className="dashboard">
@@ -144,6 +147,13 @@ export function DashboardView() {
         <AppMetric label="Structured training" value={`${adaptive.trainingMinutes} min`} icon={Target} />
         <AppMetric label="Upcoming health" value={`${healthEvents.items.length}`} icon={HeartPulse} />
         <AppMetric label="Overdue tasks" value={`${overdue}`} icon={AlertTriangle} />
+      </section>
+
+      <section className="row between quick-log-row">
+        <p className="small">Just happened? Log it in one tap — no need to open a task.</p>
+        <button className="primary-button" type="button" onClick={() => setQuickLogModal(true)}>
+          <Plus size={16} aria-hidden /> Quick log
+        </button>
       </section>
 
       <section className="split">
@@ -199,9 +209,122 @@ export function DashboardView() {
               ))}
             </section>
           )}
+          <section className="panel">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Alone-time readiness</p>
+                <h2 style={{ fontSize: "1.1rem" }}>
+                  {readiness.nextEvent ? readiness.nextEvent.title : "Nothing upcoming needs coverage"}
+                </h2>
+              </div>
+              <button className="text-button" type="button" onClick={() => setAloneTimeModal(true)}>
+                <Plus size={16} aria-hidden /> Log
+              </button>
+            </div>
+            {readiness.nextEvent && (
+              <p className={`readiness-note ${readiness.ready ? "ready" : "gap"}`}>
+                {readiness.ready
+                  ? `Logged max of ${Math.round(readiness.maxAchievedMinutes / 60)}h already meets the ${readiness.requiredMinutes / 60}h needed for ${readiness.nextEvent.title}.`
+                  : `Best logged so far is ${Math.round(readiness.maxAchievedMinutes / 60)}h, but ${readiness.nextEvent.title} on ${
+                      readiness.nextEvent.date ? formatDate(readiness.nextEvent.date) : "an upcoming date"
+                    } needs ${readiness.requiredMinutes / 60}h — ${Math.round(readiness.gapMinutes / 60)}h gap to close.`}
+              </p>
+            )}
+          </section>
         </div>
       </section>
+
+      {aloneTimeModal && (
+        <Modal title="Log alone time" onClose={() => setAloneTimeModal(false)}>
+          <AloneTimeLogForm
+            onCancel={() => setAloneTimeModal(false)}
+            onSubmit={(values) => {
+              aloneTimeLogs.add(aloneTimeLogFormValuesToLog(values, makeId("alone")));
+              setAloneTimeModal(false);
+            }}
+          />
+        </Modal>
+      )}
+      {quickLogModal && (
+        <Modal title="Quick log" onClose={() => setQuickLogModal(false)}>
+          <QuickLogForm
+            dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
+            onCancel={() => setQuickLogModal(false)}
+            onSubmit={({ kind, dogIds, note }) => {
+              journalEntries.add({
+                id: makeId("entry"),
+                dogIds,
+                date: todayKey,
+                title: kind === "accident" ? "Accident" : kind === "potty-win" ? "Good potty break" : "Quick log",
+                text: note,
+                tags: ["quick-log", kind],
+                mood: kind === "accident" ? "hard" : kind === "potty-win" ? "great" : "steady",
+              });
+              setQuickLogModal(false);
+            }}
+          />
+        </Modal>
+      )}
     </div>
+  );
+}
+
+function QuickLogForm({
+  dogOptions,
+  onSubmit,
+  onCancel,
+}: {
+  dogOptions: { id: string; name: string }[];
+  onSubmit: (values: { kind: "accident" | "potty-win" | "other"; dogIds: string[]; note: string }) => void;
+  onCancel: () => void;
+}) {
+  const [kind, setKind] = useState<"accident" | "potty-win" | "other">("potty-win");
+  const [dogIds, setDogIds] = useState<string[]>(dogOptions.map((dog) => dog.id));
+  const [note, setNote] = useState("");
+
+  function toggleDog(id: string) {
+    setDogIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+  }
+
+  return (
+    <form
+      className="entity-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit({ kind, dogIds, note });
+      }}
+    >
+      <div className="subtabs" role="group" aria-label="What happened">
+        {(["accident", "potty-win", "other"] as const).map((option) => (
+          <button key={option} type="button" className={kind === option ? "active" : ""} onClick={() => setKind(option)}>
+            {option === "accident" ? "Accident" : option === "potty-win" ? "Good potty break" : "Other"}
+          </button>
+        ))}
+      </div>
+      <label>
+        Dog(s)
+        <div className="row" style={{ gap: 12, flexWrap: "wrap", marginTop: 6 }}>
+          {dogOptions.map((dog) => (
+            <label key={dog.id} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+              <input type="checkbox" checked={dogIds.includes(dog.id)} onChange={() => toggleDog(dog.id)} />
+              {dog.name}
+            </label>
+          ))}
+        </div>
+      </label>
+      <label>
+        Note (optional)
+        <textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} />
+      </label>
+      <div className="form-actions">
+        <button className="text-button" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="primary-button" type="submit">
+          Log it
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -391,6 +514,19 @@ function assignTracks(items: AgendaItem[]): (AgendaItem & { track: number; track
 const DAY_START_MIN = 6 * 60;
 const DAY_END_MIN = 22 * 60;
 const HOUR_HEIGHT = 48;
+const MOBILE_HOUR_HEIGHT = 96;
+
+function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth <= 760);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 760px)");
+    const handler = () => setIsMobile(mq.matches);
+    handler();
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return isMobile;
+}
 
 function CalendarMonthGrid({
   cursor,
@@ -489,6 +625,8 @@ function CalendarDayAgenda({
   onOpenEvent: (event: CalendarEvent) => void;
   onOpenDog: (dogId: string) => void;
 }) {
+  const isMobile = useIsMobile();
+  const hourHeight = isMobile ? MOBILE_HOUR_HEIGHT : HOUR_HEIGHT;
   const unscheduled = items.filter((item) => item.startMinutes === null);
   const scheduled = assignTracks(items.filter((item) => item.startMinutes !== null));
   const totalHours = (DAY_END_MIN - DAY_START_MIN) / 60;
@@ -516,15 +654,15 @@ function CalendarDayAgenda({
           ))}
         </div>
       )}
-      <div className="day-timeline" style={{ height: totalHours * HOUR_HEIGHT }}>
+      <div className="day-timeline" style={{ height: totalHours * hourHeight }}>
         {hours.map((minute) => (
-          <div key={minute} className="day-hour-row" style={{ top: ((minute - DAY_START_MIN) / 60) * HOUR_HEIGHT }}>
+          <div key={minute} className="day-hour-row" style={{ top: ((minute - DAY_START_MIN) / 60) * hourHeight }}>
             <span className="day-hour-label">{formatMinutes(minute)}</span>
           </div>
         ))}
         {scheduled.map((item) => {
-          const top = Math.max(0, ((item.startMinutes! - DAY_START_MIN) / 60) * HOUR_HEIGHT);
-          const height = Math.max(26, (item.durationMinutes / 60) * HOUR_HEIGHT);
+          const top = Math.max(0, ((item.startMinutes! - DAY_START_MIN) / 60) * hourHeight);
+          const height = Math.max(isMobile ? 46 : 26, (item.durationMinutes / 60) * hourHeight);
           const width = 100 / item.trackCount;
           const left = width * item.track;
           return (
@@ -559,13 +697,12 @@ function loadViewerId(fallback: string): string {
 }
 
 export function CalendarView() {
-  const { healthEvents, milestones, tasks, dogs, calendarEvents, aloneTimeLogs, taskInstances, people } = useStore();
+  const { healthEvents, milestones, tasks, dogs, calendarEvents, taskInstances, people } = useStore();
   const { navigate } = useNavigation();
   const attendeeNames = (ids?: string[]) =>
     !ids || ids.length === 0 ? "" : ids.map((id) => people.items.find((person) => person.id === id)?.name ?? id).join(" & ");
   const [eventModal, setEventModal] = useState<"new" | (typeof calendarEvents.items)[number] | null>(null);
-  const [aloneTimeModal, setAloneTimeModal] = useState(false);
-  const [viewMode, setViewMode] = useState<"day" | "week" | "month">("day");
+  const [viewMode, setViewMode] = useState<"day" | "week" | "month" | "upcoming" | "milestones">("day");
   const [cursorDate, setCursorDate] = useState<Date>(() => new Date());
   const [viewerId, setViewerId] = useState<string>(() => loadViewerId(people.items[0]?.id ?? ""));
   const [filterMode, setFilterMode] = useState<"all" | "mine" | "other">("all");
@@ -623,12 +760,18 @@ export function CalendarView() {
     items: buildAgendaForDate(day, tasks.items, healthEvents.items, calendarEvents.items, dogs.items, taskInstances.items),
   }));
 
+  const isGridMode = viewMode === "day" || viewMode === "week" || viewMode === "month";
+
   const headingLabel =
     viewMode === "day"
       ? cursorDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })
       : viewMode === "week"
         ? `Week of ${weekStartDate(cursorDate).toLocaleDateString(undefined, { month: "long", day: "numeric" })}`
-        : cursorDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+        : viewMode === "month"
+          ? cursorDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })
+          : viewMode === "upcoming"
+            ? "Upcoming events"
+            : "Milestones";
 
   const recurring = calendarEvents.items.filter((event) => event.kind === "recurring");
   const upcoming = calendarEvents.items
@@ -636,7 +779,6 @@ export function CalendarView() {
     .slice()
     .sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999"));
   const weeks = heavyWeeks(calendarEvents.items);
-  const readiness = computeAloneTimeReadiness(aloneTimeLogs.items, calendarEvents.items);
 
   return (
     <section className="panel">
@@ -647,71 +789,77 @@ export function CalendarView() {
         </div>
         <div className="calendar-controls">
           <div className="subtabs" role="tablist">
-            {(["day", "week", "month"] as const).map((mode) => (
+            {(["day", "week", "month", "upcoming", "milestones"] as const).map((mode) => (
               <button key={mode} role="tab" aria-selected={viewMode === mode} className={viewMode === mode ? "active" : ""} type="button" onClick={() => setViewMode(mode)}>
                 {mode[0].toUpperCase() + mode.slice(1)}
               </button>
             ))}
           </div>
-          <div className="calendar-nav">
-            <button className="icon-button" type="button" onClick={goPrev} aria-label="Previous">
-              <ChevronLeft size={18} aria-hidden />
-            </button>
-            <button className="text-button" type="button" onClick={goToday}>
-              Today
-            </button>
-            <button className="icon-button" type="button" onClick={goNext} aria-label="Next">
-              <ChevronRight size={18} aria-hidden />
-            </button>
+          {isGridMode && (
+            <div className="calendar-nav">
+              <button className="icon-button" type="button" onClick={goPrev} aria-label="Previous">
+                <ChevronLeft size={18} aria-hidden />
+              </button>
+              <button className="text-button" type="button" onClick={goToday}>
+                Today
+              </button>
+              <button className="icon-button" type="button" onClick={goNext} aria-label="Next">
+                <ChevronRight size={18} aria-hidden />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {isGridMode && (
+        <div className="row between calendar-filter-row">
+          <div className="viewer-select" role="group" aria-label="Viewing as">
+            <span className="small">Viewing as</span>
+            {people.items.map((person) => (
+              <button
+                key={person.id}
+                type="button"
+                className={viewerId === person.id ? "active" : ""}
+                style={viewerId === person.id ? { borderColor: person.color, color: person.color } : undefined}
+                onClick={() => setViewerId(person.id)}
+              >
+                {person.name}
+              </button>
+            ))}
+          </div>
+          <div className="subtabs" role="group" aria-label="Filter tasks">
+            {(["all", "mine", "other"] as const).map((mode) => (
+              <button key={mode} className={filterMode === mode ? "active" : ""} type="button" onClick={() => setFilterMode(mode)}>
+                {mode === "all" ? "All" : mode === "mine" ? "Mine" : "Assigned to other"}
+              </button>
+            ))}
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="row between calendar-filter-row">
-        <div className="viewer-select" role="group" aria-label="Viewing as">
-          <span className="small">Viewing as</span>
-          {people.items.map((person) => (
-            <button
-              key={person.id}
-              type="button"
-              className={viewerId === person.id ? "active" : ""}
-              style={viewerId === person.id ? { borderColor: person.color, color: person.color } : undefined}
-              onClick={() => setViewerId(person.id)}
-            >
-              {person.name}
-            </button>
-          ))}
+      {isGridMode && (
+        <div className="calendar-swipe-area" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+          {viewMode === "day" && (
+            <CalendarDayAgenda
+              items={dayAgenda}
+              shouldDim={shouldDim}
+              onOpenTask={(task, date) => setDetailTask({ task, date })}
+              onOpenEvent={(event) => setEventModal(event)}
+              onOpenDog={openDog}
+            />
+          )}
+          {viewMode === "week" && <CalendarWeekStrip cursor={cursorDate} today={today} agendaByDay={weekAgenda} onSelectDay={selectDay} />}
+          {viewMode === "month" && (
+            <CalendarMonthGrid
+              cursor={cursorDate}
+              today={today}
+              healthEvents={healthEvents.items}
+              calendarEvents={calendarEvents.items}
+              onSelectDay={selectDay}
+            />
+          )}
         </div>
-        <div className="subtabs" role="group" aria-label="Filter tasks">
-          {(["all", "mine", "other"] as const).map((mode) => (
-            <button key={mode} className={filterMode === mode ? "active" : ""} type="button" onClick={() => setFilterMode(mode)}>
-              {mode === "all" ? "All" : mode === "mine" ? "Mine" : "Assigned to other"}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="calendar-swipe-area" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-        {viewMode === "day" && (
-          <CalendarDayAgenda
-            items={dayAgenda}
-            shouldDim={shouldDim}
-            onOpenTask={(task, date) => setDetailTask({ task, date })}
-            onOpenEvent={(event) => setEventModal(event)}
-            onOpenDog={openDog}
-          />
-        )}
-        {viewMode === "week" && <CalendarWeekStrip cursor={cursorDate} today={today} agendaByDay={weekAgenda} onSelectDay={selectDay} />}
-        {viewMode === "month" && (
-          <CalendarMonthGrid
-            cursor={cursorDate}
-            today={today}
-            healthEvents={healthEvents.items}
-            calendarEvents={calendarEvents.items}
-            onSelectDay={selectDay}
-          />
-        )}
-      </div>
+      )}
 
       {detailTask && (
         <TaskDetailModal
@@ -721,119 +869,104 @@ export function CalendarView() {
         />
       )}
 
-      <div className="row between" style={{ marginTop: 24 }}>
-        <div>
-          <p className="eyebrow">Alone-time readiness</p>
-          <h3 style={{ margin: 0 }}>
-            {readiness.nextEvent ? `Next up: ${readiness.nextEvent.title}` : "No upcoming commitment needs coverage yet"}
-          </h3>
-        </div>
-        <button className="text-button" type="button" onClick={() => setAloneTimeModal(true)}>
-          <Plus size={16} aria-hidden /> Log alone time
-        </button>
-      </div>
-      {readiness.nextEvent && (
-        <p className={`readiness-note ${readiness.ready ? "ready" : "gap"}`}>
-          {readiness.ready
-            ? `Logged max of ${Math.round(readiness.maxAchievedMinutes / 60)}h already meets the ${readiness.requiredMinutes / 60}h needed for ${readiness.nextEvent.title}.`
-            : `Best logged so far is ${Math.round(readiness.maxAchievedMinutes / 60)}h, but ${readiness.nextEvent.title} on ${
-                readiness.nextEvent.date ? formatDate(readiness.nextEvent.date) : "an upcoming date"
-              } needs ${readiness.requiredMinutes / 60}h — ${Math.round(readiness.gapMinutes / 60)}h gap to close.`}
-        </p>
+      {viewMode === "upcoming" && (
+        <>
+          <div className="row between">
+            <div>
+              <p className="eyebrow">Recurring commitments</p>
+              <h3 style={{ margin: 0 }}>Weekly household schedule</h3>
+            </div>
+            <button className="primary-button" type="button" onClick={() => setEventModal("new")}>
+              <Plus size={16} aria-hidden /> Add calendar event
+            </button>
+          </div>
+          <div className="calendar-grid">
+            {recurring.map((event) => (
+              <article
+                className={`event commitment ${event.category === "downtime" ? "downtime" : ""} ${event.status === "placeholder" ? "placeholder" : ""}`}
+                key={event.id}
+                onClick={() => setEventModal(event)}
+              >
+                <span>{event.dayOfWeek ? dayLabels[event.dayOfWeek] : ""}</span>
+                <strong>{event.title}</strong>
+                <p>
+                  {event.timeLabel}
+                  {event.activeTo ? ` · through ${formatDate(event.activeTo)}` : ""}
+                </p>
+                {event.status === "placeholder" && <small className="tbd-tag">TBD</small>}
+                {event.attendees && event.attendees.length > 0 && <small>Attendees: {attendeeNames(event.attendees)}</small>}
+                <small>{event.notes}</small>
+              </article>
+            ))}
+          </div>
+
+          <div className="row between" style={{ marginTop: 24 }}>
+            <div>
+              <p className="eyebrow">Upcoming events & football</p>
+              <h3 style={{ margin: 0 }}>Concerts, tailgates, and the season</h3>
+            </div>
+          </div>
+          <div className="calendar-grid">
+            {upcoming.map((event) => (
+              <article
+                className={`event one-off ${event.status === "placeholder" ? "placeholder" : ""} ${isHeavyWeek(event, weeks) ? "heavy-week" : ""}`}
+                key={event.id}
+                onClick={() => setEventModal(event)}
+              >
+                <span>{event.date ? formatDate(event.date) : event.windowLabel || "Date TBD"}</span>
+                <strong>{event.title}</strong>
+                <p>{event.timeLabel}</p>
+                {event.status === "placeholder" && <small className="tbd-tag">TBD</small>}
+                {isHeavyWeek(event, weeks) && <small className="heavy-tag">Heavy week</small>}
+                {event.coverageNeeded === "rover" && (
+                  <small className="rover-tag">
+                    {event.roverVisits === undefined
+                      ? "Rover — varies by trip length"
+                      : `Rover × ${event.roverVisits} visit${event.roverVisits === 1 ? "" : "s"}`}
+                  </small>
+                )}
+                <small>{event.notes}</small>
+                {(event.prepSteps?.length || event.roverInstructions?.length || event.postSteps?.length) && (
+                  <div className="rover-plan">
+                    {!!event.prepSteps?.length && (
+                      <>
+                        <small className="rover-plan-heading">Before leaving</small>
+                        <ul>
+                          {event.prepSteps.map((step, i) => (
+                            <li key={i}>{step}</li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                    {!!event.roverInstructions?.length && (
+                      <>
+                        <small className="rover-plan-heading">Rover visit(s)</small>
+                        <ul>
+                          {event.roverInstructions.map((step, i) => (
+                            <li key={i}>{step}</li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                    {!!event.postSteps?.length && (
+                      <>
+                        <small className="rover-plan-heading">On return</small>
+                        <ul>
+                          {event.postSteps.map((step, i) => (
+                            <li key={i}>{step}</li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        </>
       )}
 
-      <div className="row between" style={{ marginTop: 24 }}>
-        <div>
-          <p className="eyebrow">Recurring commitments</p>
-          <h3 style={{ margin: 0 }}>Weekly household schedule</h3>
-        </div>
-        <button className="primary-button" type="button" onClick={() => setEventModal("new")}>
-          <Plus size={16} aria-hidden /> Add calendar event
-        </button>
-      </div>
-      <div className="calendar-grid">
-        {recurring.map((event) => (
-          <article
-            className={`event commitment ${event.category === "downtime" ? "downtime" : ""} ${event.status === "placeholder" ? "placeholder" : ""}`}
-            key={event.id}
-            onClick={() => setEventModal(event)}
-          >
-            <span>{event.dayOfWeek ? dayLabels[event.dayOfWeek] : ""}</span>
-            <strong>{event.title}</strong>
-            <p>
-              {event.timeLabel}
-              {event.activeTo ? ` · through ${formatDate(event.activeTo)}` : ""}
-            </p>
-            {event.status === "placeholder" && <small className="tbd-tag">TBD</small>}
-            {event.attendees && event.attendees.length > 0 && <small>Attendees: {attendeeNames(event.attendees)}</small>}
-            <small>{event.notes}</small>
-          </article>
-        ))}
-      </div>
-
-      <div className="row between" style={{ marginTop: 24 }}>
-        <div>
-          <p className="eyebrow">Upcoming events & football</p>
-          <h3 style={{ margin: 0 }}>Concerts, tailgates, and the season</h3>
-        </div>
-      </div>
-      <div className="calendar-grid">
-        {upcoming.map((event) => (
-          <article
-            className={`event one-off ${event.status === "placeholder" ? "placeholder" : ""} ${isHeavyWeek(event, weeks) ? "heavy-week" : ""}`}
-            key={event.id}
-            onClick={() => setEventModal(event)}
-          >
-            <span>{event.date ? formatDate(event.date) : event.windowLabel || "Date TBD"}</span>
-            <strong>{event.title}</strong>
-            <p>{event.timeLabel}</p>
-            {event.status === "placeholder" && <small className="tbd-tag">TBD</small>}
-            {isHeavyWeek(event, weeks) && <small className="heavy-tag">Heavy week</small>}
-            {event.coverageNeeded === "rover" && (
-              <small className="rover-tag">
-                {event.roverVisits === undefined
-                  ? "Rover — varies by trip length"
-                  : `Rover × ${event.roverVisits} visit${event.roverVisits === 1 ? "" : "s"}`}
-              </small>
-            )}
-            <small>{event.notes}</small>
-            {(event.prepSteps?.length || event.roverInstructions?.length || event.postSteps?.length) && (
-              <div className="rover-plan">
-                {!!event.prepSteps?.length && (
-                  <>
-                    <small className="rover-plan-heading">Before leaving</small>
-                    <ul>
-                      {event.prepSteps.map((step, i) => (
-                        <li key={i}>{step}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-                {!!event.roverInstructions?.length && (
-                  <>
-                    <small className="rover-plan-heading">Rover visit(s)</small>
-                    <ul>
-                      {event.roverInstructions.map((step, i) => (
-                        <li key={i}>{step}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-                {!!event.postSteps?.length && (
-                  <>
-                    <small className="rover-plan-heading">On return</small>
-                    <ul>
-                      {event.postSteps.map((step, i) => (
-                        <li key={i}>{step}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </div>
-            )}
-          </article>
-        ))}
-      </div>
+      {viewMode === "milestones" && <CalendarMilestonesPanel milestonesList={milestones.items} onNavigate={() => navigate("training")} />}
 
       {eventModal && (
         <Modal title={eventModal === "new" ? "Add calendar event" : "Edit calendar event"} onClose={() => setEventModal(null)}>
@@ -860,18 +993,78 @@ export function CalendarView() {
           />
         </Modal>
       )}
-      {aloneTimeModal && (
-        <Modal title="Log alone time" onClose={() => setAloneTimeModal(false)}>
-          <AloneTimeLogForm
-            onCancel={() => setAloneTimeModal(false)}
-            onSubmit={(values) => {
-              aloneTimeLogs.add(aloneTimeLogFormValuesToLog(values, makeId("alone")));
-              setAloneTimeModal(false);
-            }}
-          />
-        </Modal>
-      )}
     </section>
+  );
+}
+
+function CalendarMilestonesPanel({ milestonesList, onNavigate }: { milestonesList: Milestone[]; onNavigate: () => void }) {
+  const current = milestonesList.filter((item) => item.status === "current");
+  const delayed = milestonesList.filter((item) => item.status === "delayed");
+  const upNext = milestonesList.filter((item) => item.status === "locked");
+  const skipped = milestonesList.filter((item) => item.status === "skipped");
+  const completed = milestonesList.filter((item) => item.status === "completed");
+
+  return (
+    <div>
+      {current.length > 0 && (
+        <>
+          <p className="eyebrow">Current focus</p>
+          <div className="stack" style={{ marginBottom: 24 }}>
+            {current.map((item) => (
+              <MilestoneCard key={item.id} milestone={item} />
+            ))}
+          </div>
+        </>
+      )}
+      {delayed.length > 0 && (
+        <>
+          <p className="eyebrow">Delayed — needs attention</p>
+          <div className="calendar-grid" style={{ marginBottom: 24 }}>
+            {delayed.map((item) => (
+              <article className="event milestone-row status-delayed" key={item.id} onClick={onNavigate}>
+                <span>{item.track}</span>
+                <strong>{item.title}</strong>
+                <p>{item.why}</p>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+      <p className="eyebrow">Up next ({upNext.length})</p>
+      <div className="calendar-grid" style={{ marginBottom: 24 }}>
+        {upNext.map((item) => (
+          <article className="event milestone-row" key={item.id} onClick={onNavigate}>
+            <span>{item.track}</span>
+            <strong>{item.title}</strong>
+            <p>{item.dependencies.length ? `Waiting on: ${item.dependencies.join(", ")}` : "Ready to start"}</p>
+          </article>
+        ))}
+        {upNext.length === 0 && <p className="small">Nothing queued.</p>}
+      </div>
+      {skipped.length > 0 && (
+        <>
+          <p className="eyebrow">Skipped</p>
+          <div className="calendar-grid" style={{ marginBottom: 24 }}>
+            {skipped.map((item) => (
+              <article className="event milestone-row status-skipped" key={item.id} onClick={onNavigate}>
+                <span>{item.track}</span>
+                <strong>{item.title}</strong>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+      <p className="eyebrow">Completed ({completed.length})</p>
+      <div className="calendar-grid">
+        {completed.map((item) => (
+          <article className="event milestone-row status-completed" key={item.id} onClick={onNavigate}>
+            <span>{item.track}</span>
+            <strong>{item.title}</strong>
+          </article>
+        ))}
+        {completed.length === 0 && <p className="small">None yet.</p>}
+      </div>
+    </div>
   );
 }
 
@@ -1112,7 +1305,9 @@ export function JournalView() {
 
 export function HealthView() {
   const { dogs, healthEvents } = useStore();
-  const [open, setOpen] = useState(false);
+  const [modal, setModal] = useState<"new" | HealthEvent | null>(null);
+  const dogName = (id: string) => dogs.items.find((dog) => dog.id === id)?.name ?? id;
+  const sortedEvents = healthEvents.items.slice().sort((a, b) => b.date.localeCompare(a.date));
   return (
     <div className="stack">
       <CalendarView />
@@ -1122,7 +1317,7 @@ export function HealthView() {
             <p className="eyebrow">Health</p>
             <h2>Growth charts and upcoming care</h2>
           </div>
-          <button className="primary-button" type="button" onClick={() => setOpen(true)}>
+          <button className="primary-button" type="button" onClick={() => setModal("new")}>
             <Plus size={16} aria-hidden /> Add health event
           </button>
         </div>
@@ -1137,14 +1332,50 @@ export function HealthView() {
           ))}
         </div>
       </section>
-      {open && (
-        <Modal title="Add health event" onClose={() => setOpen(false)}>
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">History</p>
+            <h2>Vet visits, vaccines & records</h2>
+          </div>
+        </div>
+        <div className="task-list">
+          {sortedEvents.length === 0 && <p className="small">Nothing logged yet.</p>}
+          {sortedEvents.map((event) => (
+            <article className="event health-event-row" key={event.id} onClick={() => setModal(event)}>
+              <span>
+                {formatDate(event.date)} · {dogName(event.dogId)}
+              </span>
+              <strong>{event.title}</strong>
+              <p className="small">{event.kind}</p>
+              {event.notes && <small>{event.notes}</small>}
+              {event.documentUrl && (
+                <a
+                  href={event.documentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(clickEvent) => clickEvent.stopPropagation()}
+                >
+                  View record / receipt
+                </a>
+              )}
+            </article>
+          ))}
+        </div>
+      </section>
+      {modal && (
+        <Modal title={modal === "new" ? "Add health event" : "Edit health event"} onClose={() => setModal(null)}>
           <HealthEventForm
+            initial={modal === "new" ? undefined : modal}
             dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
-            onCancel={() => setOpen(false)}
+            onCancel={() => setModal(null)}
             onSubmit={(values) => {
-              healthEvents.add(healthEventFormValuesToEvent(values, makeId("health")));
-              setOpen(false);
+              if (modal === "new") {
+                healthEvents.add(healthEventFormValuesToEvent(values, makeId("health")));
+              } else {
+                healthEvents.update(modal.id, healthEventFormValuesToEvent(values, modal.id));
+              }
+              setModal(null);
             }}
           />
         </Modal>

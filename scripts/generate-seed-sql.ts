@@ -103,17 +103,17 @@ lines.push("");
 
 for (const dog of dogs) {
   lines.push(
-    `insert into dogs (id, household_id, name, breed, birthday, sex, color, weight, expected_adult_weight, weight_history, microchip, photo, veterinarian, insurance, breeder, health_summary, medical_history, allergies, medications, energy, confidence, fearfulness, resource_guarding, dog_friendliness, human_friendliness, noise_sensitivity, favorite_rewards, favorite_toys, mastered_commands, exercise_need, status) values (`,
+    `insert into dogs (id, household_id, name, breed, birthday, sex, color, weight, expected_adult_weight, weight_history, microchip, photo, veterinarian, insurance, breeder, health_summary, medical_history, allergies, medication_entries, energy, confidence, fearfulness, resource_guarding, dog_friendliness, human_friendliness, noise_sensitivity, favorite_rewards, favorite_toys, mastered_commands, exercise_need, status) values (`,
     `  ${str(dogRef(dog.id))}, ${str(HOUSEHOLD_ID)}, ${str(dog.name)}, ${str(dog.breed)}, ${dog.birthday ? str(dog.birthday) : "NULL"}, ${str(dog.sex)}, ${str(dog.color)},`,
     `  ${num(dog.weight)}, ${num(dog.expectedAdultWeight)}, ${jsonb(dog.weightHistory)}, ${str(dog.microchip)}, ${str(dog.photo)}, ${str(dog.veterinarian)}, ${str(dog.insurance)}, ${str(dog.breeder)}, ${str(dog.healthSummary)},`,
-    `  ${textArray(dog.medicalHistory)}, ${textArray(dog.allergies)}, ${textArray(dog.medications)},`,
+    `  ${textArray(dog.medicalHistory)}, ${textArray(dog.allergies)}, ${jsonb(dog.medicationEntries)},`,
     `  ${num(dog.energy)}, ${num(dog.confidence)}, ${num(dog.fearfulness)}, ${num(dog.resourceGuarding)}, ${num(dog.dogFriendliness)}, ${num(dog.humanFriendliness)}, ${num(dog.noiseSensitivity)},`,
     `  ${textArray(dog.favoriteRewards)}, ${textArray(dog.favoriteToys)}, ${textArray(dog.masteredCommands)}, ${str(dog.exerciseNeed)}, ${str(dog.status)}`,
     ")",
     upsertClause([
       "name", "breed", "birthday", "sex", "color", "weight", "expected_adult_weight", "weight_history",
       "microchip", "photo", "veterinarian", "insurance", "breeder", "health_summary", "medical_history",
-      "allergies", "medications", "energy", "confidence", "fearfulness", "resource_guarding",
+      "allergies", "medication_entries", "energy", "confidence", "fearfulness", "resource_guarding",
       "dog_friendliness", "human_friendliness", "noise_sensitivity", "favorite_rewards", "favorite_toys",
       "mastered_commands", "exercise_need", "status",
     ]),
@@ -144,7 +144,7 @@ for (const milestone of milestones) {
 
 for (const event of healthEvents) {
   lines.push(
-    `insert into health_events (household_id, dog_id, title, date, kind, notes) values (${str(HOUSEHOLD_ID)}, ${str(dogRef(event.dogId))}, ${str(event.title)}, ${str(event.date)}, ${str(event.kind)}, ${str(event.notes)});`,
+    `insert into health_events (household_id, dog_id, title, date, kind, notes, document_url) values (${str(HOUSEHOLD_ID)}, ${str(dogRef(event.dogId))}, ${str(event.title)}, ${str(event.date)}, ${str(event.kind)}, ${str(event.notes)}, ${event.documentUrl ? str(event.documentUrl) : "NULL"});`,
   );
 }
 lines.push("");

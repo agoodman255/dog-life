@@ -9,11 +9,32 @@ import {
   ExposureItem,
   HealthEvent,
   JournalEntry,
+  MedicationEntry,
+  MedicationKind,
   Person,
   RelationshipLog,
   Task,
   TaskCategory,
 } from "./types";
+import { makeId } from "./store";
+
+const medicationKinds: MedicationKind[] = ["medication", "supplement", "injection", "preventive"];
+
+function parseMedicationLines(text: string): MedicationEntry[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [name = "", kind = "", dosage = "", frequency = "", notes = ""] = line.split("|").map((part) => part.trim());
+      const validKind = medicationKinds.includes(kind as MedicationKind) ? (kind as MedicationKind) : "medication";
+      return { id: makeId("med"), name, kind: validKind, dosage, frequency, notes };
+    });
+}
+
+function medicationEntriesToLines(entries: MedicationEntry[]): string {
+  return entries.map((entry) => [entry.name, entry.kind, entry.dosage, entry.frequency, entry.notes].join(" | ")).join("\n");
+}
 
 function csvToArray(value: string): string[] {
   return value
@@ -42,7 +63,7 @@ const dogSchema = z.object({
   healthSummary: z.string(),
   medicalHistory: z.string(),
   allergies: z.string(),
-  medications: z.string(),
+  medicationEntries: z.string(),
   energy: z.number().min(0).max(100),
   confidence: z.number().min(0).max(100),
   fearfulness: z.number().min(0).max(100),
@@ -76,7 +97,7 @@ function dogDefaults(dog?: Dog): DogFormValues {
     healthSummary: dog?.healthSummary ?? "",
     medicalHistory: arrayToCsv(dog?.medicalHistory ?? []),
     allergies: arrayToCsv(dog?.allergies ?? []),
-    medications: arrayToCsv(dog?.medications ?? []),
+    medicationEntries: medicationEntriesToLines(dog?.medicationEntries ?? []),
     energy: dog?.energy ?? 50,
     confidence: dog?.confidence ?? 50,
     fearfulness: dog?.fearfulness ?? 20,
@@ -110,7 +131,7 @@ export function dogFormValuesToDog(values: DogFormValues, base: Pick<Dog, "id" |
     healthSummary: values.healthSummary,
     medicalHistory: csvToArray(values.medicalHistory),
     allergies: csvToArray(values.allergies),
-    medications: csvToArray(values.medications),
+    medicationEntries: parseMedicationLines(values.medicationEntries),
     energy: values.energy,
     confidence: values.confidence,
     fearfulness: values.fearfulness,
@@ -203,6 +224,10 @@ export function DogForm({ initial, onSubmit, onCancel }: { initial?: Dog; onSubm
         Health summary
         <textarea rows={2} {...register("healthSummary")} />
       </label>
+      <label>
+        Medications, supplements & injections (one per line: name | medication/supplement/injection/preventive | dosage | frequency | notes)
+        <textarea rows={4} {...register("medicationEntries")} placeholder="Gabapentin | medication | 1 pill | 2x/day with meals | " />
+      </label>
       <div className="form-grid">
         <label>
           Medical history (comma separated)
@@ -211,10 +236,6 @@ export function DogForm({ initial, onSubmit, onCancel }: { initial?: Dog; onSubm
         <label>
           Allergies (comma separated)
           <input {...register("allergies")} />
-        </label>
-        <label>
-          Medications (comma separated)
-          <input {...register("medications")} />
         </label>
         <label>
           Favorite rewards (comma separated)
@@ -545,19 +566,22 @@ const healthEventSchema = z.object({
   date: z.string().min(1),
   kind: z.enum(["vaccine", "vet", "medication", "grooming", "weight", "insurance"]),
   notes: z.string(),
+  documentUrl: z.string(),
 });
 
 type HealthEventFormValues = z.infer<typeof healthEventSchema>;
 
 export function healthEventFormValuesToEvent(values: HealthEventFormValues, id: string): HealthEvent {
-  return { id, ...values };
+  return { id, ...values, documentUrl: values.documentUrl || undefined };
 }
 
 export function HealthEventForm({
+  initial,
   dogOptions,
   onSubmit,
   onCancel,
 }: {
+  initial?: HealthEvent;
   dogOptions: { id: string; name: string }[];
   onSubmit: (values: HealthEventFormValues) => void;
   onCancel: () => void;
@@ -565,11 +589,12 @@ export function HealthEventForm({
   const { register, handleSubmit, formState: { errors } } = useForm<HealthEventFormValues>({
     resolver: zodResolver(healthEventSchema),
     defaultValues: {
-      dogId: dogOptions[0]?.id ?? "",
-      title: "",
-      date: new Date().toISOString().slice(0, 10),
-      kind: "vet",
-      notes: "",
+      dogId: initial?.dogId ?? dogOptions[0]?.id ?? "",
+      title: initial?.title ?? "",
+      date: initial?.date ?? new Date().toISOString().slice(0, 10),
+      kind: initial?.kind ?? "vet",
+      notes: initial?.notes ?? "",
+      documentUrl: initial?.documentUrl ?? "",
     },
   });
   return (
@@ -608,6 +633,10 @@ export function HealthEventForm({
       <label>
         Notes
         <textarea rows={2} {...register("notes")} />
+      </label>
+      <label>
+        Record / receipt link (optional)
+        <input {...register("documentUrl")} placeholder="https://…" />
       </label>
       <div className="form-actions">
         <button className="text-button" type="button" onClick={onCancel}>

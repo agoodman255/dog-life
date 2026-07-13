@@ -41,7 +41,7 @@ create table if not exists dogs (
   health_summary text not null default '',
   medical_history text[] not null default '{}',
   allergies text[] not null default '{}',
-  medications text[] not null default '{}',
+  medication_entries jsonb not null default '[]',
   energy int not null default 50,
   confidence int not null default 50,
   fearfulness int not null default 20,
@@ -55,6 +55,13 @@ create table if not exists dogs (
   exercise_need text not null default '',
   status text not null default 'puppy'
 );
+
+-- `create table if not exists` above is a no-op once dogs already exists in
+-- production, so this column swap is applied explicitly for anyone re-running
+-- this file against a database synced before medications became structured
+-- entries (name/kind/dosage/frequency/notes) instead of a flat text list.
+alter table dogs add column if not exists medication_entries jsonb not null default '[]';
+alter table dogs drop column if exists medications;
 
 create table if not exists tasks (
   id uuid primary key default gen_random_uuid(),
@@ -188,8 +195,11 @@ create table if not exists health_events (
   title text not null,
   date date not null,
   kind text not null,
-  notes text not null default ''
+  notes text not null default '',
+  document_url text
 );
+
+alter table health_events add column if not exists document_url text;
 
 create table if not exists journal_entries (
   id uuid primary key default gen_random_uuid(),

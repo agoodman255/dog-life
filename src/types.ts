@@ -1,5 +1,16 @@
 export type DogStatus = "puppy" | "adult" | "senior";
 
+export type MedicationKind = "medication" | "supplement" | "injection" | "preventive";
+
+export type MedicationEntry = {
+  id: string;
+  name: string;
+  kind: MedicationKind;
+  dosage: string;
+  frequency: string;
+  notes: string;
+};
+
 export type Household = {
   id: string;
   name: string;
@@ -26,7 +37,7 @@ export type Dog = {
   healthSummary: string;
   medicalHistory: string[];
   allergies: string[];
-  medications: string[];
+  medicationEntries: MedicationEntry[];
   energy: number;
   confidence: number;
   fearfulness: number;
@@ -192,6 +203,9 @@ export type HealthEvent = {
   date: string;
   kind: "vaccine" | "vet" | "medication" | "grooming" | "weight" | "insurance";
   notes: string;
+  /** Link to a stored receipt/vaccine record/document — e.g. a URL from the
+   * Storage upload script (scripts/upload-asset.ts) or any external link. */
+  documentUrl?: string;
 };
 
 export type JournalEntry = {

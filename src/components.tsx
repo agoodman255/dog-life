@@ -985,10 +985,17 @@ export function DogProfile({ dog, onEdit, onDelete }: { dog: Dog; onEdit?: (dog:
             </ul>
           </div>
           <div>
-            <strong>Medications</strong>
+            <strong>Medications, supplements & injections</strong>
             <ul>
-              {(dog.medications.length ? dog.medications : ["None logged"]).map((item) => (
-                <li key={item}>{item}</li>
+              {dog.medicationEntries.length === 0 && <li>None logged</li>}
+              {dog.medicationEntries.map((entry) => (
+                <li key={entry.id}>
+                  <span className={`priority ${entry.kind === "medication" ? "essential" : entry.kind === "injection" ? "essential" : "optional"}`}>
+                    {entry.kind}
+                  </span>{" "}
+                  {entry.name} — {entry.dosage}, {entry.frequency}
+                  {entry.notes ? ` (${entry.notes})` : ""}
+                </li>
               ))}
             </ul>
           </div>
