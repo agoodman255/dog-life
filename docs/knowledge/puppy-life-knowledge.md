@@ -28,14 +28,16 @@ Name, sex, birth date, color/coat, and microchip ID stay unset in the app until 
 
 ## 2. Existing Dog — Griz (from Care Sheet, dated 2024-05-08)
 
+**Medication/supplement specifics below are the original 2024 care sheet and are now superseded — see the household's 2026-07-15 update in Section 18 (Conflicts) and the app's `Dog.medicationEntries` on Griz's profile for his actual current regimen (Tramadol/Tylenol/Gabapentin pain management, Hill's Healthy Mobility diet, MYOS, etc.). The rest of this section (feeding cadence, hygiene, walks, commands) still stands.**
+
 - **Nicknames:** He/Him/Good Boy/Grizzy Bear
 - **Medical contacts:** MedVet SLC (24/7) 385-341-4444 · MedVet Sandy 801-758-7633
 - **Feeding:** ~1 cup dry food morning + evening (fill a Solo cup ~½–¾ full); not a big eater — pick up bowl after 1–2 hrs to encourage eating, shredded mozzarella on top helps
-- **Medications (2x/day, one per meal):**
+- **Medications (2024 care sheet, outdated — see note above):**
   - Gabapentin (white oblong) — whole pill
   - Carprofen (brown circle) — half pill
   - Meds stored in the cabinet right of the kitchen sink
-- **Supplements:** 1 pump salmon oil per meal · 1 soft Dasuquin chew at breakfast · 1 packet FortiFlora probiotic at dinner
+- **Supplements (2024 care sheet, outdated — see note above):** 1 pump salmon oil per meal · 1 soft Dasuquin chew at breakfast · 1 packet FortiFlora probiotic at dinner
 - **Night snack:** 1 spoonful cottage cheese OR 1 Dingo dental treat (or hide it for a sniff session)
 - **Water:** available all day; prefers the bowl in the main bedroom
 - **Walks:** reward check-ins; say "get back" and stop if he pulls (metal loop collar helps); good off-leash recall varies by person; off-leash at home only with driveway gate in place (will run into the street otherwise)
@@ -403,3 +405,4 @@ Still needed from the household before these can move from placeholder to confir
 - **School name correction:** an earlier pass referred to the school as "Parkside Elementary" based on a generic mention; the household's follow-up message and the attached district calendar confirm it's **Parkview Elementary**, using the Salt Lake City School District's real 2026-27 calendar (Section 15). Corrected throughout the app.
 - **Not a conflict, an added layer:** Sections 10-13 (merged daily schedule, gym overlap policy, downtime blocks, coverage tiers) don't come from a source document — they're household-logistics guidance built on top of the source data, added because the household asked for realistic Rover/coverage planning and a workable shared schedule rather than two independent dog routines. Several specifics (exact downtime days, which weeks need staggered gym trips) are intentionally left as placeholders to tune once the real post-pickup routine settles.
 - **Ski days correction (household-provided):** the original knowledge doc modeled ski days as a single ~6-8 hr full-day event fixed to late December. The household clarified it's actually a ~45-min-each-way SLC drive with variable 3-8 hr mountain time, happening on any night/weekend/powder weekday across the whole ski season — corrected throughout Sections 4, 5, and 13, and the Rover plan now treats it as a per-trip tiering decision rather than one fixed plan.
+- **Griz's medication regimen update (household-provided, 2026-07-15):** the 2024 care sheet's Gabapentin + Carprofen + salmon oil + Dasuquin + FortiFlora regimen (Section 2) is superseded by a detailed by-mealtime protocol the household gave directly: Tramadol 100mg + Extra Strength Tylenol (1/2 tab) + Gabapentin 100mg 2x/day (after breakfast & before bed) for pain management — Carprofen no longer appears — plus Hill's Science Diet Healthy Mobility (therapeutic joint diet, 1.5 cups 2x/day, soaked), Dasuquin, MYOS Muscle Formula, Purina Meal Mixers, FortiFlora, canned pumpkin, and small pill-vehicle treats (Greek yogurt/cottage cheese, American cheese, a Dingo dental stick). Not flagging this as an error — just a real update to keep the app's Dog.medicationEntries accurate for vet visits. **Open question:** the household didn't restate whether the monthly flea/tick/heartworm preventive is still active; left as-is in the app rather than removed, since its absence from this message doesn't necessarily mean it stopped — worth confirming.
