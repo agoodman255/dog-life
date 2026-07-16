@@ -93,6 +93,17 @@ alter table tasks add column if not exists formation text;
 alter table tasks add column if not exists related_milestone_id text;
 alter table tasks add column if not exists checklist_schema jsonb not null default '[]';
 
+-- Prevents the bug where re-running seed.sql silently duplicated every task
+-- (no id/constraint stopped it from inserting a fresh copy each time).
+-- If you're seeing duplicate tasks, run supabase/dedupe-tasks-2026-07-16.sql
+-- BEFORE this file, or this constraint will fail to add.
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'tasks_household_title_key') then
+    alter table tasks add constraint tasks_household_title_key unique (household_id, title);
+  end if;
+end $$;
+
 -- Dated instances of a task template (Section 3 of the calendar/task-workflow
 -- spec) — this is what actually carries the start/stop/reschedule/skip/delegate
 -- lifecycle and its audit trail, since a template alone has no notion of "today".

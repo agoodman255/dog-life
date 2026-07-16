@@ -10,11 +10,19 @@
 -- re-running this will reset that progress back to zero. Safe right now since the puppy
 -- isn't picked up yet (nothing real has been logged), but don't blindly re-run this later.
 --
--- tasks/health_events/journal_entries/relationship_logs/calendar_events/alone_time_logs have
--- no stable client-side id (Postgres generates a fresh uuid each insert), so re-running this
--- file normally just adds duplicates alongside whatever's already there. If you want a full
--- reset of those tables to exactly this seed set, uncomment the DELETE block below first —
--- note that deleting a task cascades to delete any per-task feedback ratings tied to it.
+-- `tasks` is now UPSERTED too, on (household_id, title) — see the unique constraint added
+-- 2026-07-16 in schema.sql. This is what fixed the 'same task duplicated 5+ times on the
+-- calendar' bug: every earlier re-run of this file had inserted a fresh duplicate of every
+-- task with no conflict handling at all. If you're seeing duplicates from before this fix,
+-- run supabase/dedupe-tasks-2026-07-16.sql once, first.
+--
+-- health_events/journal_entries/relationship_logs/calendar_events/alone_time_logs still have
+-- no stable client-side id or unique constraint (Postgres generates a fresh uuid each insert),
+-- so re-running this file still adds duplicates of those alongside whatever's already there —
+-- same bug class as tasks had, just not fixed yet (unconfirmed whether it's visibly caused
+-- problems for these tables the way it did for tasks). If you want a full reset of those
+-- tables to exactly this seed set, uncomment the DELETE block below first — note that
+-- deleting a task cascades to delete any per-task feedback ratings tied to it.
 
 -- delete from tasks where household_id = '11111111-1111-1111-1111-111111111111';
 -- delete from health_events where household_id = '11111111-1111-1111-1111-111111111111';
@@ -52,32 +60,68 @@ on conflict (id) do update set name = excluded.name, breed = excluded.breed, bir
 insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id, checklist_schema) values (
   '11111111-1111-1111-1111-111111111111', 'Morning potty', 'care', '11111111-1111-1111-1111-111111111112', '7:15 AM', 5, 'essential', ARRAY['Treat pouch', 'Leash']::text[], 'outdoor', 1, ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], ARRAY['Outside', 'Reward', 'Pee', 'Poop', 'No accidents']::text[], 'yes', 'Keep it boring, reward fast, log how quickly the puppy goes. Real cadence once home: potty every ~2 hours (rule of thumb — hourly frequency roughly equals age in months), always right after eating or waking. Griz''s morning-walk poop happens naturally in this same window, so this is one joint trip out rather than two separate ones — his schedule is flexible enough to slide onto the puppy''s timing (see the merged-schedule note in the knowledge doc). No playtime or extra praise during the potty trip itself — calm acknowledgment only when the behavior happens, then a short play reward after.',
   'home-fenced-yard', 'together', NULL, '[{"itemName":"Peed","dataType":"counter"},{"itemName":"Pooped","dataType":"counter"},{"itemName":"Playtime occurred","dataType":"boolean"},{"itemName":"Playtime duration (min)","dataType":"duration_minutes"},{"itemName":"Treats given","dataType":"counter"},{"itemName":"Notes","dataType":"free_text"}]'::jsonb
-);
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, assigned_to = excluded.assigned_to, time = excluded.time, duration = excluded.duration,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  dog_ids = excluded.dog_ids, checklist = excluded.checklist, griz_participation = excluded.griz_participation, notes = excluded.notes,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  checklist_schema = excluded.checklist_schema;
 
 insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id, checklist_schema) values (
   '11111111-1111-1111-1111-111111111111', 'Breakfast + settle reset', 'care', '11111111-1111-1111-1111-111111111113', '7:45 AM', 15, 'essential', ARRAY['Food', 'Water', 'Crate', 'Puzzle feeder']::text[], 'indoor', 2, ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], ARRAY['Separate meals', 'Water refreshed', 'Calm release', 'Two-minute settle']::text[], 'separate', 'Feed separately until relationship score stays above 80 for two weeks. Real cadence once home: puppy ~0.25 cup per serving, 4x/day total; water refreshed every ~2 hours (~1 oz per lb body weight/day total). Griz''s usual ~1 cup morning meal (+ Gabapentin, Carprofen, salmon oil, Dasuquin chew) is folded into this same slot instead of running on his own separate morning schedule.',
   'home-indoor', 'separate-rooms', NULL, '[]'::jsonb
-);
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, assigned_to = excluded.assigned_to, time = excluded.time, duration = excluded.duration,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  dog_ids = excluded.dog_ids, checklist = excluded.checklist, griz_participation = excluded.griz_participation, notes = excluded.notes,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  checklist_schema = excluded.checklist_schema;
 
 insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id, checklist_schema) values (
   '11111111-1111-1111-1111-111111111111', 'Evening meal (both dogs)', 'care', '11111111-1111-1111-1111-111111111112', '6:00 PM', 10, 'essential', ARRAY['Food', 'Water', 'Crate', 'Griz''s meds']::text[], 'indoor', 1, ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], ARRAY['Separate meals', 'Griz''s evening meds + FortiFlora given', 'Water refreshed', 'Calm release']::text[], 'separate', 'Griz''s second daily meal (+ Gabapentin, Carprofen, FortiFlora probiotic) is scheduled here instead of on his own timetable, right before the 6:15 PM parallel walk — he''s a flexible, chill adult who adapts easily to the puppy''s cadence. This is one of the puppy''s 4 daily feeds; the other two (midday) are puppy-only and don''t need to move Griz''s routine at all.',
   'home-indoor', 'separate-rooms', NULL, '[]'::jsonb
-);
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, assigned_to = excluded.assigned_to, time = excluded.time, duration = excluded.duration,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  dog_ids = excluded.dog_ids, checklist = excluded.checklist, griz_participation = excluded.griz_participation, notes = excluded.notes,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  checklist_schema = excluded.checklist_schema;
 
 insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id, checklist_schema) values (
   '11111111-1111-1111-1111-111111111111', 'Name + recall foundation', 'training', '11111111-1111-1111-1111-111111111112', '12:15 PM', 6, 'important', ARRAY['Soft treats', 'Clicker or marker word']::text[], 'indoor', 2, ARRAY['11111111-1111-1111-1111-111111111114']::uuid[], ARRAY['Say name once', 'Mark eye contact', 'Treat at leg', 'Five happy recalls']::text[], 'managed', 'End before attention fades. Griz can practice place for parallel rewards. Week 1 focus per the real training schedule: Name/Look at Me, Leash, Leave It, and Sit are taught in parallel starting pickup week.',
   'home-indoor', 'solo', 'name-recognition', '[]'::jsonb
-);
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, assigned_to = excluded.assigned_to, time = excluded.time, duration = excluded.duration,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  dog_ids = excluded.dog_ids, checklist = excluded.checklist, griz_participation = excluded.griz_participation, notes = excluded.notes,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  checklist_schema = excluded.checklist_schema;
 
 insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id, checklist_schema) values (
   '11111111-1111-1111-1111-111111111111', 'Parallel decompression walk', 'relationship', '11111111-1111-1111-1111-111111111113', '6:15 PM', 18, 'important', ARRAY['Two leashes', 'Treats', 'Water']::text[], 'outdoor', 3, ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], ARRAY['Start with distance', 'Reward check-ins', 'No shared toy', 'Log body language']::text[], 'yes', 'Keep dogs parallel, not face-to-face — ideally a human walking each dog with a person-width gap between them (dog, human, human, dog), not dog-to-dog. Increase distance if either dog stiffens.',
   'walking-paths', 'parallel-buffered', NULL, '[]'::jsonb
-);
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, assigned_to = excluded.assigned_to, time = excluded.time, duration = excluded.duration,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  dog_ids = excluded.dog_ids, checklist = excluded.checklist, griz_participation = excluded.griz_participation, notes = excluded.notes,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  checklist_schema = excluded.checklist_schema;
 
 insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id, checklist_schema) values (
   '11111111-1111-1111-1111-111111111111', 'Cooperative handling minis', 'handling', '11111111-1111-1111-1111-111111111113', '8:30 PM', 7, 'optional', ARRAY['Brush', 'Treats', 'Toothbrush']::text[], 'indoor', 2, ARRAY['11111111-1111-1111-1111-111111111114']::uuid[], ARRAY['Touch paws', 'Lift lips', 'Brush one stroke', 'End with play']::text[], 'managed', 'Consent-based pace. If the puppy withdraws twice, stop and make tomorrow easier. Real cadence once home: brush hair daily (evenings), dental treats 2x/week (Mon, Thu), ear cleaning + teeth brushing weekly (Sunday), bath bi-weekly.',
   'home-indoor', 'solo', 'grooming-desensitizing', '[]'::jsonb
-);
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, assigned_to = excluded.assigned_to, time = excluded.time, duration = excluded.duration,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  dog_ids = excluded.dog_ids, checklist = excluded.checklist, griz_participation = excluded.griz_participation, notes = excluded.notes,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  checklist_schema = excluded.checklist_schema;
 
 insert into milestones (id, household_id, title, track, status, dependencies, age_gate_weeks, dog_ids, steps, sources, why) values (
   'marker-word', '11111111-1111-1111-1111-111111111111', 'Marker word', 'obedience', 'current', ARRAY[]::text[], NULL,

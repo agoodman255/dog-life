@@ -75,11 +75,19 @@ const lines: string[] = [
   "-- re-running this will reset that progress back to zero. Safe right now since the puppy",
   "-- isn't picked up yet (nothing real has been logged), but don't blindly re-run this later.",
   "--",
-  "-- tasks/health_events/journal_entries/relationship_logs/calendar_events/alone_time_logs have",
-  "-- no stable client-side id (Postgres generates a fresh uuid each insert), so re-running this",
-  "-- file normally just adds duplicates alongside whatever's already there. If you want a full",
-  "-- reset of those tables to exactly this seed set, uncomment the DELETE block below first —",
-  "-- note that deleting a task cascades to delete any per-task feedback ratings tied to it.",
+  "-- `tasks` is now UPSERTED too, on (household_id, title) — see the unique constraint added",
+  "-- 2026-07-16 in schema.sql. This is what fixed the 'same task duplicated 5+ times on the",
+  "-- calendar' bug: every earlier re-run of this file had inserted a fresh duplicate of every",
+  "-- task with no conflict handling at all. If you're seeing duplicates from before this fix,",
+  "-- run supabase/dedupe-tasks-2026-07-16.sql once, first.",
+  "--",
+  "-- health_events/journal_entries/relationship_logs/calendar_events/alone_time_logs still have",
+  "-- no stable client-side id or unique constraint (Postgres generates a fresh uuid each insert),",
+  "-- so re-running this file still adds duplicates of those alongside whatever's already there —",
+  "-- same bug class as tasks had, just not fixed yet (unconfirmed whether it's visibly caused",
+  "-- problems for these tables the way it did for tasks). If you want a full reset of those",
+  "-- tables to exactly this seed set, uncomment the DELETE block below first — note that",
+  "-- deleting a task cascades to delete any per-task feedback ratings tied to it.",
   "",
   "-- delete from tasks where household_id = '11111111-1111-1111-1111-111111111111';",
   "-- delete from health_events where household_id = '11111111-1111-1111-1111-111111111111';",
@@ -121,12 +129,21 @@ for (const dog of dogs) {
   );
 }
 
+// Upserts on (household_id, title) — see the unique constraint added in
+// schema.sql. Previously this was a plain insert with no conflict handling,
+// so every re-run of this file added a fresh duplicate of every task.
 for (const task of todayTasks) {
   lines.push(
     `insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id, checklist_schema) values (`,
     `  ${str(HOUSEHOLD_ID)}, ${str(task.title)}, ${str(task.category)}, ${str(personRef(task.assignedTo))}, ${str(task.time)}, ${num(task.duration)}, ${str(task.priority)}, ${textArray(task.supplies)}, ${str(task.setting)}, ${num(task.difficulty)}, ${uuidArray(task.dogIds.map(dogRef))}, ${textArray(task.checklist)}, ${str(task.grizParticipation)}, ${str(task.notes)},`,
     `  ${task.location ? str(task.location) : "NULL"}, ${task.formation ? str(task.formation) : "NULL"}, ${task.relatedMilestoneId ? str(task.relatedMilestoneId) : "NULL"}, ${jsonb(task.checklistSchema ?? [])}`,
-    ");",
+    ")",
+    "on conflict (household_id, title) do update set",
+    "  category = excluded.category, assigned_to = excluded.assigned_to, time = excluded.time, duration = excluded.duration,",
+    "  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,",
+    "  dog_ids = excluded.dog_ids, checklist = excluded.checklist, griz_participation = excluded.griz_participation, notes = excluded.notes,",
+    "  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,",
+    "  checklist_schema = excluded.checklist_schema;",
     "",
   );
 }
