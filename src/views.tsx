@@ -110,7 +110,7 @@ export function NotificationBell() {
 }
 
 export function DashboardView() {
-  const { tasks, feedback, healthEvents, milestones, dogs, completeTask, aloneTimeLogs, calendarEvents, journalEntries } = useStore();
+  const { tasks, feedback, milestones, dogs, completeTask, aloneTimeLogs, calendarEvents, journalEntries } = useStore();
   const adaptive = useAdaptivePlan(tasks.items, feedback);
   const feedbackByTask = new Map(feedback.map((item) => [item.taskId, item]));
   const [detailTask, setDetailTask] = useState<Task | null>(null);
@@ -118,37 +118,12 @@ export function DashboardView() {
   const [quickLogModal, setQuickLogModal] = useState(false);
   const todayKey = toDateKey(new Date());
   const puppy = dogs.items.find((dog) => dog.status === "puppy") ?? dogs.items[0];
-  const overdue = healthEvents.items.filter((event) => parseLocalDate(event.date) < new Date()).length;
   const currentMilestone =
     milestones.items.find((item) => item.status !== "completed" && item.dependencies.length > 0) ?? milestones.items[0];
   const readiness = computeAloneTimeReadiness(aloneTimeLogs.items, calendarEvents.items);
 
   return (
     <div className="dashboard">
-      <section className="hero-panel">
-        <div>
-          <p className="eyebrow">{adaptive.mode}</p>
-          <h2>Today shows only what the household can realistically carry.</h2>
-          <p>{adaptive.coach}</p>
-        </div>
-        <div className="coach-card">
-          <Sparkles size={20} aria-hidden />
-          <strong>AI coach preview</strong>
-          <p>Current plan protects potty, meals, relationship safety, and short wins. Optional work drops when hard logs stack up.</p>
-          <p className="small">
-            Target: {adaptive.targetTrainingMinutes[0]}-{adaptive.targetTrainingMinutes[1]} min structured training,{" "}
-            {adaptive.targetExerciseMinutes[0]}-{adaptive.targetExerciseMinutes[1]} min age-appropriate exercise.
-          </p>
-        </div>
-      </section>
-
-      <section className="metric-grid">
-        <AppMetric label="Current streak" value="5 days" icon={Check} />
-        <AppMetric label="Structured training" value={`${adaptive.trainingMinutes} min`} icon={Target} />
-        <AppMetric label="Upcoming health" value={`${healthEvents.items.length}`} icon={HeartPulse} />
-        <AppMetric label="Overdue tasks" value={`${overdue}`} icon={AlertTriangle} />
-      </section>
-
       <section className="row between quick-log-row">
         <p className="small">Just happened? Log it in one tap — no need to open a task.</p>
         <button className="primary-button" type="button" onClick={() => setQuickLogModal(true)}>

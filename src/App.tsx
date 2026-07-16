@@ -3,9 +3,7 @@ import {
   CalendarDays,
   ChevronRight,
   ClipboardList,
-  Download,
   Home,
-  Import,
   Inbox as InboxIcon,
   ListTodo,
   MessageSquarePlus,
@@ -19,6 +17,7 @@ import {
   Target,
   UtensilsCrossed,
   Users,
+  X,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -85,6 +84,8 @@ function Shell() {
   const { view: active, navigate } = useNavigation();
   const setActive = (id: string) => navigate(id as Parameters<typeof navigate>[0]);
   const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const [largeText, setLargeText] = useState<boolean>(loadLargeText);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -131,6 +132,17 @@ function Shell() {
   function selectResult(result: { type: string; title: string }) {
     setActive(searchTargets[result.type] ?? "dashboard");
     setQuery("");
+    setSearchOpen(false);
+  }
+
+  function openSearch() {
+    setSearchOpen(true);
+    setTimeout(() => searchInputRef.current?.focus(), 0);
+  }
+
+  function closeSearch() {
+    setSearchOpen(false);
+    setQuery("");
   }
 
   return (
@@ -159,33 +171,17 @@ function Shell() {
 
       <main>
         <header className="topbar">
-          <div>
-            <p className="eyebrow">Adaptive puppy raising & household planning</p>
-            <h1>Lifelong dog companion system</h1>
+          <div className="topbar-brand">
+            <PawPrint size={20} aria-hidden />
+            <strong>Dog Life OS</strong>
           </div>
           <div className="top-actions">
-            <label className="search">
-              <Search size={17} aria-hidden />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search notes, vaccines, walks" />
-            </label>
+            {!searchOpen && (
+              <button className="icon-button" type="button" onClick={openSearch} aria-label="Search">
+                <Search size={18} aria-hidden />
+              </button>
+            )}
             <NotificationBell />
-            <button className="icon-button" type="button" onClick={exportData} aria-label="Export data">
-              <Download size={18} aria-hidden />
-            </button>
-            <button className="icon-button" type="button" onClick={() => importInputRef.current?.click()} aria-label="Import data">
-              <Import size={18} aria-hidden />
-            </button>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept="application/json"
-              hidden
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) importData(file);
-                event.target.value = "";
-              }}
-            />
             <button
               className="icon-button"
               type="button"
@@ -195,19 +191,47 @@ function Shell() {
               {theme === "dark" ? <Sun size={18} aria-hidden /> : <Moon size={18} aria-hidden />}
             </button>
           </div>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) importData(file);
+              event.target.value = "";
+            }}
+          />
         </header>
 
-        {query && (
-          <section className="search-results">
-            {searchResults.map((result) => (
-              <button key={`${result.type}-${result.title}`} type="button" onClick={() => selectResult(result)}>
-                <span>{result.type}</span>
-                <strong>{result.title}</strong>
-                <ChevronRight size={16} aria-hidden />
+        {searchOpen && (
+          <section className="search-overlay">
+            <label className="search">
+              <Search size={17} aria-hidden />
+              <input
+                ref={searchInputRef}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search tasks, milestones, journal notes…"
+              />
+              <button className="text-button" type="button" onClick={closeSearch} aria-label="Close search">
+                <X size={16} aria-hidden />
               </button>
-            ))}
-            {searchResults.length === 0 && (
-              <p className="search-empty">No matches for "{query}" in tasks, milestones, or journal entries.</p>
+            </label>
+            {!query && <p className="search-empty">Type to search across tasks, milestones, and journal entries.</p>}
+            {query && (
+              <div className="search-results">
+                {searchResults.map((result) => (
+                  <button key={`${result.type}-${result.title}`} type="button" onClick={() => selectResult(result)}>
+                    <span>{result.type}</span>
+                    <strong>{result.title}</strong>
+                    <ChevronRight size={16} aria-hidden />
+                  </button>
+                ))}
+                {searchResults.length === 0 && (
+                  <p className="search-empty">No matches for "{query}" in tasks, milestones, or journal entries.</p>
+                )}
+              </div>
             )}
           </section>
         )}

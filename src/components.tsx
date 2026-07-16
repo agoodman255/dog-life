@@ -337,6 +337,9 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
 
   const instance = getInstance(task.id, date);
   const state = instance?.state ?? "not_started";
+  // Guards every lifecycle confirm below against a slow network response +
+  // an impatient re-tap creating a duplicate task_instance for the same slot.
+  const [submitting, setSubmitting] = useState(false);
 
   const involvedDogs = dogs.items.filter((dog) => task.dogIds.includes(dog.id));
   const location = locations.find((loc) => loc.id === task.location);
@@ -357,18 +360,24 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
   }
 
   async function confirmStartNow() {
+    if (submitting) return;
+    setSubmitting(true);
     setError(false);
     const ok = await startTask(task, date, new Date().toISOString(), timezone);
     if (!ok) setError(true);
     else setActivePanel(null);
+    setSubmitting(false);
   }
 
   async function confirmStartManual() {
+    if (submitting) return;
+    setSubmitting(true);
     setError(false);
     const iso = zonedTimeToUtcIso(startDate, startClock, startZone);
     const ok = await startTask(task, date, iso, startZone);
     if (!ok) setError(true);
     else setActivePanel(null);
+    setSubmitting(false);
   }
 
   const [endManual, setEndManual] = useState(false);
@@ -390,28 +399,35 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
   }
 
   async function finishEnd(endIso: string, endTz: string) {
-    if (!instance) return;
+    if (submitting || !instance) return;
+    setSubmitting(true);
     setError(false);
     const ok = await endTask(instance.id, endIso, endTz, checklistDraft, ratingDraft);
     if (!ok) setError(true);
     else setActivePanel(null);
+    setSubmitting(false);
   }
 
   async function quickComplete(rating: number) {
+    if (submitting) return;
+    setSubmitting(true);
     setError(false);
     const nowIso = new Date().toISOString();
     const started = await startTask(task, date, nowIso, timezone);
     if (!started) {
       setError(true);
+      setSubmitting(false);
       return;
     }
     const fresh = getInstance(task.id, date);
     if (!fresh) {
       setError(true);
+      setSubmitting(false);
       return;
     }
     const ok = await endTask(fresh.id, nowIso, timezone, buildDefaultChecklist(task), rating);
     if (!ok) setError(true);
+    setSubmitting(false);
   }
 
   const [rescheduleReason, setRescheduleReason] = useState("");
@@ -427,10 +443,12 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
   }
 
   async function confirmReschedule() {
+    if (submitting) return;
     if (!rescheduleReason.trim()) {
       setError(true);
       return;
     }
+    setSubmitting(true);
     setError(false);
     const ok = await rescheduleTask(task, date, rescheduleDate, to12Hour(rescheduleClock), rescheduleReason.trim());
     if (!ok) setError(true);
@@ -438,6 +456,7 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
       setActivePanel(null);
       onClose();
     }
+    setSubmitting(false);
   }
 
   const [skipReason, setSkipReason] = useState("");
@@ -449,10 +468,12 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
   }
 
   async function confirmSkip() {
+    if (submitting) return;
     if (!skipReason.trim()) {
       setError(true);
       return;
     }
+    setSubmitting(true);
     setError(false);
     const ok = await skipTask(task, date, skipReason.trim());
     if (!ok) setError(true);
@@ -460,6 +481,7 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
       setActivePanel(null);
       onClose();
     }
+    setSubmitting(false);
   }
 
   const [delegateTo, setDelegateTo] = useState("");
@@ -471,10 +493,12 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
   }
 
   async function confirmDelegate() {
+    if (submitting) return;
     if (!delegateTo) {
       setError(true);
       return;
     }
+    setSubmitting(true);
     setError(false);
     const fromId = instance?.assignedTo ?? task.assignedTo;
     const ok = await delegateTask(task, date, fromId, delegateTo);
@@ -483,6 +507,7 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
       setActivePanel(null);
       onClose();
     }
+    setSubmitting(false);
   }
 
   return (
@@ -635,10 +660,10 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
               <>
                 <p>Is now the correct time this task started?</p>
                 <div className="form-actions">
-                  <button className="text-button" type="button" onClick={() => setStartManual(true)}>
+                  <button className="text-button" type="button" onClick={() => setStartManual(true)} disabled={submitting}>
                     No, pick a time
                   </button>
-                  <button className="primary-button" type="button" onClick={confirmStartNow}>
+                  <button className="primary-button" type="button" onClick={confirmStartNow} disabled={submitting}>
                     Yes, starting now
                   </button>
                 </div>
@@ -678,10 +703,15 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
               <>
                 <p>Is now the correct time this task ended?</p>
                 <div className="form-actions">
-                  <button className="text-button" type="button" onClick={() => setEndManual(true)}>
+                  <button className="text-button" type="button" onClick={() => setEndManual(true)} disabled={submitting}>
                     No, pick a time
                   </button>
-                  <button className="primary-button" type="button" onClick={() => finishEnd(new Date().toISOString(), timezone)}>
+                  <button
+                    className="primary-button"
+                    type="button"
+                    onClick={() => finishEnd(new Date().toISOString(), timezone)}
+                    disabled={submitting}
+                  >
                     Yes, ending now
                   </button>
                 </div>
@@ -706,7 +736,12 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
                   <button className="text-button" type="button" onClick={() => setActivePanel(null)}>
                     Cancel
                   </button>
-                  <button className="primary-button" type="button" onClick={() => finishEnd(zonedTimeToUtcIso(endDate, endClock, endZone), endZone)}>
+                  <button
+                    className="primary-button"
+                    type="button"
+                    onClick={() => finishEnd(zonedTimeToUtcIso(endDate, endClock, endZone), endZone)}
+                    disabled={submitting}
+                  >
                     Confirm end
                   </button>
                 </div>
@@ -764,7 +799,7 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
               <button className="text-button" type="button" onClick={() => setActivePanel(null)}>
                 Cancel
               </button>
-              <button className="primary-button" type="button" onClick={confirmReschedule}>
+              <button className="primary-button" type="button" onClick={confirmReschedule} disabled={submitting}>
                 Confirm reschedule
               </button>
             </div>
@@ -781,7 +816,7 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
               <button className="text-button" type="button" onClick={() => setActivePanel(null)}>
                 Cancel
               </button>
-              <button className="primary-button" type="button" onClick={confirmSkip}>
+              <button className="primary-button" type="button" onClick={confirmSkip} disabled={submitting}>
                 Confirm skip
               </button>
             </div>
@@ -807,7 +842,7 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
               <button className="text-button" type="button" onClick={() => setActivePanel(null)}>
                 Cancel
               </button>
-              <button className="primary-button" type="button" onClick={confirmDelegate}>
+              <button className="primary-button" type="button" onClick={confirmDelegate} disabled={submitting}>
                 Send request
               </button>
             </div>
@@ -820,7 +855,7 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
               Quick complete:
             </span>
             {[1, 2, 3, 4, 5].map((rating) => (
-              <button key={rating} type="button" onClick={() => quickComplete(rating)}>
+              <button key={rating} type="button" onClick={() => quickComplete(rating)} disabled={submitting}>
                 {rating}
               </button>
             ))}
