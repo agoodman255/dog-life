@@ -36,7 +36,12 @@ set template_id = losers.keep_id
 from losers
 where task_instances.template_id = losers.lose_id;
 
+with ranked as (
+  select id,
+         row_number() over (partition by household_id, title order by id) as rn
+  from tasks
+)
 delete from tasks
-where id not in (
-  select min(id) from tasks group by household_id, title
-);
+using ranked
+where tasks.id = ranked.id
+  and ranked.rn > 1;

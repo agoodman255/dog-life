@@ -16,20 +16,13 @@
 -- task with no conflict handling at all. If you're seeing duplicates from before this fix,
 -- run supabase/dedupe-tasks-2026-07-16.sql once, first.
 --
--- health_events/journal_entries/relationship_logs/calendar_events/alone_time_logs still have
--- no stable client-side id or unique constraint (Postgres generates a fresh uuid each insert),
--- so re-running this file still adds duplicates of those alongside whatever's already there —
--- same bug class as tasks had, just not fixed yet (unconfirmed whether it's visibly caused
--- problems for these tables the way it did for tasks). If you want a full reset of those
--- tables to exactly this seed set, uncomment the DELETE block below first — note that
--- deleting a task cascades to delete any per-task feedback ratings tied to it.
-
--- delete from tasks where household_id = '11111111-1111-1111-1111-111111111111';
--- delete from health_events where household_id = '11111111-1111-1111-1111-111111111111';
--- delete from journal_entries where household_id = '11111111-1111-1111-1111-111111111111';
--- delete from relationship_logs where household_id = '11111111-1111-1111-1111-111111111111';
--- delete from calendar_events where household_id = '11111111-1111-1111-1111-111111111111';
--- delete from alone_time_logs where household_id = '11111111-1111-1111-1111-111111111111';
+-- health_events/journal_entries/relationship_logs/calendar_events/alone_time_logs are now
+-- UPSERTED too, on a fixed deterministic id (see seedId() above) rather than a content-based
+-- key, since those tables also accept real user-entered rows (quick-log, journal, relationship
+-- tracker) that can legitimately repeat a title+date. If you're seeing duplicates from before
+-- this fix, run supabase/dedupe-remaining-tables-2026-07-22.sql once, first — it wipes only
+-- the seed-originated rows in these 5 tables, safe only because this household hadn't logged
+-- any real entries there yet as of 2026-07-22.
 
 insert into households (id, name) values ('11111111-1111-1111-1111-111111111111', 'Andrew & Bree''s household')
 on conflict (id) do nothing;
@@ -339,12 +332,17 @@ insert into milestones (id, household_id, title, track, status, dependencies, ag
 )
 on conflict (id) do update set title = excluded.title, track = excluded.track, status = excluded.status, dependencies = excluded.dependencies, age_gate_weeks = excluded.age_gate_weeks, dog_ids = excluded.dog_ids, steps = excluded.steps, sources = excluded.sources, why = excluded.why;
 
-insert into health_events (household_id, dog_id, title, date, kind, notes, document_url) values ('11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111114', 'Pickup day — Ruby Doodles Louisiana', '2026-08-01', 'weight', 'Mid-afternoon pickup. Confirm name, sex, birthday, microchip, and get breeder health records. First weigh-in today.', NULL);
-insert into health_events (household_id, dog_id, title, date, kind, notes, document_url) values ('11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111114', 'First vet appointment — Canyons Vet', '2026-08-03', 'vet', '2:00 PM. Bring breeder health records. Confirm vaccine schedule and set booster dates.', NULL);
-insert into health_events (household_id, dog_id, title, date, kind, notes, document_url) values ('11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111115', 'Heartworm prevention', '2026-07-20', 'medication', 'Monthly prevention, per care sheet cadence.', NULL);
-insert into health_events (household_id, dog_id, title, date, kind, notes, document_url) values ('11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111115', 'Grooming reset', '2026-08-07', 'grooming', 'Brush, nail check, ear check.', NULL);
+insert into health_events (id, household_id, dog_id, title, date, kind, notes, document_url) values ('f96413b1-4282-571c-99c6-8085edaa1ba8', '11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111114', 'Pickup day — Ruby Doodles Louisiana', '2026-08-01', 'weight', 'Mid-afternoon pickup. Confirm name, sex, birthday, microchip, and get breeder health records. First weigh-in today.', NULL)
+on conflict (id) do update set dog_id = excluded.dog_id, title = excluded.title, date = excluded.date, kind = excluded.kind, notes = excluded.notes, document_url = excluded.document_url;
+insert into health_events (id, household_id, dog_id, title, date, kind, notes, document_url) values ('983b977f-994b-5edc-849e-f50b0341d7d3', '11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111114', 'First vet appointment — Canyons Vet', '2026-08-03', 'vet', '2:00 PM. Bring breeder health records. Confirm vaccine schedule and set booster dates.', NULL)
+on conflict (id) do update set dog_id = excluded.dog_id, title = excluded.title, date = excluded.date, kind = excluded.kind, notes = excluded.notes, document_url = excluded.document_url;
+insert into health_events (id, household_id, dog_id, title, date, kind, notes, document_url) values ('123a9130-8023-5932-bd11-07a6c6fa3a18', '11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111115', 'Heartworm prevention', '2026-07-20', 'medication', 'Monthly prevention, per care sheet cadence.', NULL)
+on conflict (id) do update set dog_id = excluded.dog_id, title = excluded.title, date = excluded.date, kind = excluded.kind, notes = excluded.notes, document_url = excluded.document_url;
+insert into health_events (id, household_id, dog_id, title, date, kind, notes, document_url) values ('f2f0ca14-5a9a-59fe-a71b-515032d904b7', '11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111115', 'Grooming reset', '2026-08-07', 'grooming', 'Brush, nail check, ear check.', NULL)
+on conflict (id) do update set dog_id = excluded.dog_id, title = excluded.title, date = excluded.date, kind = excluded.kind, notes = excluded.notes, document_url = excluded.document_url;
 
-insert into journal_entries (household_id, dog_ids, date, title, text, tags, mood) values ('11111111-1111-1111-1111-111111111111', ARRAY['11111111-1111-1111-1111-111111111114']::uuid[], '2026-07-25', 'Pickup week prep checklist', 'Crate and pen set up, potty spot picked out near the door, breeder paperwork folder ready, first vet appointment (8/3, 2:00 PM, Canyons Vet) on the calendar. Plan for a parallel-walk introduction with Griz once the puppy has settled in for a few days rather than day one.', ARRAY['prep', 'pickup', 'planning']::text[], 'steady');
+insert into journal_entries (id, household_id, dog_ids, date, title, text, tags, mood) values ('4a074585-e8f2-51fe-8af3-da8742576f34', '11111111-1111-1111-1111-111111111111', ARRAY['11111111-1111-1111-1111-111111111114']::uuid[], '2026-07-25', 'Pickup week prep checklist', 'Crate and pen set up, potty spot picked out near the door, breeder paperwork folder ready, first vet appointment (8/3, 2:00 PM, Canyons Vet) on the calendar. Plan for a parallel-walk introduction with Griz once the puppy has settled in for a few days rather than day one.', ARRAY['prep', 'pickup', 'planning']::text[], 'steady')
+on conflict (id) do update set dog_ids = excluded.dog_ids, date = excluded.date, title = excluded.title, text = excluded.text, tags = excluded.tags, mood = excluded.mood;
 
 insert into exposure_items (id, household_id, category, title, dog_ids, status, log) values ('socialization-children', '11111111-1111-1111-1111-111111111111', 'socialization', 'Children', ARRAY['11111111-1111-1111-1111-111111111114']::uuid[], 'not-started', '[]'::jsonb)
 on conflict (id) do update set category = excluded.category, title = excluded.title, dog_ids = excluded.dog_ids, status = excluded.status, log = excluded.log;
@@ -485,188 +483,225 @@ on conflict (id) do update set category = excluded.category, title = excluded.ti
 
 
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Gym — concert series', 'gym', 'recurring', 'wednesday', NULL, '2026-09-07', NULL,
+  '7cb8b072-b061-5166-abb3-42b641774352', '11111111-1111-1111-1111-111111111111', 'Gym — concert series', 'gym', 'recurring', 'wednesday', NULL, '2026-09-07', NULL,
   '', '~6:00 PM', 1.25, 'none', 'confirmed', NULL, 'Through Labor Day (9/7/26). Default: go together — a ~1-1.25 hr window is inside the crate-trained short-alone-time tier (no Rover needed). If schedules split some weeks, see the household overlap policy: stagger start times ~30-45 min so one person is always home, rather than both being out the full window.',
   ARRAY['11111111-1111-1111-1111-111111111112', '11111111-1111-1111-1111-111111111113']::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Gym — "Hot Dogs"', 'gym', 'recurring', 'monday', NULL, '2026-09-07', NULL,
+  'ce4917b8-b3be-53e2-89c0-595fe1ad7e7d', '11111111-1111-1111-1111-111111111111', 'Gym — "Hot Dogs"', 'gym', 'recurring', 'monday', NULL, '2026-09-07', NULL,
   '', '~5:30 PM', 1.25, 'none', 'confirmed', NULL, 'Through Labor Day (9/7/26). Same overlap policy as the Wednesday concert-series class — go together by default; stagger if a given Monday doesn''t allow both to leave at once.',
   ARRAY['11111111-1111-1111-1111-111111111112', '11111111-1111-1111-1111-111111111113']::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Andrew''s volleyball', 'volleyball', 'recurring', 'tuesday', NULL, NULL, NULL,
+  'ce76a8c3-d3f7-5aaa-a14d-7db18570946b', '11111111-1111-1111-1111-111111111111', 'Andrew''s volleyball', 'volleyball', 'recurring', 'tuesday', NULL, NULL, NULL,
   '', 'estimated — confirm exact time', 2.5, 'none', 'placeholder', NULL, '~2-3 hr blocks. Exact schedule to be uploaded. Bree is solo with both dogs during this window — good slot for her personal downtime once the puppy settles, or a quieter training/relationship-building evening early on.',
   ARRAY['11111111-1111-1111-1111-111111111112']::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Curling', 'curling', 'recurring', 'thursday', NULL, NULL, NULL,
+  'fd9f835c-737c-561c-a638-15c431a3325e', '11111111-1111-1111-1111-111111111111', 'Curling', 'curling', 'recurring', 'thursday', NULL, NULL, NULL,
   'starts fall 2026, exact date TBD', '8:30 PM – 11:00 PM', 2.5, 'none', 'placeholder', NULL, 'League start date not yet set. Treated as a shared couple activity (2.5 hrs, evening) — inside the medium alone-time tier once logged readiness supports it; no Rover needed if the puppy is already hitting 3-4 hr solo by fall.',
   ARRAY['11111111-1111-1111-1111-111111111112', '11111111-1111-1111-1111-111111111113']::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Andrew — personal time', 'downtime', 'recurring', 'tuesday', NULL, NULL, NULL,
+  '2d798fd2-cad4-507f-8041-c125342bada2', '11111111-1111-1111-1111-111111111111', 'Andrew — personal time', 'downtime', 'recurring', 'tuesday', NULL, NULL, NULL,
   'estimated — confirm day/time', 'evening, during Bree''s coverage of Andrew''s volleyball window', 2, 'none', 'placeholder', NULL, 'Placeholder slot for Spanish practice, vibe-coding, or other solo hobbies. Proposed default: Tuesday evenings work themselves out since Andrew is already out at volleyball — this block is really about protecting a second, at-home slot later in the week (e.g. a weekend afternoon) once the puppy''s routine settles. Adjust day/time to whatever actually sticks.',
   ARRAY['11111111-1111-1111-1111-111111111112']::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Bree — personal time', 'downtime', 'recurring', 'tuesday', NULL, NULL, NULL,
+  'bc70a7ef-d8b9-5fee-86f0-f8c2804970ce', '11111111-1111-1111-1111-111111111111', 'Bree — personal time', 'downtime', 'recurring', 'tuesday', NULL, NULL, NULL,
   'estimated — confirm day/time', 'evening, while Andrew is at volleyball', 2, 'none', 'placeholder', NULL, 'Placeholder slot for art, house projects, or other solo hobbies — uses the Tuesday window Andrew is already out for volleyball. A second slot (e.g. a weekend morning) is worth adding once the together-time and nighttime routine settle into a fixed pattern.',
   ARRAY['11111111-1111-1111-1111-111111111113']::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'September concerts', 'concert', 'one-off', NULL, NULL, NULL, NULL,
+  '6b8989ca-7fed-54a8-93a0-099d17e0c7d5', '11111111-1111-1111-1111-111111111111', 'September concerts', 'concert', 'one-off', NULL, NULL, NULL, NULL,
   'mid-to-late September 2026', 'evening, date TBD', 3, 'rover', 'placeholder', NULL, 'Several hours away (~3 hr estimate). Puppy''s age at this point makes 1 Rover visit the right default — see Section 13 coverage tiers. Exact dates pending.',
   ARRAY[]::uuid[], 1, ARRAY['Potty walk ~30 min before leaving', 'Pick up the water bowl ~1 hr before departure to cut down on mid-outing accidents', 'Stuff and freeze a Kong, crate the puppy in the hardwood-floor room (easiest cleanup)', 'Keep Griz in a separate room or gated area from the crate rather than free-roaming with a stressed puppy']::text[], ARRAY['Arrive around the halfway point of the outing (~1.5 hrs in)', 'Leash the puppy out to the usual potty spot and wait for a full elimination', 'Refresh water, 10-15 min of low-key play or sniffing, then back in the crate with a fresh chew', 'Text a quick note on accidents, barking, or anxiety']::text[], ARRAY['Full decompression walk with both dogs', 'Refresh water and clear any Kong remnants', 'Log the outing in Alone-Time Readiness']::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Comedy shows', 'comedy', 'one-off', NULL, NULL, NULL, NULL,
+  'f5af664f-0a52-5969-abc9-0ee68ce69db5', '11111111-1111-1111-1111-111111111111', 'Comedy shows', 'comedy', 'one-off', NULL, NULL, NULL, NULL,
   'mid-to-late September 2026 onward', 'evening, date TBD', 3, 'rover', 'placeholder', NULL, 'Several hours away (~3 hr estimate). Optional depending on how alone-time readiness is tracking by then — if the puppy''s already comfortably past 3 hrs solo, this one can drop to no Rover. Exact dates pending.',
   ARRAY[]::uuid[], 1, ARRAY['Potty walk ~30 min before leaving', 'Water bowl up ~1 hr before departure', 'Stuffed frozen Kong in the crate, hardwood-floor room', 'Griz kept separate from the crate for the first stretch']::text[], ARRAY['One visit at the halfway mark: potty, fresh water, short play, fresh chew before re-crating', 'Note any accidents or distress']::text[], ARRAY['Decompression walk on return', 'Refresh water', 'Log the outing']::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'BYU vs. Notre Dame tailgate', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-17',
+  '41a84d56-8a53-5123-8a12-19cbb073f68e', '11111111-1111-1111-1111-111111111111', 'BYU vs. Notre Dame tailgate', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-17',
   '', 'Kickoff TBA', 4, 'rover', 'confirmed', 'marquee', 'LaVell Edwards Stadium, Provo. This is the ~4-hour alone-time milestone target — same date as Georgia @ Auburn and Clemson vs. Charleston Southern (stacked heavy week). Section 4''s cross-reference found this date-driven target is more aggressive than typical age-based crating guidance for a puppy this age, so booking 1 Rover visit as a safety net is the realistic default rather than assuming readiness from the calendar alone.',
   ARRAY[]::uuid[], 1, ARRAY['Potty walk ~30 min before leaving', 'Water bowl up ~1 hr before departure', 'Stuffed frozen Kong, puppy crated in the hardwood-floor room', 'Griz in a separate room/gated area, not free-roaming with the crate']::text[], ARRAY['Visit around the 2-hr mark', 'Potty break, fresh water, 15-20 min low-key play, fresh chew before re-crating', 'Note any accidents, barking, or anxiety']::text[], ARRAY['Full decompression walk with both dogs', 'Refresh water and food', 'Log the outing — this is the marquee readiness checkpoint']::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Utah Mammoth hockey games', 'sports', 'one-off', NULL, NULL, NULL, NULL,
+  'c5890a1a-9d14-5182-9188-9ce619dfe194', '11111111-1111-1111-1111-111111111111', 'Utah Mammoth hockey games', 'sports', 'one-off', NULL, NULL, NULL, NULL,
   'late October – early November 2026 onward', 'evening, specific games TBD', 4.5, 'rover', 'placeholder', NULL, 'Partial season ticket holder — drive + game + drive realistically runs ~4.5 hrs, a full-evening alone-time target. 2 Rover visits is the realistic default until logged readiness clears this window solo. Specific games attended still TBD.',
   ARRAY[]::uuid[], 2, ARRAY['Potty walk ~30 min before leaving', 'Water bowl up ~1-1.5 hrs before departure', 'Stuffed frozen Kong, puppy crated in the hardwood-floor room', 'Griz separated from the crate for the first stretch', 'If the visit overlaps a scheduled meal, portion it out and label it for the sitter']::text[], ARRAY['Visit 1 (~90 min in): potty, fresh water, short play, fresh chew', 'Visit 2 (~3 hr in): potty, feed the labeled meal if one falls in this window, another short play session', 'Note any accidents, barking, or anxiety on each visit']::text[], ARRAY['Full decompression walk', 'Refresh water', 'Log the outing in Alone-Time Readiness']::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Griz decompression hike (splits with puppy''s vet visit)', 'other', 'one-off', NULL, NULL, NULL, '2026-08-03',
+  'b11953da-76bb-526c-ac72-70aae6f3bbb9', '11111111-1111-1111-1111-111111111111', 'Griz decompression hike (splits with puppy''s vet visit)', 'other', 'one-off', NULL, NULL, NULL, '2026-08-03',
   '', '~2:00 PM, overlapping the vet appointment', NULL, 'none', 'confirmed', NULL, 'Illustrates the general split pattern: when one dog has an appointment, the other doesn''t have to sit it out. Bree takes Griz to the local hiking trail (puppy isn''t cleared for trail exposure yet) while Andrew takes the puppy to the first vet appointment at Canyons Vet — two separate activities, two separate humans, same time window, instead of the whole household being tied to the vet trip. Swap people as makes sense on the actual day; the pattern is the point.',
   ARRAY['11111111-1111-1111-1111-111111111113']::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Mom visiting', 'family', 'one-off', NULL, NULL, NULL, '2026-09-23',
+  'e83aa281-9ab1-5c93-9966-f805394128b6', '11111111-1111-1111-1111-111111111111', 'Mom visiting', 'family', 'one-off', NULL, NULL, NULL, '2026-09-23',
   'through Sept 26', 'multi-day visit', NULL, 'none', 'confirmed', NULL, 'Stay in Salt Lake City or day-trip distance only — no overnight travel or camping. Clemson @ Cal Fri 9/25 (8:30 PM MT) is a late TV game, no conflict with staying local.',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Ski days (as conditions allow)', 'travel', 'one-off', NULL, NULL, NULL, NULL,
+  'a7acff74-880e-5933-aa08-50d41c7fbebb', '11111111-1111-1111-1111-111111111111', 'Ski days (as conditions allow)', 'travel', 'one-off', NULL, NULL, NULL, NULL,
   'ski season, ~November 2026 – April 2027', 'variable — 45 min drive each way + 3-8 hrs on the mountain', 6, 'rover', 'placeholder', NULL, 'SLC household — ~45 min drive each way to the mountain, skiing for as long as conditions and plans call for (as short as 3 hrs, up to a full 8-hour day), on nights, weekends, or a good-powder weekday — not a fixed December week. Total away time really ranges ~4.5-9.5 hrs including the drive, so treat the Rover call as a per-trip decision using the tiers above rather than one fixed plan.',
   ARRAY[]::uuid[], NULL, ARRAY['Decide the away-time tier before leaving: total away time (drive + ski + drive) under ~4.5 hrs needs no Rover once that alone-time milestone is cleared; ~4.5-7 hrs = 1 Rover visit; ~7-9.5 hrs = 2 visits', 'Potty walk ~30 min before leaving', 'Water bowl up ~1 hr before departure', 'Stuffed frozen Kong, puppy crated in the hardwood-floor room', 'Griz kept separate from the crate for the first stretch — he''s fine solo for a full day if the trip runs long']::text[], ARRAY['Time the visit(s) around the middle of however long you''ll actually be gone — text the sitter your real ETA before leaving rather than a fixed clock time', 'Standard visit: potty, fresh water, a meal if one falls in the window, 15-20 min play, fresh chew before re-crating', 'Note accidents, appetite, and energy level']::text[], ARRAY['Decompression walk with both dogs', 'Refresh food and water', 'Log the actual away-time (drive + ski + drive) in Alone-Time Readiness so future tiering stays accurate']::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Tennessee State', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-05',
+  'b2555eb3-1698-5262-a79c-361aba90e8a0', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Tennessee State', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-05',
   '', '1:00 PM', NULL, 'none', 'confirmed', 'normal', 'Home opener',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Western Kentucky', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-12',
+  'bd6ce12a-b6c7-5c74-8225-28429fafc99d', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Western Kentucky', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-12',
   '', '10:45 AM', NULL, 'none', 'confirmed', 'normal', 'Home',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia @ Arkansas', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-19',
+  '5c8b47a6-306a-543a-acb9-5ad37008f4fd', '11111111-1111-1111-1111-111111111111', 'Georgia @ Arkansas', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-19',
   '', '10:00 AM', NULL, 'none', 'confirmed', 'normal', 'Away',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Oklahoma', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-26',
+  'be75fa7b-8490-517f-b674-6c6aba8d6a50', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Oklahoma', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-26',
   '', 'Flex 1:30-2:30 PM or 4-6 PM', NULL, 'none', 'placeholder', 'normal', 'Home, SEC',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Vanderbilt', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-03',
+  'd1c1aca4-c0be-58d6-945b-694214907e7c', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Vanderbilt', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-03',
   '', '~10-11 AM window', NULL, 'none', 'placeholder', 'normal', 'Home',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia @ Alabama', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-10',
+  '4294614d-a6a4-512b-a0ef-6c9de1b7afd7', '11111111-1111-1111-1111-111111111111', 'Georgia @ Alabama', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-10',
   '', 'Night, 4-6 PM window', NULL, 'none', 'placeholder', 'marquee', 'Heavy/marquee week',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Auburn', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-17',
+  'ea0d66c8-5cff-59f4-aed1-53012da4534d', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Auburn', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-17',
   '', '~1:30-2:30 PM window', NULL, 'none', 'placeholder', 'marquee', 'Heavy week — same date as BYU/Notre Dame tailgate',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Florida (Atlanta)', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-31',
+  '6e52bb94-8851-547c-849d-07f1502b55ff', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Florida (Atlanta)', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-31',
   '', '1:30 PM', NULL, 'none', 'confirmed', 'normal', 'Rivalry, moved to Mercedes-Benz Stadium',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia @ Ole Miss', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-07',
+  'ce5a12fc-d846-5944-bcd2-a1bcff4a4f39', '11111111-1111-1111-1111-111111111111', 'Georgia @ Ole Miss', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-07',
   '', 'Flex', NULL, 'none', 'placeholder', 'marquee', 'Heavy/marquee week',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Missouri', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-14',
+  '55df02b2-3618-584a-b1a3-277841ec1f95', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Missouri', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-14',
   '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Home',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia @ South Carolina', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-21',
+  '8f330fa8-826b-5cfb-bdc6-43796766e1a2', '11111111-1111-1111-1111-111111111111', 'Georgia @ South Carolina', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-21',
   '', 'TBA', NULL, 'none', 'placeholder', 'marquee', 'Heavy week (Clemson @ Duke Fri 11/20 into this)',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Georgia vs. Georgia Tech', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-28',
+  'c24408fe-8029-5337-b632-4c31b536d551', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Georgia Tech', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-28',
   '', 'TBA', NULL, 'none', 'placeholder', 'marquee', 'Rivalry, heavy week',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson @ LSU', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-05',
+  '9f50c89f-7346-5132-9e7c-a2b085ea42ef', '11111111-1111-1111-1111-111111111111', 'Clemson @ LSU', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-05',
   '', '5:30 PM', NULL, 'none', 'confirmed', 'marquee', 'College GameDay, Lane Kiffin''s LSU debut',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson vs. Georgia Southern', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-12',
+  'a188d570-6ea5-5640-ae9a-e544636ef995', '11111111-1111-1111-1111-111111111111', 'Clemson vs. Georgia Southern', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-12',
   '', '5:30 PM', NULL, 'none', 'confirmed', 'normal', 'Home opener',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson vs. North Carolina', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-19',
+  'bb6975f7-b225-5489-98f5-7da8beac73c9', '11111111-1111-1111-1111-111111111111', 'Clemson vs. North Carolina', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-19',
   '', '10:00 AM', NULL, 'none', 'confirmed', 'normal', 'Home',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson @ Cal', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-25',
+  '20c1541a-b030-5da1-b837-b07affae3e4e', '11111111-1111-1111-1111-111111111111', 'Clemson @ Cal', 'sports', 'one-off', NULL, NULL, NULL, '2026-09-25',
   '', '8:30 PM (Fri)', NULL, 'none', 'confirmed', 'normal', 'During mom''s visit — late TV game, no conflict',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson vs. Miami', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-03',
+  '8aa4db71-818a-58c0-86b7-2cb5687295e8', '11111111-1111-1111-1111-111111111111', 'Clemson vs. Miami', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-03',
   '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Home',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson vs. Charleston Southern', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-17',
+  '36d28175-6b6b-5866-ac33-9921335eaa4a', '11111111-1111-1111-1111-111111111111', 'Clemson vs. Charleston Southern', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-17',
   '', 'TBA', NULL, 'none', 'placeholder', 'marquee', 'Heavy week — stacked with Georgia/Auburn + BYU/Notre Dame',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson vs. Virginia Tech', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-24',
+  '595a419a-7eb3-5c1c-ba3f-dce5c81a244f', '11111111-1111-1111-1111-111111111111', 'Clemson vs. Virginia Tech', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-24',
   '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Home — light week for Georgia (bye), but Clemson still plays',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson @ Florida State', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-31',
+  'dde6de9c-9234-56ff-b567-d8c1e0802004', '11111111-1111-1111-1111-111111111111', 'Clemson @ Florida State', 'sports', 'one-off', NULL, NULL, NULL, '2026-10-31',
   '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Away',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson @ Syracuse', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-07',
+  '8df63f03-afb2-534e-83ba-7eef855e414a', '11111111-1111-1111-1111-111111111111', 'Clemson @ Syracuse', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-07',
   '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Away',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson vs. Georgia Tech', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-14',
+  'c5899b5a-a2d2-58f0-8a56-0a0f9be90dc5', '11111111-1111-1111-1111-111111111111', 'Clemson vs. Georgia Tech', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-14',
   '', 'TBA', NULL, 'none', 'placeholder', 'normal', 'Home',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson @ Duke', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-20',
+  '4158287a-b4af-54a2-9eb1-195d936f3496', '11111111-1111-1111-1111-111111111111', 'Clemson @ Duke', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-20',
   '', '5:30 PM (Fri)', NULL, 'none', 'confirmed', 'marquee', 'ACC title implications, heavy week into 11/21 Georgia @ South Carolina',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 insert into calendar_events (id, household_id, title, category, kind, day_of_week, active_from, active_to, date, window_label, time_label, duration_hours, coverage_needed, status, importance, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (
-  gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Clemson vs. South Carolina', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-28',
+  '0fffe717-d14e-5650-8cd6-e4ccf8107336', '11111111-1111-1111-1111-111111111111', 'Clemson vs. South Carolina', 'sports', 'one-off', NULL, NULL, NULL, '2026-11-28',
   '', 'TBA', NULL, 'none', 'placeholder', 'marquee', 'Palmetto Bowl rivalry, heavy week',
   ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[]
-);
+)
+on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, day_of_week = excluded.day_of_week, active_from = excluded.active_from, active_to = excluded.active_to, date = excluded.date, window_label = excluded.window_label, time_label = excluded.time_label, duration_hours = excluded.duration_hours, coverage_needed = excluded.coverage_needed, status = excluded.status, importance = excluded.importance, notes = excluded.notes, attendees = excluded.attendees, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps;
 
