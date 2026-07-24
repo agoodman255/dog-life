@@ -198,15 +198,29 @@ export function PersonName({ id }: { id: string }) {
   return <span style={{ color: person?.color }}>{person?.name ?? id}</span>;
 }
 
+function dogsInvolvedLabel(dogIds: string[], allDogs: Dog[]): string {
+  if (dogIds.length === 0) return "—";
+  if (allDogs.length > 1 && dogIds.length === allDogs.length) return "Both";
+  return dogIds
+    .map((id) => {
+      const dog = allDogs.find((item) => item.id === id);
+      if (!dog) return id;
+      return dog.status === "puppy" ? "Puppy" : dog.name;
+    })
+    .join(", ");
+}
+
 export function TaskCard({
   task,
   feedback,
+  dogs,
   onComplete,
   onDelete,
   onOpenDetail,
 }: {
   task: Task;
   feedback?: DailyFeedback;
+  dogs: Dog[];
   onComplete: (task: Task, rating: number) => Promise<boolean> | boolean | void;
   onDelete?: (task: Task) => void;
   onOpenDetail?: (task: Task) => void;
@@ -251,8 +265,7 @@ export function TaskCard({
         <div className="task-meta">
           <span>{task.duration} min</span>
           <span>{task.setting}</span>
-          <span>Difficulty {task.difficulty}/5</span>
-          <span>Griz: {task.grizParticipation}</span>
+          <span>Dogs: {dogsInvolvedLabel(task.dogIds, dogs)}</span>
           <span>
             <PersonName id={task.assignedTo} />
           </span>
@@ -520,7 +533,6 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
             {instance?.scheduledTime ?? task.time} · {task.duration} min
           </span>
           <span>{task.setting}</span>
-          <span>Difficulty {task.difficulty}/5</span>
           <span>
             <PersonName id={instance?.assignedTo ?? task.assignedTo} />
           </span>

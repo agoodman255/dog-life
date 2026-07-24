@@ -145,6 +145,7 @@ export function DashboardView() {
                 key={task.id}
                 task={task}
                 feedback={feedbackByTask.get(task.id)}
+                dogs={dogs.items}
                 onComplete={completeTask}
                 onOpenDetail={setDetailTask}
               />
@@ -739,7 +740,7 @@ export function CalendarView() {
 
   const headingLabel =
     viewMode === "day"
-      ? cursorDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })
+      ? cursorDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })
       : viewMode === "week"
         ? `Week of ${weekStartDate(cursorDate).toLocaleDateString(undefined, { month: "long", day: "numeric" })}`
         : viewMode === "month"
@@ -757,18 +758,11 @@ export function CalendarView() {
 
   return (
     <section className="panel">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Household calendar</p>
-          <h2>{headingLabel}</h2>
-        </div>
-        <div className="calendar-controls">
-          <div className="subtabs" role="tablist">
-            {(["day", "week", "month", "upcoming", "milestones"] as const).map((mode) => (
-              <button key={mode} role="tab" aria-selected={viewMode === mode} className={viewMode === mode ? "active" : ""} type="button" onClick={() => setViewMode(mode)}>
-                {mode[0].toUpperCase() + mode.slice(1)}
-              </button>
-            ))}
+      <div className={`section-heading calendar-heading ${viewMode === "day" ? "is-frozen" : ""}`}>
+        <div className="calendar-title-row">
+          <div>
+            <p className="eyebrow">Calendar</p>
+            <h2>{headingLabel}</h2>
           </div>
           {isGridMode && (
             <div className="calendar-nav">
@@ -783,6 +777,15 @@ export function CalendarView() {
               </button>
             </div>
           )}
+        </div>
+        <div className="calendar-controls">
+          <div className="subtabs" role="tablist">
+            {(["day", "week", "month", "upcoming", "milestones"] as const).map((mode) => (
+              <button key={mode} role="tab" aria-selected={viewMode === mode} className={viewMode === mode ? "active" : ""} type="button" onClick={() => setViewMode(mode)}>
+                {mode[0].toUpperCase() + mode.slice(1)}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -1382,6 +1385,7 @@ export function TasksView() {
             key={task.id}
             task={task}
             feedback={feedbackByTask.get(task.id)}
+            dogs={dogs.items}
             onComplete={completeTask}
             onDelete={(target) => tasks.remove(target.id)}
             onOpenDetail={setDetailTask}

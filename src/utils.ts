@@ -136,7 +136,15 @@ export function useAdaptivePlan(tasks: Task[], feedback: DailyFeedback[]) {
     const hardDays = feedback.slice(-6).filter((item) => item.rating <= 2 || item.fear || item.guarding).length;
     const optionalLimit = hardDays >= 3 ? 1 : 3;
     const completed = new Set(feedback.filter((item) => item.completed).map((item) => item.taskId));
-    const visibleTasks = tasks.filter((task) => task.priority !== "optional" || optionalLimit > 1 || completed.has(task.id));
+    const visibleTasks = tasks
+      .filter((task) => task.priority !== "optional" || optionalLimit > 1 || completed.has(task.id))
+      .slice()
+      .sort((a, b) => {
+        const aDone = completed.has(a.id);
+        const bDone = completed.has(b.id);
+        if (aDone !== bDone) return aDone ? 1 : -1;
+        return (parseTimeLabel(a.time) ?? 0) - (parseTimeLabel(b.time) ?? 0);
+      });
     const trainingMinutes = visibleTasks
       .filter((task) => task.category === "training" || task.category === "handling" || task.category === "relationship")
       .reduce((sum, task) => sum + task.duration, 0);

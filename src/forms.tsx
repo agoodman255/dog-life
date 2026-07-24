@@ -430,19 +430,6 @@ export function TaskForm({
           </select>
         </label>
         <label>
-          Difficulty (1-5)
-          <input type="number" min={1} max={5} {...register("difficulty", { valueAsNumber: true })} />
-        </label>
-        <label>
-          Griz participation
-          <select {...register("grizParticipation")}>
-            <option value="yes">Yes</option>
-            <option value="separate">Separate</option>
-            <option value="managed">Managed</option>
-            <option value="not yet">Not yet</option>
-          </select>
-        </label>
-        <label>
           Dogs (comma separated ids: {dogOptions.map((dog) => dog.id).join(", ")})
           <input {...register("dogIds")} />
         </label>

@@ -163,10 +163,6 @@ function Shell() {
             </button>
           ))}
         </nav>
-        <button className="sidebar-feedback" type="button" onClick={() => setFeedbackOpen(true)}>
-          <MessageSquarePlus size={18} aria-hidden />
-          <span>Feedback</span>
-        </button>
       </aside>
 
       <main>
@@ -262,6 +258,10 @@ function Shell() {
           />
         )}
       </main>
+
+      <button className="feedback-fab" type="button" onClick={() => setFeedbackOpen(true)} aria-label="Send feedback">
+        <MessageSquarePlus size={20} aria-hidden />
+      </button>
 
       {feedbackOpen && <FeedbackWizard page={currentPageLabel} onClose={() => setFeedbackOpen(false)} />}
     </div>
