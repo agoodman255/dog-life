@@ -149,27 +149,12 @@ function Shell() {
     <div className="app">
       <aside className="sidebar" aria-label="Primary navigation">
         <div className="brand">
-          <PawPrint size={26} aria-hidden />
-          <div>
-            <strong>Dog Life OS</strong>
-            <span>Andrew + Bree</span>
-          </div>
-        </div>
-        <nav>
-          {navItems.map(({ id, label, icon: Icon }) => (
-            <button className={active === id ? "active" : ""} key={id} type="button" onClick={() => setActive(id)}>
-              <Icon size={18} aria-hidden />
-              <span>{label}</span>
-            </button>
-          ))}
-        </nav>
-      </aside>
-
-      <main>
-        <header className="topbar">
-          <div className="topbar-brand">
-            <PawPrint size={20} aria-hidden />
-            <strong>Dog Life OS</strong>
+          <div className="brand-mark">
+            <PawPrint size={26} aria-hidden />
+            <div>
+              <strong>Dog Life OS</strong>
+              <span>Andrew + Bree</span>
+            </div>
           </div>
           <div className="top-actions">
             {!searchOpen && (
@@ -187,18 +172,29 @@ function Shell() {
               {theme === "dark" ? <Sun size={18} aria-hidden /> : <Moon size={18} aria-hidden />}
             </button>
           </div>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept="application/json"
-            hidden
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) importData(file);
-              event.target.value = "";
-            }}
-          />
-        </header>
+        </div>
+        <nav>
+          {navItems.map(({ id, label, icon: Icon }) => (
+            <button className={active === id ? "active" : ""} key={id} type="button" onClick={() => setActive(id)}>
+              <Icon size={18} aria-hidden />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      <main>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) importData(file);
+            event.target.value = "";
+          }}
+        />
 
         {searchOpen && (
           <section className="search-overlay">
