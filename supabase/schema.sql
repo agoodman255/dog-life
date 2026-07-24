@@ -274,20 +274,26 @@ create table if not exists feedback (
 -- (concerts, tailgates, family visits), and the football schedule all live
 -- here as a single flexible calendar entry shape — see
 -- docs/knowledge/puppy-life-knowledge.md sections 3-6 for the source data.
+-- `recurrence` (jsonb, only set when kind = 'recurring') holds
+-- {frequency, interval, daysOfWeek?, monthDay?, startDate, endDate?, occurrenceCount?} —
+-- see the Recurrence type in src/types.ts. `excluded_dates` holds YYYY-MM-DD
+-- dates skipped when a single occurrence of a recurring series is deleted
+-- without deleting the whole series.
 create table if not exists calendar_events (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references households (id) on delete cascade,
   title text not null,
   category text not null,
   kind text not null,
-  day_of_week text,
-  active_from date,
-  active_to date,
+  recurrence jsonb,
+  excluded_dates date[] not null default '{}',
   date date,
   window_label text not null default '',
-  time_label text not null default '',
+  start_time text,
+  end_time text,
   duration_hours numeric,
-  coverage_needed text not null default 'none',
+  alone_time_required text not null default 'no',
+  alone_time_required_amount numeric,
   status text not null default 'confirmed',
   importance text,
   notes text not null default '',
@@ -300,12 +306,35 @@ create table if not exists calendar_events (
 
 -- `create table if not exists` above is a no-op once the table already exists in
 -- production, so these columns are added explicitly for anyone re-running this file
--- against a database that already had calendar_events from an earlier sync.
+-- against a database that already had calendar_events from an earlier sync. Anyone
+-- with pre-2026-07-23 data (day_of_week/active_from/active_to/time_label/coverage_needed
+-- columns) should run supabase/migrate-calendar-events-2026-07-23.sql instead, which
+-- backfills these new columns from the old ones before they'd otherwise be dropped.
 alter table calendar_events add column if not exists attendees uuid[] not null default '{}';
 alter table calendar_events add column if not exists rover_visits int;
 alter table calendar_events add column if not exists prep_steps text[] not null default '{}';
 alter table calendar_events add column if not exists rover_instructions text[] not null default '{}';
 alter table calendar_events add column if not exists post_steps text[] not null default '{}';
+alter table calendar_events add column if not exists recurrence jsonb;
+alter table calendar_events add column if not exists excluded_dates date[] not null default '{}';
+alter table calendar_events add column if not exists start_time text;
+alter table calendar_events add column if not exists end_time text;
+alter table calendar_events add column if not exists alone_time_required text not null default 'no';
+alter table calendar_events add column if not exists alone_time_required_amount numeric;
+
+-- Audit trail for deleted calendar events/occurrences — a note is required at
+-- delete time (enforced in the app, not here) and kept even after the event
+-- itself is gone, which is why event_title is snapshotted rather than joined.
+create table if not exists calendar_event_deletions (
+  id text primary key,
+  household_id uuid not null references households (id) on delete cascade,
+  event_id text not null,
+  event_title text not null,
+  scope text not null,
+  occurrence_date date,
+  note text not null,
+  deleted_at timestamptz not null default now()
+);
 
 -- Logged instances of the puppy being left alone comfortably, compared
 -- against calendar_events that need coverage to flag readiness gaps early.
@@ -354,6 +383,7 @@ alter table relationship_logs enable row level security;
 alter table feedback enable row level security;
 alter table product_feedback enable row level security;
 alter table calendar_events enable row level security;
+alter table calendar_event_deletions enable row level security;
 alter table alone_time_logs enable row level security;
 alter table task_instances enable row level security;
 alter table inbox_requests enable row level security;
@@ -370,7 +400,7 @@ begin
     'households', 'people', 'dogs', 'tasks', 'milestones',
     'health_events', 'journal_entries', 'exposure_items',
     'relationship_logs', 'feedback', 'product_feedback',
-    'calendar_events', 'alone_time_logs', 'task_instances', 'inbox_requests',
+    'calendar_events', 'calendar_event_deletions', 'alone_time_logs', 'task_instances', 'inbox_requests',
     'meals', 'recipe_ingredients', 'inventory', 'grocery_list'
   ])
   loop
@@ -397,7 +427,7 @@ begin
     'households', 'people', 'dogs', 'tasks', 'milestones',
     'health_events', 'journal_entries', 'exposure_items',
     'relationship_logs', 'feedback', 'product_feedback',
-    'calendar_events', 'alone_time_logs', 'task_instances', 'inbox_requests',
+    'calendar_events', 'calendar_event_deletions', 'alone_time_logs', 'task_instances', 'inbox_requests',
     'meals', 'recipe_ingredients', 'inventory', 'grocery_list'
   ])
   loop

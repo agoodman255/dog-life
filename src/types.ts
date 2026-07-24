@@ -59,22 +59,33 @@ export type Person = {
   color: string;
 };
 
-export type TaskCategory =
-  | "care"
+/** Unified category taxonomy shared by Tasks and CalendarEvents — one vocabulary across the app. */
+export type Category =
+  | "potty"
+  | "meals"
   | "training"
   | "health"
   | "handling"
   | "socialization"
   | "exercise"
   | "relationship"
-  | "journal";
+  | "alone-time"
+  | "journal"
+  | "chores"
+  | "family"
+  | "social"
+  | "entertainment"
+  | "sports"
+  | "travel"
+  | "downtime"
+  | "other";
 
 export type DogFormation = "together" | "parallel-buffered" | "separate-rooms" | "separate-locations" | "solo";
 
 export type Task = {
   id: string;
   title: string;
-  category: TaskCategory;
+  category: Category;
   assignedTo: string;
   time: string;
   duration: number;
@@ -290,35 +301,46 @@ export type ProductFeedback = {
 
 export type DayOfWeek = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 
-export type CalendarEventCategory =
-  | "gym"
-  | "sports"
-  | "concert"
-  | "comedy"
-  | "family"
-  | "travel"
-  | "curling"
-  | "volleyball"
-  | "downtime"
-  | "other";
+export type RecurrenceFrequency = "daily" | "weekly" | "monthly" | "yearly";
+
+export type Recurrence = {
+  frequency: RecurrenceFrequency;
+  /** Every N units of `frequency` — e.g. frequency "weekly", interval 2 = every 2 weeks. */
+  interval: number;
+  /** Which weekdays this recurs on. Only used/required when frequency is "weekly". */
+  daysOfWeek?: DayOfWeek[];
+  /** Day of the month (1-31) this recurs on. Only used when frequency is "monthly". Defaults to startDate's day-of-month when absent. */
+  monthDay?: number;
+  /** YYYY-MM-DD — required. The first possible occurrence. */
+  startDate: string;
+  /** YYYY-MM-DD — optional, mutually exclusive with occurrenceCount. Series never recurs past this date. */
+  endDate?: string;
+  /** Optional, mutually exclusive with endDate. Series stops after this many total occurrences. */
+  occurrenceCount?: number;
+};
 
 export type CalendarEvent = {
   id: string;
   title: string;
-  category: CalendarEventCategory;
+  category: Category;
   kind: "recurring" | "one-off";
-  dayOfWeek?: DayOfWeek;
-  activeFrom?: string;
-  activeTo?: string;
+  /** Required when kind is "recurring". */
+  recurrence?: Recurrence;
+  /** YYYY-MM-DD dates to skip — how a single occurrence of a recurring series gets deleted without deleting the whole series. */
+  excludedDates?: string[];
   date?: string;
   windowLabel: string;
-  timeLabel: string;
+  /** Wall-clock start time, e.g. "7:00 PM". At least 2 of startTime/endTime/durationHours must be set — the third is derived. */
+  startTime?: string;
+  endTime?: string;
   durationHours?: number;
-  coverageNeeded: "none" | "rover" | "full-day";
+  /** Does this event need dog coverage arranged? "partial" carries a user-entered amount in aloneTimeRequiredAmount (hours). Whether that coverage is actually needed given proven alone-time tolerance is computed, not stored — see computeEventCoverageNeeded in utils.ts. */
+  aloneTimeRequired: "all" | "partial" | "no";
+  aloneTimeRequiredAmount?: number;
   status: "confirmed" | "placeholder";
   importance?: "marquee" | "normal";
   notes: string;
-  /** Person id(s) this block belongs to / is expected to attend. Omit for whole-household events. */
+  /** Person id(s) this block belongs to / is expected to attend. Omit for whole-household ("everyone") events. */
   attendees?: string[];
   /** Number of Rover sitter visits recommended while away (0/undefined = no rover needed). */
   roverVisits?: number;
@@ -328,6 +350,20 @@ export type CalendarEvent = {
   roverInstructions?: string[];
   /** Checklist for the moment someone gets home. */
   postSteps?: string[];
+};
+
+export type CalendarEventDeletionScope = "instance" | "series";
+
+/** Audit trail for deleted calendar events/occurrences — required note captured at delete time. */
+export type CalendarEventDeletion = {
+  id: string;
+  eventId: string;
+  eventTitle: string;
+  scope: CalendarEventDeletionScope;
+  /** YYYY-MM-DD — set only when scope is "instance". */
+  occurrenceDate?: string;
+  note: string;
+  deletedAt: string;
 };
 
 export type AloneTimeLog = {

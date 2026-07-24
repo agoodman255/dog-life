@@ -4,6 +4,8 @@ import { z } from "zod";
 import {
   AloneTimeLog,
   CalendarEvent,
+  Category,
+  DayOfWeek,
   Dog,
   DogStatus,
   ExposureItem,
@@ -12,11 +14,34 @@ import {
   MedicationEntry,
   MedicationKind,
   Person,
+  Recurrence,
+  RecurrenceFrequency,
   RelationshipLog,
   Task,
-  TaskCategory,
 } from "./types";
 import { makeId } from "./store";
+import { computeEventTimes, to12Hour, to24Hour } from "./utils";
+
+export const CATEGORY_OPTIONS: Category[] = [
+  "potty",
+  "meals",
+  "training",
+  "health",
+  "handling",
+  "socialization",
+  "exercise",
+  "relationship",
+  "alone-time",
+  "chores",
+  "family",
+  "social",
+  "entertainment",
+  "sports",
+  "travel",
+  "downtime",
+  "journal",
+  "other",
+];
 
 const medicationKinds: MedicationKind[] = ["medication", "supplement", "injection", "preventive"];
 
@@ -311,7 +336,7 @@ export function PersonForm({ initial, onSubmit, onCancel }: { initial?: Person; 
 
 const taskSchema = z.object({
   title: z.string().min(1, "Title is required"),
-  category: z.enum(["care", "training", "health", "handling", "socialization", "exercise", "relationship", "journal"]),
+  category: z.enum(CATEGORY_OPTIONS as [Category, ...Category[]]),
   assignedTo: z.string().min(1),
   time: z.string().min(1),
   duration: z.number().min(1),
@@ -331,7 +356,7 @@ export function taskFormValuesToTask(values: TaskFormValues, id: string): Task {
   return {
     id,
     title: values.title,
-    category: values.category as TaskCategory,
+    category: values.category as Category,
     assignedTo: values.assignedTo,
     time: values.time,
     duration: values.duration,
@@ -363,7 +388,7 @@ export function TaskForm({
     resolver: zodResolver(taskSchema),
     defaultValues: {
       title: initial?.title ?? "",
-      category: initial?.category ?? "care",
+      category: initial?.category ?? "potty",
       assignedTo: initial?.assignedTo ?? peopleOptions[0]?.id ?? "",
       time: initial?.time ?? "8:00 AM",
       duration: initial?.duration ?? 10,
@@ -388,7 +413,7 @@ export function TaskForm({
         <label>
           Category
           <select {...register("category")}>
-            {["care", "training", "health", "handling", "socialization", "exercise", "relationship", "journal"].map((option) => (
+            {CATEGORY_OPTIONS.map((option) => (
               <option key={option} value={option}>
                 {option}
               </option>
@@ -777,43 +802,80 @@ export function RelationshipLogForm({
   );
 }
 
-const calendarEventSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  category: z.enum(["gym", "sports", "concert", "comedy", "family", "travel", "curling", "volleyball", "downtime", "other"]),
-  kind: z.enum(["recurring", "one-off"]),
-  dayOfWeek: z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", ""]),
-  activeFrom: z.string(),
-  activeTo: z.string(),
-  date: z.string(),
-  windowLabel: z.string(),
-  timeLabel: z.string().min(1, "Time label is required"),
-  durationHours: z.number().min(0),
-  coverageNeeded: z.enum(["none", "rover", "full-day"]),
-  status: z.enum(["confirmed", "placeholder"]),
-  importance: z.enum(["marquee", "normal", ""]),
-  notes: z.string(),
-});
+const DAY_OF_WEEK_OPTIONS: DayOfWeek[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+
+const calendarEventSchema = z
+  .object({
+    title: z.string().min(1, "Title is required"),
+    category: z.enum(CATEGORY_OPTIONS as [Category, ...Category[]]),
+    kind: z.enum(["recurring", "one-off"]),
+    frequency: z.enum(["daily", "weekly", "monthly", "yearly"]),
+    interval: z.number().min(1),
+    daysOfWeek: z.array(z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"])),
+    monthDay: z.number().min(1).max(31).optional(),
+    startDate: z.string(),
+    endMode: z.enum(["never", "on-date", "after-count"]),
+    endDate: z.string(),
+    occurrenceCount: z.number().min(1).optional(),
+    date: z.string(),
+    windowLabel: z.string(),
+    startTime: z.string(),
+    endTime: z.string(),
+    durationHours: z.number().min(0),
+    attendeeMode: z.enum(["everyone", "specific"]),
+    attendees: z.array(z.string()),
+    aloneTimeRequired: z.enum(["all", "partial", "no"]),
+    aloneTimeRequiredAmount: z.number().min(0).optional(),
+    status: z.enum(["confirmed", "placeholder"]),
+    importance: z.enum(["marquee", "normal", ""]),
+    notes: z.string(),
+  })
+  .superRefine((values, ctx) => {
+    if (values.kind === "recurring" && !values.startDate) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["startDate"], message: "Start date is required for recurring events" });
+    }
+    const filledTimeFields = [values.startTime, values.endTime, values.durationHours > 0].filter(Boolean).length;
+    if (filledTimeFields < 2) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["startTime"], message: "Fill in at least 2 of start time, end time, duration" });
+    }
+    if (values.aloneTimeRequired === "partial" && !(values.aloneTimeRequiredAmount && values.aloneTimeRequiredAmount > 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["aloneTimeRequiredAmount"], message: "Enter how much alone time this event needs" });
+    }
+  });
 
 type CalendarEventFormValues = z.infer<typeof calendarEventSchema>;
 
 export function calendarEventFormValuesToEvent(
   values: CalendarEventFormValues,
   id: string,
-  extra?: Pick<CalendarEvent, "attendees" | "roverVisits" | "prepSteps" | "roverInstructions" | "postSteps">,
+  extra?: Pick<CalendarEvent, "excludedDates" | "roverVisits" | "prepSteps" | "roverInstructions" | "postSteps">,
 ): CalendarEvent {
+  const recurrence: Recurrence | undefined =
+    values.kind === "recurring"
+      ? {
+          frequency: values.frequency as RecurrenceFrequency,
+          interval: values.interval,
+          daysOfWeek: values.frequency === "weekly" ? (values.daysOfWeek as DayOfWeek[]) : undefined,
+          monthDay: values.frequency === "monthly" ? values.monthDay : undefined,
+          startDate: values.startDate,
+          endDate: values.endMode === "on-date" ? values.endDate || undefined : undefined,
+          occurrenceCount: values.endMode === "after-count" ? values.occurrenceCount : undefined,
+        }
+      : undefined;
   return {
     id,
     title: values.title,
     category: values.category,
     kind: values.kind,
-    dayOfWeek: values.dayOfWeek || undefined,
-    activeFrom: values.activeFrom || undefined,
-    activeTo: values.activeTo || undefined,
-    date: values.date || undefined,
+    recurrence,
+    date: values.kind === "one-off" ? values.date || undefined : undefined,
     windowLabel: values.windowLabel,
-    timeLabel: values.timeLabel,
+    startTime: values.startTime ? to12Hour(values.startTime) : undefined,
+    endTime: values.endTime ? to12Hour(values.endTime) : undefined,
     durationHours: values.durationHours || undefined,
-    coverageNeeded: values.coverageNeeded,
+    attendees: values.attendeeMode === "everyone" ? undefined : values.attendees,
+    aloneTimeRequired: values.aloneTimeRequired,
+    aloneTimeRequiredAmount: values.aloneTimeRequired === "partial" ? values.aloneTimeRequiredAmount : undefined,
     status: values.status,
     importance: values.importance || undefined,
     notes: values.notes,
@@ -823,33 +885,78 @@ export function calendarEventFormValuesToEvent(
 
 export function CalendarEventForm({
   initial,
+  peopleOptions,
   onSubmit,
   onCancel,
 }: {
   initial?: CalendarEvent;
+  peopleOptions: { id: string; name: string }[];
   onSubmit: (values: CalendarEventFormValues) => void;
   onCancel: () => void;
 }) {
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<CalendarEventFormValues>({
+  const rec = initial?.recurrence;
+  const { register, handleSubmit, watch, setValue, getValues, formState: { errors } } = useForm<CalendarEventFormValues>({
     resolver: zodResolver(calendarEventSchema),
     defaultValues: {
       title: initial?.title ?? "",
       category: initial?.category ?? "other",
       kind: initial?.kind ?? "one-off",
-      dayOfWeek: initial?.dayOfWeek ?? "",
-      activeFrom: initial?.activeFrom ?? "",
-      activeTo: initial?.activeTo ?? "",
+      frequency: rec?.frequency ?? "weekly",
+      interval: rec?.interval ?? 1,
+      daysOfWeek: rec?.daysOfWeek ?? [],
+      monthDay: rec?.monthDay,
+      startDate: rec?.startDate ?? "",
+      endMode: rec?.occurrenceCount ? "after-count" : rec?.endDate ? "on-date" : "never",
+      endDate: rec?.endDate ?? "",
+      occurrenceCount: rec?.occurrenceCount,
       date: initial?.date ?? "",
       windowLabel: initial?.windowLabel ?? "",
-      timeLabel: initial?.timeLabel ?? "",
+      startTime: initial?.startTime ? to24Hour(initial.startTime) : "",
+      endTime: initial?.endTime ? to24Hour(initial.endTime) : "",
       durationHours: initial?.durationHours ?? 0,
-      coverageNeeded: initial?.coverageNeeded ?? "none",
+      attendeeMode: initial?.attendees && initial.attendees.length > 0 ? "specific" : "everyone",
+      attendees: initial?.attendees ?? [],
+      aloneTimeRequired: initial?.aloneTimeRequired ?? "no",
+      aloneTimeRequiredAmount: initial?.aloneTimeRequiredAmount,
       status: initial?.status ?? "placeholder",
       importance: initial?.importance ?? "",
       notes: initial?.notes ?? "",
     },
   });
   const kind = watch("kind");
+  const frequency = watch("frequency");
+  const endMode = watch("endMode");
+  const attendeeMode = watch("attendeeMode");
+  const aloneTimeRequired = watch("aloneTimeRequired");
+  const daysOfWeek = watch("daysOfWeek");
+  const attendees = watch("attendees");
+
+  function toggleDayOfWeek(day: DayOfWeek) {
+    const current = getValues("daysOfWeek");
+    setValue("daysOfWeek", current.includes(day) ? current.filter((d) => d !== day) : [...current, day]);
+  }
+
+  function toggleAttendee(id: string) {
+    const current = getValues("attendees");
+    setValue("attendees", current.includes(id) ? current.filter((a) => a !== id) : [...current, id]);
+  }
+
+  function handleTimeBlur() {
+    const values = getValues();
+    const computed = computeEventTimes({
+      startTime: values.startTime ? to12Hour(values.startTime) : undefined,
+      endTime: values.endTime ? to12Hour(values.endTime) : undefined,
+      durationHours: values.durationHours || undefined,
+    });
+    if (computed.durationHours !== undefined) setValue("durationHours", computed.durationHours);
+    if (computed.endTime !== undefined && !values.endTime) setValue("endTime", to24Hour(computed.endTime));
+    if (computed.startTime !== undefined && !values.startTime) setValue("startTime", to24Hour(computed.startTime));
+  }
+
+  const startTimeReg = register("startTime");
+  const endTimeReg = register("endTime");
+  const durationReg = register("durationHours", { valueAsNumber: true });
+
   return (
     <form className="entity-form" onSubmit={handleSubmit(onSubmit)}>
       <div className="form-grid">
@@ -861,7 +968,7 @@ export function CalendarEventForm({
         <label>
           Category
           <select {...register("category")}>
-            {["gym", "sports", "concert", "comedy", "family", "travel", "curling", "volleyball", "downtime", "other"].map((option) => (
+            {CATEGORY_OPTIONS.map((option) => (
               <option key={option} value={option}>
                 {option}
               </option>
@@ -871,30 +978,69 @@ export function CalendarEventForm({
         <label>
           Recurring or one-off
           <select {...register("kind")}>
-            <option value="recurring">Recurring weekly</option>
             <option value="one-off">One-off event</option>
+            <option value="recurring">Recurring</option>
           </select>
         </label>
+
         {kind === "recurring" ? (
           <>
             <label>
-              Day of week
-              <select {...register("dayOfWeek")}>
-                {["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((day) => (
-                  <option key={day} value={day}>
-                    {day}
-                  </option>
-                ))}
+              Repeats
+              <select {...register("frequency")}>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
               </select>
             </label>
             <label>
-              Active from (optional)
-              <input type="date" {...register("activeFrom")} />
+              Every ({frequency === "daily" ? "days" : frequency === "weekly" ? "weeks" : frequency === "monthly" ? "months" : "years"})
+              <input type="number" min={1} {...register("interval", { valueAsNumber: true })} />
+            </label>
+            {frequency === "weekly" && (
+              <label>
+                Days of week
+                <div className="subtabs" role="group" aria-label="Days of week">
+                  {DAY_OF_WEEK_OPTIONS.map((day) => (
+                    <button key={day} type="button" className={daysOfWeek.includes(day) ? "active" : ""} onClick={() => toggleDayOfWeek(day)}>
+                      {day.slice(0, 3)}
+                    </button>
+                  ))}
+                </div>
+              </label>
+            )}
+            {frequency === "monthly" && (
+              <label>
+                Day of month (optional — defaults to start date's day)
+                <input type="number" min={1} max={31} {...register("monthDay", { valueAsNumber: true })} />
+              </label>
+            )}
+            <label>
+              Start date
+              <input type="date" {...register("startDate")} />
+              {errors.startDate && <small className="form-error">{errors.startDate.message}</small>}
             </label>
             <label>
-              Active to (optional)
-              <input type="date" {...register("activeTo")} />
+              Ends
+              <select {...register("endMode")}>
+                <option value="never">Never</option>
+                <option value="on-date">On date</option>
+                <option value="after-count">After a number of times</option>
+              </select>
             </label>
+            {endMode === "on-date" && (
+              <label>
+                End date
+                <input type="date" {...register("endDate")} />
+              </label>
+            )}
+            {endMode === "after-count" && (
+              <label>
+                Number of occurrences
+                <input type="number" min={1} {...register("occurrenceCount", { valueAsNumber: true })} />
+              </label>
+            )}
           </>
         ) : (
           <>
@@ -908,23 +1054,57 @@ export function CalendarEventForm({
             </label>
           </>
         )}
+
         <label>
-          Time label
-          <input {...register("timeLabel")} placeholder="6:00 PM, TBA, Kickoff TBA…" />
-          {errors.timeLabel && <small className="form-error">{errors.timeLabel.message}</small>}
+          Start time
+          <input type="time" {...startTimeReg} onBlur={(e) => { startTimeReg.onBlur(e); handleTimeBlur(); }} />
         </label>
         <label>
-          Duration (hours, optional)
-          <input type="number" min={0} step="0.5" {...register("durationHours", { valueAsNumber: true })} />
+          End time
+          <input type="time" {...endTimeReg} onBlur={(e) => { endTimeReg.onBlur(e); handleTimeBlur(); }} />
         </label>
         <label>
-          Coverage needed
-          <select {...register("coverageNeeded")}>
-            <option value="none">None</option>
-            <option value="rover">Rover</option>
-            <option value="full-day">Full day</option>
+          Duration (hours)
+          <input type="number" min={0} step="0.25" {...durationReg} onBlur={(e) => { durationReg.onBlur(e); handleTimeBlur(); }} />
+        </label>
+        {errors.startTime && <small className="form-error">{errors.startTime.message}</small>}
+
+        <label>
+          Assigned to
+          <select {...register("attendeeMode")}>
+            <option value="everyone">Everyone</option>
+            <option value="specific">Specific people</option>
           </select>
         </label>
+        {attendeeMode === "specific" && (
+          <label>
+            Who
+            <div className="subtabs" role="group" aria-label="Assigned people">
+              {peopleOptions.map((person) => (
+                <button key={person.id} type="button" className={attendees.includes(person.id) ? "active" : ""} onClick={() => toggleAttendee(person.id)}>
+                  {person.name}
+                </button>
+              ))}
+            </div>
+          </label>
+        )}
+
+        <label>
+          Dog alone time required
+          <select {...register("aloneTimeRequired")}>
+            <option value="no">No</option>
+            <option value="all">Yes — all of it</option>
+            <option value="partial">Yes — partial</option>
+          </select>
+        </label>
+        {aloneTimeRequired === "partial" && (
+          <label>
+            How much (hours)
+            <input type="number" min={0} step="0.5" {...register("aloneTimeRequiredAmount", { valueAsNumber: true })} />
+            {errors.aloneTimeRequiredAmount && <small className="form-error">{errors.aloneTimeRequiredAmount.message}</small>}
+          </label>
+        )}
+
         <label>
           Status
           <select {...register("status")}>

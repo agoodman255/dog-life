@@ -24,6 +24,8 @@ import { getSupabaseClient, isBackendConfigured } from "./supabaseClient";
 import {
   AloneTimeLog,
   CalendarEvent,
+  CalendarEventDeletion,
+  CalendarEventDeletionScope,
   ChecklistItemValue,
   DailyFeedback,
   Dog,
@@ -247,6 +249,13 @@ function useDataStore() {
   const relationshipLogs = useCollection<RelationshipLog>("relationship-logs", seedRelationshipLogs, "relationship_logs", mapping.relationshipLog);
   const productFeedback = useCollection<ProductFeedback>("product-feedback", [], "product_feedback", mapping.productFeedback);
   const calendarEvents = useCollection<CalendarEvent>("calendar-events", seedCalendarEvents, "calendar_events", mapping.calendarEvent);
+  const calendarEventDeletions = useCollection<CalendarEventDeletion>(
+    "calendar-event-deletions",
+    [],
+    "calendar_event_deletions",
+    mapping.calendarEventDeletion,
+    "client",
+  );
   const aloneTimeLogs = useCollection<AloneTimeLog>("alone-time-logs", seedAloneTimeLogs, "alone_time_logs", mapping.aloneTimeLog);
   const taskInstances = useCollection<TaskInstance>("task-instances", [], "task_instances", mapping.taskInstance, "client");
   const inboxRequests = useCollection<InboxRequest>("inbox-requests", [], "inbox_requests", mapping.inboxRequest, "client");
@@ -316,7 +325,7 @@ function useDataStore() {
       mood: rating >= 4 ? "calm" : rating === 3 ? "tired" : "frustrated",
       successScore: rating * 20,
       notes: rating >= 4 ? "Went well." : "Needs an easier setup tomorrow.",
-      accident: task.category === "care" && task.title.toLowerCase().includes("potty") && rating <= 2,
+      accident: task.category === "potty" && rating <= 2,
       barking: false,
       fear: rating <= 2 && task.category === "socialization",
       guarding: rating <= 2 && task.category === "relationship",
@@ -357,6 +366,32 @@ function useDataStore() {
     const current = exposureItems.items.find((item) => item.id === itemId);
     if (!current) return;
     exposureItems.update(itemId, { log: [...current.log, entry], status });
+  }
+
+  // Deleting "this occurrence" of a recurring event doesn't remove the event row —
+  // it adds the date to excludedDates so generateOccurrences skips it, keeping the
+  // rest of the series intact. Deleting "the series" (or a one-off event) removes
+  // the row outright. Either way a required note gets logged for the record.
+  async function deleteCalendarEvent(
+    event: CalendarEvent,
+    scope: CalendarEventDeletionScope,
+    occurrenceDate: string | undefined,
+    note: string,
+  ) {
+    const ok =
+      scope === "instance" && occurrenceDate
+        ? await calendarEvents.update(event.id, { excludedDates: [...(event.excludedDates ?? []), occurrenceDate] })
+        : await calendarEvents.remove(event.id);
+    if (!ok) return false;
+    return calendarEventDeletions.add({
+      id: makeId("evtdel"),
+      eventId: event.id,
+      eventTitle: event.title,
+      scope,
+      occurrenceDate: scope === "instance" ? occurrenceDate : undefined,
+      note,
+      deletedAt: new Date().toISOString(),
+    });
   }
 
   // --- Task lifecycle workflow (start/stop/delegate/reschedule/skip) --------
@@ -555,6 +590,8 @@ function useDataStore() {
     relationshipLogs,
     productFeedback,
     calendarEvents,
+    calendarEventDeletions,
+    deleteCalendarEvent,
     aloneTimeLogs,
     taskInstances,
     inboxRequests,

@@ -190,6 +190,108 @@ export function dayOfWeekName(date: Date): DayOfWeek {
   return DAY_NAMES[date.getDay()];
 }
 
+/** Every date (as YYYY-MM-DD keys) this event occurs on within [rangeStart, rangeEnd],
+ * inclusive, respecting excludedDates. The single source of truth for expanding a
+ * CalendarEvent into occurrences — replaces the old per-callsite dayOfWeek/activeFrom/
+ * activeTo checks. Recurring series are walked from `recurrence.startDate` every call
+ * (not incrementally cached), capped at ITER_CAP periods as a safety bound. */
+export function generateOccurrences(event: CalendarEvent, rangeStart: Date, rangeEnd: Date): string[] {
+  const rangeStartKey = toDateKey(rangeStart);
+  const rangeEndKey = toDateKey(rangeEnd);
+  const excluded = new Set(event.excludedDates ?? []);
+
+  if (event.kind === "one-off") {
+    if (!event.date || excluded.has(event.date)) return [];
+    return event.date >= rangeStartKey && event.date <= rangeEndKey ? [event.date] : [];
+  }
+
+  const rec = event.recurrence;
+  if (!rec) return [];
+
+  const startDate = parseLocalDate(rec.startDate);
+  const endDate = rec.endDate ? parseLocalDate(rec.endDate) : null;
+  const maxOccurrences = rec.occurrenceCount ?? Infinity;
+  const interval = Math.max(1, rec.interval || 1);
+  const ITER_CAP = 5000;
+
+  const results: string[] = [];
+  let totalOccurrences = 0;
+
+  function emit(d: Date): boolean {
+    if (endDate && d > endDate) return false;
+    totalOccurrences += 1;
+    if (totalOccurrences > maxOccurrences) return false;
+    const key = toDateKey(d);
+    if (key > rangeEndKey) return false;
+    if (key >= rangeStartKey && !excluded.has(key)) results.push(key);
+    return true;
+  }
+
+  if (rec.frequency === "weekly") {
+    const days = rec.daysOfWeek && rec.daysOfWeek.length > 0 ? rec.daysOfWeek : [dayOfWeekName(startDate)];
+    const dayIndices = days.map((d) => DAY_NAMES.indexOf(d)).sort((a, b) => a - b);
+    let weekCursor = weekStartDate(startDate);
+    outer: for (let i = 0; i < ITER_CAP; i++) {
+      for (const dayIndex of dayIndices) {
+        const occDate = addDays(weekCursor, dayIndex);
+        if (occDate < startDate) continue;
+        if (!emit(occDate)) break outer;
+      }
+      weekCursor = addDays(weekCursor, 7 * interval);
+    }
+  } else {
+    let cursor = startDate;
+    const monthDay = rec.monthDay ?? startDate.getDate();
+    for (let i = 0; i < ITER_CAP; i++) {
+      const occDate = rec.frequency === "monthly" ? new Date(cursor.getFullYear(), cursor.getMonth(), monthDay) : cursor;
+      if (!emit(occDate)) break;
+      cursor =
+        rec.frequency === "daily" ? addDays(cursor, interval) : rec.frequency === "monthly" ? addMonths(cursor, interval) : addMonths(cursor, 12 * interval);
+    }
+  }
+
+  return results.sort();
+}
+
+/** Fills in whichever of startTime/endTime/durationHours is missing from the other
+ * two (the "2 of 3 mandatory" rule). Leaves input untouched if fewer than 2 are set. */
+export function computeEventTimes(input: {
+  startTime?: string;
+  endTime?: string;
+  durationHours?: number;
+}): { startTime?: string; endTime?: string; durationHours?: number } {
+  const startMinutes = input.startTime ? parseTimeLabel(input.startTime) : null;
+  const endMinutes = input.endTime ? parseTimeLabel(input.endTime) : null;
+  const duration = input.durationHours;
+
+  if (startMinutes !== null && endMinutes !== null) {
+    let diff = endMinutes - startMinutes;
+    if (diff < 0) diff += 24 * 60;
+    return { ...input, durationHours: Math.round((diff / 60) * 100) / 100 };
+  }
+  if (startMinutes !== null && duration != null) {
+    return { ...input, endTime: formatMinutes((startMinutes + duration * 60) % (24 * 60)) };
+  }
+  if (endMinutes !== null && duration != null) {
+    let start = endMinutes - duration * 60;
+    if (start < 0) start += 24 * 60;
+    return { ...input, startTime: formatMinutes(start) };
+  }
+  return input;
+}
+
+/** Does this event need dog coverage arranged, given the household's current proven
+ * alone-time tolerance (maxAchievedMinutes from computeAloneTimeReadiness)? Simple
+ * threshold comparison — the formula Andrew asked for, kept deliberately dumb. */
+export function computeEventCoverageNeeded(
+  event: Pick<CalendarEvent, "aloneTimeRequired" | "aloneTimeRequiredAmount" | "durationHours">,
+  currentAloneTimeReadinessMinutes: number,
+): boolean {
+  if (event.aloneTimeRequired === "no") return false;
+  const neededMinutes = (event.aloneTimeRequired === "all" ? (event.durationHours ?? 0) : (event.aloneTimeRequiredAmount ?? 0)) * 60;
+  return neededMinutes > currentAloneTimeReadinessMinutes;
+}
+
 export function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
@@ -254,6 +356,23 @@ export function formatMinutes(totalMinutes: number): string {
   return `${hours12}:${String(minutes).padStart(2, "0")} ${meridiem}`;
 }
 
+/** Native `<input type="time">` gives "HH:MM" 24-hour values — convert to the
+ * "H:MM AM/PM" format used everywhere else in the app (Task.time, event labels). */
+export function to12Hour(time24: string): string {
+  if (!time24) return "";
+  const [hours, minutes] = time24.split(":").map(Number);
+  return formatMinutes(hours * 60 + minutes);
+}
+
+/** Reverse of to12Hour — for pre-filling a native time input from a stored "H:MM AM/PM" value. */
+export function to24Hour(label: string): string {
+  const minutes = parseTimeLabel(label);
+  if (minutes === null) return "";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 export type AloneTimeReadiness = {
   maxAchievedMinutes: number;
   nextEvent: CalendarEvent | null;
@@ -266,10 +385,12 @@ export function computeAloneTimeReadiness(logs: AloneTimeLog[], events: Calendar
   const maxAchievedMinutes = logs.reduce((max, log) => Math.max(max, log.durationMinutes), 0);
   const now = Date.now();
   const upcoming = events
-    .filter((event) => (event.durationHours ?? 0) > 0 && event.date && parseLocalDate(event.date).getTime() >= now)
+    .filter((event) => event.aloneTimeRequired !== "no" && event.date && parseLocalDate(event.date).getTime() >= now)
     .sort((a, b) => parseLocalDate(a.date as string).getTime() - parseLocalDate(b.date as string).getTime());
   const nextEvent = upcoming[0] ?? null;
-  const requiredMinutes = nextEvent?.durationHours ? nextEvent.durationHours * 60 : 0;
+  const requiredMinutes = nextEvent
+    ? (nextEvent.aloneTimeRequired === "all" ? (nextEvent.durationHours ?? 0) : (nextEvent.aloneTimeRequiredAmount ?? 0)) * 60
+    : 0;
   const gapMinutes = Math.max(0, requiredMinutes - maxAchievedMinutes);
   return { maxAchievedMinutes, nextEvent, requiredMinutes, gapMinutes, ready: requiredMinutes > 0 && gapMinutes === 0 };
 }
@@ -357,15 +478,9 @@ export function isExpired(item: InventoryItem): boolean {
  * with a long combined prep+cook time to an already-packed evening. */
 export function dayLoadMinutes(dateKey: string, tasks: Task[], calendarEvents: CalendarEvent[]): number {
   const taskMinutes = tasks.reduce((sum, task) => sum + task.duration, 0);
-  const dow = dayOfWeekName(parseLocalDate(dateKey));
+  const day = parseLocalDate(dateKey);
   const eventMinutes = calendarEvents
-    .filter((event) => {
-      const isOneOff = event.kind === "one-off" && event.date === dateKey;
-      const activeFromOk = !event.activeFrom || event.activeFrom <= dateKey;
-      const activeToOk = !event.activeTo || event.activeTo >= dateKey;
-      const isRecurring = event.kind === "recurring" && event.dayOfWeek === dow && activeFromOk && activeToOk;
-      return isOneOff || isRecurring;
-    })
+    .filter((event) => generateOccurrences(event, day, day).length > 0)
     .reduce((sum, event) => sum + (event.durationHours ?? 0) * 60, 0);
   return taskMinutes + eventMinutes;
 }

@@ -5,12 +5,7 @@ import { useNavigation } from "./navigation";
 import { makeId, useStore } from "./store";
 import { ChecklistItemValue, DailyFeedback, Dog, DogFormation, FeedbackType, Milestone, Person, Task } from "./types";
 import { formatInZone, isoToZonedParts, searchTimezones, zonedTimeToUtcIso, zoneLabel } from "./timezones";
-import { buildDefaultChecklist, computeMilestoneStatus, formatMinutes, milestoneProgress, resolveDependencies, taskStateLabels } from "./utils";
-
-function to12Hour(time24: string): string {
-  const [hours, minutes] = time24.split(":").map(Number);
-  return formatMinutes(hours * 60 + minutes);
-}
+import { buildDefaultChecklist, computeMilestoneStatus, formatMinutes, milestoneProgress, resolveDependencies, taskStateLabels, to12Hour } from "./utils";
 
 export function TimezonePicker({ value, onChange }: { value: string; onChange: (zoneId: string) => void }) {
   const [query, setQuery] = useState("");

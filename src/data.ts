@@ -224,7 +224,7 @@ export const todayTasks: Task[] = [
   {
     id: "morning-potty",
     title: "Morning potty",
-    category: "care",
+    category: "potty",
     assignedTo: "andrew",
     time: "7:15 AM",
     duration: 5,
@@ -251,7 +251,7 @@ export const todayTasks: Task[] = [
   {
     id: "breakfast-reset",
     title: "Breakfast + settle reset",
-    category: "care",
+    category: "meals",
     assignedTo: "bree",
     time: "7:45 AM",
     duration: 15,
@@ -270,7 +270,7 @@ export const todayTasks: Task[] = [
   {
     id: "evening-meal",
     title: "Evening meal (both dogs)",
-    category: "care",
+    category: "meals",
     assignedTo: "andrew",
     time: "6:00 PM",
     duration: 10,
@@ -326,7 +326,7 @@ export const todayTasks: Task[] = [
   {
     id: "handling",
     title: "Cooperative handling minis",
-    category: "handling" as Task["category"],
+    category: "handling",
     assignedTo: "bree",
     time: "8:30 PM",
     duration: 7,
@@ -1227,6 +1227,11 @@ export const feedbackLoopRules: FeedbackLoopRule[] = [
 // sections 3-6. All dates/times are the real 2026 household schedule.
 // ---------------------------------------------------------------------------
 
+// Kickoff times are often "TBA" or flex windows this far out — only clean
+// "H:MM AM/PM" strings (optionally with a trailing parenthetical like "(Fri)")
+// become a structured startTime; everything else stays descriptive-only via notes.
+const CLEAN_TIME = /^~?\d{1,2}:\d{2}\s*(AM|PM)(\s*\([^)]*\))?$/i;
+
 function footballGame(
   id: string,
   team: "Georgia" | "Clemson",
@@ -1237,6 +1242,7 @@ function footballGame(
   importance: CalendarEvent["importance"],
   notes: string,
 ): CalendarEvent {
+  const clean = CLEAN_TIME.test(timeLabel);
   return {
     id,
     title: `${team} ${opponent}`,
@@ -1244,11 +1250,11 @@ function footballGame(
     kind: "one-off",
     date,
     windowLabel: "",
-    timeLabel,
-    coverageNeeded: "none",
+    startTime: clean ? timeLabel.replace(/^~/, "") : undefined,
+    aloneTimeRequired: "no",
     status,
     importance,
-    notes,
+    notes: clean ? notes : `${timeLabel}. ${notes}`,
   };
 }
 
@@ -1257,14 +1263,13 @@ export const calendarEvents: CalendarEvent[] = [
   {
     id: "gym-concert-series",
     title: "Gym — concert series",
-    category: "gym",
+    category: "sports",
     kind: "recurring",
-    dayOfWeek: "wednesday",
-    activeTo: "2026-09-07",
+    recurrence: { frequency: "weekly", interval: 1, daysOfWeek: ["wednesday"], startDate: "2026-08-01", endDate: "2026-09-07" },
     windowLabel: "",
-    timeLabel: "~6:00 PM",
+    startTime: "6:00 PM",
     durationHours: 1.25,
-    coverageNeeded: "none",
+    aloneTimeRequired: "all",
     status: "confirmed",
     attendees: ["andrew", "bree"],
     notes:
@@ -1273,14 +1278,13 @@ export const calendarEvents: CalendarEvent[] = [
   {
     id: "gym-hot-dogs",
     title: "Gym — \"Hot Dogs\"",
-    category: "gym",
+    category: "sports",
     kind: "recurring",
-    dayOfWeek: "monday",
-    activeTo: "2026-09-07",
+    recurrence: { frequency: "weekly", interval: 1, daysOfWeek: ["monday"], startDate: "2026-08-01", endDate: "2026-09-07" },
     windowLabel: "",
-    timeLabel: "~5:30 PM",
+    startTime: "5:30 PM",
     durationHours: 1.25,
-    coverageNeeded: "none",
+    aloneTimeRequired: "all",
     status: "confirmed",
     attendees: ["andrew", "bree"],
     notes:
@@ -1289,13 +1293,12 @@ export const calendarEvents: CalendarEvent[] = [
   {
     id: "andrew-volleyball",
     title: "Andrew's volleyball",
-    category: "volleyball",
+    category: "sports",
     kind: "recurring",
-    dayOfWeek: "tuesday",
-    windowLabel: "",
-    timeLabel: "estimated — confirm exact time",
+    recurrence: { frequency: "weekly", interval: 1, daysOfWeek: ["tuesday"], startDate: "2026-08-01" },
+    windowLabel: "estimated — confirm exact time",
     durationHours: 2.5,
-    coverageNeeded: "none",
+    aloneTimeRequired: "no",
     status: "placeholder",
     attendees: ["andrew"],
     notes:
@@ -1304,13 +1307,14 @@ export const calendarEvents: CalendarEvent[] = [
   {
     id: "curling",
     title: "Curling",
-    category: "curling",
+    category: "sports",
     kind: "recurring",
-    dayOfWeek: "thursday",
+    recurrence: { frequency: "weekly", interval: 1, daysOfWeek: ["thursday"], startDate: "2026-08-01" },
     windowLabel: "starts fall 2026, exact date TBD",
-    timeLabel: "8:30 PM – 11:00 PM",
+    startTime: "8:30 PM",
+    endTime: "11:00 PM",
     durationHours: 2.5,
-    coverageNeeded: "none",
+    aloneTimeRequired: "all",
     status: "placeholder",
     attendees: ["andrew", "bree"],
     notes:
@@ -1321,11 +1325,10 @@ export const calendarEvents: CalendarEvent[] = [
     title: "Andrew — personal time",
     category: "downtime",
     kind: "recurring",
-    dayOfWeek: "tuesday",
-    windowLabel: "estimated — confirm day/time",
-    timeLabel: "evening, during Bree's coverage of Andrew's volleyball window",
+    recurrence: { frequency: "weekly", interval: 1, daysOfWeek: ["tuesday"], startDate: "2026-08-01" },
+    windowLabel: "estimated — confirm day/time, during Bree's coverage of Andrew's volleyball window",
     durationHours: 2,
-    coverageNeeded: "none",
+    aloneTimeRequired: "no",
     status: "placeholder",
     attendees: ["andrew"],
     notes:
@@ -1336,11 +1339,10 @@ export const calendarEvents: CalendarEvent[] = [
     title: "Bree — personal time",
     category: "downtime",
     kind: "recurring",
-    dayOfWeek: "tuesday",
-    windowLabel: "estimated — confirm day/time",
-    timeLabel: "evening, while Andrew is at volleyball",
+    recurrence: { frequency: "weekly", interval: 1, daysOfWeek: ["tuesday"], startDate: "2026-08-01" },
+    windowLabel: "estimated — confirm day/time, while Andrew is at volleyball",
     durationHours: 2,
-    coverageNeeded: "none",
+    aloneTimeRequired: "no",
     status: "placeholder",
     attendees: ["bree"],
     notes:
@@ -1351,12 +1353,11 @@ export const calendarEvents: CalendarEvent[] = [
   {
     id: "september-concerts",
     title: "September concerts",
-    category: "concert",
+    category: "entertainment",
     kind: "one-off",
-    windowLabel: "mid-to-late September 2026",
-    timeLabel: "evening, date TBD",
+    windowLabel: "mid-to-late September 2026, evening, date TBD",
     durationHours: 3,
-    coverageNeeded: "rover",
+    aloneTimeRequired: "all",
     status: "placeholder",
     roverVisits: 1,
     prepSteps: [
@@ -1377,12 +1378,11 @@ export const calendarEvents: CalendarEvent[] = [
   {
     id: "comedy-shows",
     title: "Comedy shows",
-    category: "comedy",
+    category: "entertainment",
     kind: "one-off",
-    windowLabel: "mid-to-late September 2026 onward",
-    timeLabel: "evening, date TBD",
+    windowLabel: "mid-to-late September 2026 onward, evening, date TBD",
     durationHours: 3,
-    coverageNeeded: "rover",
+    aloneTimeRequired: "all",
     status: "placeholder",
     roverVisits: 1,
     prepSteps: [
@@ -1402,10 +1402,9 @@ export const calendarEvents: CalendarEvent[] = [
     category: "sports",
     kind: "one-off",
     date: "2026-10-17",
-    windowLabel: "",
-    timeLabel: "Kickoff TBA",
+    windowLabel: "Kickoff TBA",
     durationHours: 4,
-    coverageNeeded: "rover",
+    aloneTimeRequired: "all",
     status: "confirmed",
     importance: "marquee",
     roverVisits: 1,
@@ -1429,10 +1428,9 @@ export const calendarEvents: CalendarEvent[] = [
     title: "Utah Mammoth hockey games",
     category: "sports",
     kind: "one-off",
-    windowLabel: "late October – early November 2026 onward",
-    timeLabel: "evening, specific games TBD",
+    windowLabel: "late October – early November 2026 onward, evening, specific games TBD",
     durationHours: 4.5,
-    coverageNeeded: "rover",
+    aloneTimeRequired: "all",
     status: "placeholder",
     roverVisits: 2,
     prepSteps: [
@@ -1454,12 +1452,12 @@ export const calendarEvents: CalendarEvent[] = [
   {
     id: "griz-hike-during-vet-visit",
     title: "Griz decompression hike (splits with puppy's vet visit)",
-    category: "other",
+    category: "exercise",
     kind: "one-off",
     date: "2026-08-03",
     windowLabel: "",
-    timeLabel: "~2:00 PM, overlapping the vet appointment",
-    coverageNeeded: "none",
+    startTime: "2:00 PM",
+    aloneTimeRequired: "no",
     status: "confirmed",
     attendees: ["bree"],
     notes:
@@ -1471,9 +1469,8 @@ export const calendarEvents: CalendarEvent[] = [
     category: "family",
     kind: "one-off",
     date: "2026-09-23",
-    windowLabel: "through Sept 26",
-    timeLabel: "multi-day visit",
-    coverageNeeded: "none",
+    windowLabel: "through Sept 26, multi-day visit",
+    aloneTimeRequired: "no",
     status: "confirmed",
     notes: "Stay in Salt Lake City or day-trip distance only — no overnight travel or camping. Clemson @ Cal Fri 9/25 (8:30 PM MT) is a late TV game, no conflict with staying local.",
   },
@@ -1482,10 +1479,9 @@ export const calendarEvents: CalendarEvent[] = [
     title: "Ski days (as conditions allow)",
     category: "travel",
     kind: "one-off",
-    windowLabel: "ski season, ~November 2026 – April 2027",
-    timeLabel: "variable — 45 min drive each way + 3-8 hrs on the mountain",
+    windowLabel: "ski season, ~November 2026 – April 2027, variable — 45 min drive each way + 3-8 hrs on the mountain",
     durationHours: 6,
-    coverageNeeded: "rover",
+    aloneTimeRequired: "all",
     status: "placeholder",
     prepSteps: [
       "Decide the away-time tier before leaving: total away time (drive + ski + drive) under ~4.5 hrs needs no Rover once that alone-time milestone is cleared; ~4.5-7 hrs = 1 Rover visit; ~7-9.5 hrs = 2 visits",

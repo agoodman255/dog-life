@@ -2,6 +2,7 @@ import {
   Activity,
   AlertTriangle,
   Bell,
+  Calendar as CalendarIcon,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -54,18 +55,36 @@ import { makeId, useStore } from "./store";
 import { useNavigation } from "./navigation";
 import { setPassword as setAccountPassword, signOut, useSession } from "./auth";
 import { isBackendConfigured } from "./supabaseClient";
-import { CalendarEvent, Dog, ExposureCategory, ExposureItem, FeedbackLoopRule, HealthEvent, InboxRequest, InventoryItem, Milestone, NotificationItem, Task, TaskInstance, TaskState } from "./types";
+import {
+  CalendarEvent,
+  CalendarEventDeletionScope,
+  Dog,
+  ExposureCategory,
+  ExposureItem,
+  FeedbackLoopRule,
+  HealthEvent,
+  InboxRequest,
+  InventoryItem,
+  Milestone,
+  NotificationItem,
+  Recurrence,
+  Task,
+  TaskInstance,
+  TaskState,
+} from "./types";
 import {
   addDays,
   addMonths,
   ageLabel,
   computeAloneTimeReadiness,
+  computeEventCoverageNeeded,
+  computeEventTimes,
   computeNotifications,
   dayLoadMinutes,
-  dayOfWeekName,
   formatDate,
   formatMinutes,
   generateGroceryList,
+  generateOccurrences,
   heavyWeeks,
   isExpired,
   isExpiringSoon,
@@ -328,6 +347,15 @@ function QuickLogForm({
   );
 }
 
+function describeRecurrence(rec: Recurrence): string {
+  const unit = rec.frequency === "daily" ? "day" : rec.frequency === "weekly" ? "week" : rec.frequency === "monthly" ? "month" : "year";
+  const every = rec.interval > 1 ? `Every ${rec.interval} ${unit}s` : `Every ${unit}`;
+  if (rec.frequency === "weekly" && rec.daysOfWeek && rec.daysOfWeek.length > 0) {
+    return `${every} on ${rec.daysOfWeek.map((d) => dayLabels[d]).join(", ")}`;
+  }
+  return every;
+}
+
 const dayLabels: Record<string, string> = {
   monday: "Mon",
   tuesday: "Tue",
@@ -367,7 +395,6 @@ function buildAgendaForDate(
   instances: TaskInstance[],
 ): AgendaItem[] {
   const dateKey = toDateKey(date);
-  const dow = dayOfWeekName(date);
   const dogName = (id: string) => dogs.find((dog) => dog.id === id)?.name ?? id;
   const items: AgendaItem[] = [];
 
@@ -429,18 +456,15 @@ function buildAgendaForDate(
   });
 
   calendarEvents.forEach((event) => {
-    const isOneOffToday = event.kind === "one-off" && event.date === dateKey;
-    const activeFromOk = !event.activeFrom || event.activeFrom <= dateKey;
-    const activeToOk = !event.activeTo || event.activeTo >= dateKey;
-    const isRecurringToday = event.kind === "recurring" && event.dayOfWeek === dow && activeFromOk && activeToOk;
-    if (!isOneOffToday && !isRecurringToday) return;
+    if (generateOccurrences(event, date, date).length === 0) return;
     items.push({
-      id: `event-${event.id}`,
+      id: `event-${event.id}-${dateKey}`,
       title: event.title,
       category: event.category,
-      startMinutes: parseTimeLabel(event.timeLabel),
+      startMinutes: event.startTime ? parseTimeLabel(event.startTime) : null,
       durationMinutes: (event.durationHours ?? 1) * 60,
       dogNames: "",
+      date: dateKey,
       placeholder: event.status === "placeholder",
       source: "calendar",
       calendarEvent: event,
@@ -452,21 +476,15 @@ function buildAgendaForDate(
 
 function monthDaySummary(day: Date, healthEvents: HealthEvent[], calendarEvents: CalendarEvent[]): { count: number; heavy: boolean } {
   const key = toDateKey(day);
-  const dow = dayOfWeekName(day);
   let count = 0;
   let heavy = false;
   healthEvents.forEach((event) => {
     if (event.date === key) count++;
   });
   calendarEvents.forEach((event) => {
-    const isOneOff = event.kind === "one-off" && event.date === key;
-    const activeFromOk = !event.activeFrom || event.activeFrom <= key;
-    const activeToOk = !event.activeTo || event.activeTo >= key;
-    const isRecurring = event.kind === "recurring" && event.dayOfWeek === dow && activeFromOk && activeToOk;
-    if (isOneOff || isRecurring) {
-      count++;
-      if (event.importance === "marquee") heavy = true;
-    }
+    if (generateOccurrences(event, day, day).length === 0) return;
+    count++;
+    if (event.importance === "marquee") heavy = true;
   });
   return { count, heavy };
 }
@@ -622,7 +640,7 @@ function CalendarDayAgenda({
   items: AgendaItem[];
   shouldDim: (item: AgendaItem) => boolean;
   onOpenTask: (task: Task, date: string) => void;
-  onOpenEvent: (event: CalendarEvent) => void;
+  onOpenEvent: (event: CalendarEvent, occurrenceDate?: string) => void;
   onOpenDog: (dogId: string) => void;
 }) {
   const isMobile = useIsMobile();
@@ -634,7 +652,7 @@ function CalendarDayAgenda({
 
   function openItem(item: AgendaItem) {
     if (item.task) onOpenTask(item.task, item.date ?? toDateKey(new Date()));
-    else if (item.calendarEvent) onOpenEvent(item.calendarEvent);
+    else if (item.calendarEvent) onOpenEvent(item.calendarEvent, item.date);
     else if (item.healthEvent) onOpenDog(item.healthEvent.dogId);
   }
 
@@ -686,6 +704,67 @@ function CalendarDayAgenda({
   );
 }
 
+function DeleteEventModal({
+  event,
+  occurrenceDate,
+  onCancel,
+  onConfirm,
+}: {
+  event: CalendarEvent;
+  occurrenceDate?: string;
+  onCancel: () => void;
+  onConfirm: (scope: CalendarEventDeletionScope, note: string) => void;
+}) {
+  const [scope, setScope] = useState<CalendarEventDeletionScope>(occurrenceDate ? "instance" : "series");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState(false);
+
+  function confirm() {
+    if (!note.trim()) {
+      setError(true);
+      return;
+    }
+    onConfirm(scope, note.trim());
+  }
+
+  return (
+    <Modal title={`Delete "${event.title}"`} onClose={onCancel}>
+      {event.kind === "recurring" && (
+        <div className="subtabs" role="radiogroup" aria-label="What to delete" style={{ marginBottom: 12 }}>
+          {occurrenceDate && (
+            <button type="button" className={scope === "instance" ? "active" : ""} onClick={() => setScope("instance")}>
+              Just this occurrence
+            </button>
+          )}
+          <button type="button" className={scope === "series" ? "active" : ""} onClick={() => setScope("series")}>
+            The whole series
+          </button>
+        </div>
+      )}
+      <label>
+        Why is this being deleted? (required)
+        <textarea
+          rows={2}
+          value={note}
+          onChange={(event) => {
+            setNote(event.target.value);
+            setError(false);
+          }}
+        />
+        {error && <small className="form-error">A note is required to delete an event.</small>}
+      </label>
+      <div className="form-actions">
+        <button className="text-button" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="primary-button" type="button" onClick={confirm}>
+          Delete
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 const viewerStorageKey = "dog-life-os-viewer";
 
 function loadViewerId(fallback: string): string {
@@ -697,11 +776,12 @@ function loadViewerId(fallback: string): string {
 }
 
 export function CalendarView() {
-  const { healthEvents, milestones, tasks, dogs, calendarEvents, taskInstances, people } = useStore();
+  const { healthEvents, milestones, tasks, dogs, calendarEvents, taskInstances, people, aloneTimeLogs, deleteCalendarEvent } = useStore();
   const { navigate } = useNavigation();
   const attendeeNames = (ids?: string[]) =>
     !ids || ids.length === 0 ? "" : ids.map((id) => people.items.find((person) => person.id === id)?.name ?? id).join(" & ");
-  const [eventModal, setEventModal] = useState<"new" | (typeof calendarEvents.items)[number] | null>(null);
+  const [eventModal, setEventModal] = useState<"new" | { event: CalendarEvent; occurrenceDate?: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ event: CalendarEvent; occurrenceDate?: string } | null>(null);
   const [viewMode, setViewMode] = useState<"day" | "week" | "month" | "upcoming" | "milestones">("day");
   const [cursorDate, setCursorDate] = useState<Date>(() => new Date());
   const [viewerId, setViewerId] = useState<string>(() => loadViewerId(people.items[0]?.id ?? ""));
@@ -736,6 +816,10 @@ export function CalendarView() {
   function selectDay(day: Date) {
     setCursorDate(day);
     setViewMode("day");
+  }
+  function handlePickDate(dateKey: string) {
+    if (!dateKey) return;
+    setCursorDate(parseLocalDate(dateKey));
   }
 
   function handleTouchStart(event: ReactTouchEvent) {
@@ -779,29 +863,45 @@ export function CalendarView() {
     .slice()
     .sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999"));
   const weeks = heavyWeeks(calendarEvents.items);
+  const aloneReadiness = computeAloneTimeReadiness(aloneTimeLogs.items, calendarEvents.items);
 
   return (
     <section className="panel">
       <div className={`section-heading calendar-heading ${viewMode === "day" ? "is-frozen" : ""}`}>
         <div className="calendar-title-row">
-          <div>
-            <p className="eyebrow">Calendar</p>
-            <h2>{headingLabel}</h2>
-          </div>
+          <p className="eyebrow">Calendar</p>
           {isGridMode && (
-            <div className="calendar-nav">
-              <button className="icon-button" type="button" onClick={goPrev} aria-label="Previous">
-                <ChevronLeft size={18} aria-hidden />
-              </button>
-              <button className="text-button" type="button" onClick={goToday}>
+            <div className="calendar-quick-actions">
+              <button className="today-button" type="button" onClick={goToday}>
                 Today
               </button>
-              <button className="icon-button" type="button" onClick={goNext} aria-label="Next">
-                <ChevronRight size={18} aria-hidden />
-              </button>
+              <div className="calendar-date-picker">
+                <span className="icon-button" aria-hidden>
+                  <CalendarIcon size={18} aria-hidden />
+                </span>
+                <input
+                  className="calendar-date-input"
+                  type="date"
+                  value={toDateKey(cursorDate)}
+                  onChange={(event) => handlePickDate(event.target.value)}
+                  aria-label="Choose date"
+                />
+              </div>
             </div>
           )}
         </div>
+        {isGridMode && (
+          <div className="calendar-date-row">
+            <button className="icon-button" type="button" onClick={goPrev} aria-label="Previous">
+              <ChevronLeft size={18} aria-hidden />
+            </button>
+            <h2>{headingLabel}</h2>
+            <button className="icon-button" type="button" onClick={goNext} aria-label="Next">
+              <ChevronRight size={18} aria-hidden />
+            </button>
+          </div>
+        )}
+        {!isGridMode && <h2>{headingLabel}</h2>}
         <div className="calendar-controls">
           <div className="subtabs" role="tablist">
             {(["day", "week", "month", "upcoming", "milestones"] as const).map((mode) => (
@@ -846,7 +946,7 @@ export function CalendarView() {
               items={dayAgenda}
               shouldDim={shouldDim}
               onOpenTask={(task, date) => setDetailTask({ task, date })}
-              onOpenEvent={(event) => setEventModal(event)}
+              onOpenEvent={(event, occurrenceDate) => setEventModal({ event, occurrenceDate })}
               onOpenDog={openDog}
             />
           )}
@@ -887,13 +987,13 @@ export function CalendarView() {
               <article
                 className={`event commitment ${event.category === "downtime" ? "downtime" : ""} ${event.status === "placeholder" ? "placeholder" : ""}`}
                 key={event.id}
-                onClick={() => setEventModal(event)}
+                onClick={() => setEventModal({ event })}
               >
-                <span>{event.dayOfWeek ? dayLabels[event.dayOfWeek] : ""}</span>
+                <span>{event.recurrence ? describeRecurrence(event.recurrence) : ""}</span>
                 <strong>{event.title}</strong>
                 <p>
-                  {event.timeLabel}
-                  {event.activeTo ? ` · through ${formatDate(event.activeTo)}` : ""}
+                  {event.startTime ?? ""}
+                  {event.recurrence?.endDate ? ` · through ${formatDate(event.recurrence.endDate)}` : ""}
                 </p>
                 {event.status === "placeholder" && <small className="tbd-tag">TBD</small>}
                 {event.attendees && event.attendees.length > 0 && <small>Attendees: {attendeeNames(event.attendees)}</small>}
@@ -913,19 +1013,20 @@ export function CalendarView() {
               <article
                 className={`event one-off ${event.status === "placeholder" ? "placeholder" : ""} ${isHeavyWeek(event, weeks) ? "heavy-week" : ""}`}
                 key={event.id}
-                onClick={() => setEventModal(event)}
+                onClick={() => setEventModal({ event })}
               >
                 <span>{event.date ? formatDate(event.date) : event.windowLabel || "Date TBD"}</span>
                 <strong>{event.title}</strong>
-                <p>{event.timeLabel}</p>
+                <p>{event.startTime ?? ""}</p>
                 {event.status === "placeholder" && <small className="tbd-tag">TBD</small>}
                 {isHeavyWeek(event, weeks) && <small className="heavy-tag">Heavy week</small>}
-                {event.coverageNeeded === "rover" && (
+                {event.roverVisits !== undefined && (
                   <small className="rover-tag">
-                    {event.roverVisits === undefined
-                      ? "Rover — varies by trip length"
-                      : `Rover × ${event.roverVisits} visit${event.roverVisits === 1 ? "" : "s"}`}
+                    Rover × {event.roverVisits} visit{event.roverVisits === 1 ? "" : "s"}
                   </small>
+                )}
+                {computeEventCoverageNeeded(event, aloneReadiness.maxAchievedMinutes) && (
+                  <small className="rover-tag">Needs coverage arranged</small>
                 )}
                 <small>{event.notes}</small>
                 {(event.prepSteps?.length || event.roverInstructions?.length || event.postSteps?.length) && (
@@ -973,27 +1074,52 @@ export function CalendarView() {
       {eventModal && (
         <Modal title={eventModal === "new" ? "Add calendar event" : "Edit calendar event"} onClose={() => setEventModal(null)}>
           <CalendarEventForm
-            initial={eventModal === "new" ? undefined : eventModal}
+            initial={eventModal === "new" ? undefined : eventModal.event}
+            peopleOptions={people.items.map((person) => ({ id: person.id, name: person.name }))}
             onCancel={() => setEventModal(null)}
             onSubmit={(values) => {
               if (eventModal === "new") {
                 calendarEvents.add(calendarEventFormValuesToEvent(values, makeId("event")));
               } else {
                 calendarEvents.update(
-                  eventModal.id,
-                  calendarEventFormValuesToEvent(values, eventModal.id, {
-                    attendees: eventModal.attendees,
-                    roverVisits: eventModal.roverVisits,
-                    prepSteps: eventModal.prepSteps,
-                    roverInstructions: eventModal.roverInstructions,
-                    postSteps: eventModal.postSteps,
+                  eventModal.event.id,
+                  calendarEventFormValuesToEvent(values, eventModal.event.id, {
+                    excludedDates: eventModal.event.excludedDates,
+                    roverVisits: eventModal.event.roverVisits,
+                    prepSteps: eventModal.event.prepSteps,
+                    roverInstructions: eventModal.event.roverInstructions,
+                    postSteps: eventModal.event.postSteps,
                   }),
                 );
               }
               setEventModal(null);
             }}
           />
+          {eventModal !== "new" && (
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => {
+                setDeleteTarget(eventModal);
+                setEventModal(null);
+              }}
+            >
+              Delete event
+            </button>
+          )}
         </Modal>
+      )}
+
+      {deleteTarget && (
+        <DeleteEventModal
+          event={deleteTarget.event}
+          occurrenceDate={deleteTarget.occurrenceDate}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={async (scope, note) => {
+            await deleteCalendarEvent(deleteTarget.event, scope, deleteTarget.occurrenceDate, note);
+            setDeleteTarget(null);
+          }}
+        />
       )}
     </section>
   );
