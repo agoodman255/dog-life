@@ -122,17 +122,39 @@ export function DashboardView() {
     milestones.items.find((item) => item.status !== "completed" && item.dependencies.length > 0) ?? milestones.items[0];
   const readiness = computeAloneTimeReadiness(aloneTimeLogs.items, calendarEvents.items);
 
+  function jumpTo(id: string) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const toolbar = document.querySelector(".dashboard-toolbar");
+    const stickyTop = toolbar ? parseFloat(getComputedStyle(toolbar).top) || 0 : 0;
+    const clearance = toolbar ? stickyTop + toolbar.getBoundingClientRect().height + 8 : 0;
+    const targetY = el.getBoundingClientRect().top + window.scrollY - clearance;
+    window.scrollTo({ top: Math.max(targetY, 0), behavior: "smooth" });
+  }
+
   return (
     <div className="dashboard">
-      <section className="row between quick-log-row">
-        <p className="small">Just happened? Log it in one tap — no need to open a task.</p>
-        <button className="primary-button" type="button" onClick={() => setQuickLogModal(true)}>
+      <section className="dashboard-toolbar">
+        <button className="primary-button small" type="button" onClick={() => setQuickLogModal(true)}>
           <Plus size={16} aria-hidden /> Quick log
         </button>
+        <nav className="dashboard-jump-nav" aria-label="Jump to dashboard section">
+          <button type="button" onClick={() => jumpTo("today-section")}>
+            Today
+          </button>
+          {currentMilestone && (
+            <button type="button" onClick={() => jumpTo("focus-milestone-section")}>
+              Milestone
+            </button>
+          )}
+          <button type="button" onClick={() => jumpTo("readiness-section")}>
+            Readiness
+          </button>
+        </nav>
       </section>
 
       <section className="split">
-        <div className="panel">
+        <div className="panel" id="today-section">
           <div className="section-heading">
             <div>
               <p className="eyebrow">Today</p>
@@ -156,7 +178,7 @@ export function DashboardView() {
 
         <div className="stack">
           {currentMilestone && (
-            <section className="panel">
+            <section className="panel" id="focus-milestone-section">
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">Focus milestone</p>
@@ -166,47 +188,49 @@ export function DashboardView() {
               <MilestoneCard milestone={currentMilestone} />
             </section>
           )}
-          {puppy && (
+          <div className="readiness-group" id="readiness-section">
+            {puppy && (
+              <section className="panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Readiness</p>
+                    <h2>{puppy.name}</h2>
+                  </div>
+                </div>
+                {(["vet", "walk", "recall", "hiking", "dogPark"] as const).map((kind) => (
+                  <div className="readiness" key={kind}>
+                    <span>
+                      {{ vet: "Vet visit", walk: "Neighborhood walk", recall: "Off-leash recall", hiking: "Hiking", dogPark: "Dog park" }[kind]}
+                    </span>
+                    <strong>{readinessScore(kind, puppy)}%</strong>
+                    <ProgressBar value={readinessScore(kind, puppy)} />
+                  </div>
+                ))}
+              </section>
+            )}
             <section className="panel">
               <div className="section-heading">
                 <div>
-                  <p className="eyebrow">Readiness</p>
-                  <h2>{puppy.name}</h2>
+                  <p className="eyebrow">Alone-time readiness</p>
+                  <h2 style={{ fontSize: "1.1rem" }}>
+                    {readiness.nextEvent ? readiness.nextEvent.title : "Nothing upcoming needs coverage"}
+                  </h2>
                 </div>
+                <button className="text-button" type="button" onClick={() => setAloneTimeModal(true)}>
+                  <Plus size={16} aria-hidden /> Log
+                </button>
               </div>
-              {(["vet", "walk", "recall", "hiking", "dogPark"] as const).map((kind) => (
-                <div className="readiness" key={kind}>
-                  <span>
-                    {{ vet: "Vet visit", walk: "Neighborhood walk", recall: "Off-leash recall", hiking: "Hiking", dogPark: "Dog park" }[kind]}
-                  </span>
-                  <strong>{readinessScore(kind, puppy)}%</strong>
-                  <ProgressBar value={readinessScore(kind, puppy)} />
-                </div>
-              ))}
+              {readiness.nextEvent && (
+                <p className={`readiness-note ${readiness.ready ? "ready" : "gap"}`}>
+                  {readiness.ready
+                    ? `Logged max of ${Math.round(readiness.maxAchievedMinutes / 60)}h already meets the ${readiness.requiredMinutes / 60}h needed for ${readiness.nextEvent.title}.`
+                    : `Best logged so far is ${Math.round(readiness.maxAchievedMinutes / 60)}h, but ${readiness.nextEvent.title} on ${
+                        readiness.nextEvent.date ? formatDate(readiness.nextEvent.date) : "an upcoming date"
+                      } needs ${readiness.requiredMinutes / 60}h — ${Math.round(readiness.gapMinutes / 60)}h gap to close.`}
+                </p>
+              )}
             </section>
-          )}
-          <section className="panel">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Alone-time readiness</p>
-                <h2 style={{ fontSize: "1.1rem" }}>
-                  {readiness.nextEvent ? readiness.nextEvent.title : "Nothing upcoming needs coverage"}
-                </h2>
-              </div>
-              <button className="text-button" type="button" onClick={() => setAloneTimeModal(true)}>
-                <Plus size={16} aria-hidden /> Log
-              </button>
-            </div>
-            {readiness.nextEvent && (
-              <p className={`readiness-note ${readiness.ready ? "ready" : "gap"}`}>
-                {readiness.ready
-                  ? `Logged max of ${Math.round(readiness.maxAchievedMinutes / 60)}h already meets the ${readiness.requiredMinutes / 60}h needed for ${readiness.nextEvent.title}.`
-                  : `Best logged so far is ${Math.round(readiness.maxAchievedMinutes / 60)}h, but ${readiness.nextEvent.title} on ${
-                      readiness.nextEvent.date ? formatDate(readiness.nextEvent.date) : "an upcoming date"
-                    } needs ${readiness.requiredMinutes / 60}h — ${Math.round(readiness.gapMinutes / 60)}h gap to close.`}
-              </p>
-            )}
-          </section>
+          </div>
         </div>
       </section>
 
