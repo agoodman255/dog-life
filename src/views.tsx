@@ -683,7 +683,7 @@ function CalendarWeekStrip({
   onSelectDay,
   onOpenTask,
   onOpenEvent,
-  onOpenDog,
+  onOpenHealthEvent,
 }: {
   cursor: Date;
   today: Date;
@@ -691,12 +691,12 @@ function CalendarWeekStrip({
   onSelectDay: (date: Date) => void;
   onOpenTask: (task: Task, date: string) => void;
   onOpenEvent: (event: CalendarEvent, occurrenceDate?: string) => void;
-  onOpenDog: (dogId: string) => void;
+  onOpenHealthEvent: (event: HealthEvent) => void;
 }) {
   function openItem(item: AgendaItem) {
     if (item.task) onOpenTask(item.task, item.date ?? toDateKey(new Date()));
     else if (item.calendarEvent) onOpenEvent(item.calendarEvent, item.date);
-    else if (item.healthEvent) onOpenDog(item.healthEvent.dogId);
+    else if (item.healthEvent) onOpenHealthEvent(item.healthEvent);
   }
 
   return (
@@ -742,13 +742,13 @@ function CalendarDayAgenda({
   shouldDim,
   onOpenTask,
   onOpenEvent,
-  onOpenDog,
+  onOpenHealthEvent,
 }: {
   items: AgendaItem[];
   shouldDim: (item: AgendaItem) => boolean;
   onOpenTask: (task: Task, date: string) => void;
   onOpenEvent: (event: CalendarEvent, occurrenceDate?: string) => void;
-  onOpenDog: (dogId: string) => void;
+  onOpenHealthEvent: (event: HealthEvent) => void;
 }) {
   const isMobile = useIsMobile();
   const hourHeight = isMobile ? MOBILE_HOUR_HEIGHT : HOUR_HEIGHT;
@@ -760,7 +760,7 @@ function CalendarDayAgenda({
   function openItem(item: AgendaItem) {
     if (item.task) onOpenTask(item.task, item.date ?? toDateKey(new Date()));
     else if (item.calendarEvent) onOpenEvent(item.calendarEvent, item.date);
-    else if (item.healthEvent) onOpenDog(item.healthEvent.dogId);
+    else if (item.healthEvent) onOpenHealthEvent(item.healthEvent);
   }
 
   return (
@@ -961,6 +961,7 @@ export function CalendarView() {
   const [filterMode, setFilterMode] = useState<"all" | "mine" | "other">("all");
   const [categoryFilter, setCategoryFilter] = useState<Set<Category>>(new Set());
   const [detailTask, setDetailTask] = useState<{ task: Task; date: string } | null>(null);
+  const [healthEventModal, setHealthEventModal] = useState<HealthEvent | null>(null);
   const touchStartX = useRef<number | null>(null);
   const today = new Date();
 
@@ -1005,11 +1006,6 @@ export function CalendarView() {
     if (deltaX > 60) goPrev();
     else if (deltaX < -60) goNext();
     touchStartX.current = null;
-  }
-
-  function openDog(dogId: string) {
-    setDetailTask(null);
-    navigate("profile", { dogId });
   }
 
   // Health events aren't part of the shared Category taxonomy (they use HealthEvent's
@@ -1153,7 +1149,7 @@ export function CalendarView() {
               shouldDim={shouldDim}
               onOpenTask={(task, date) => setDetailTask({ task, date })}
               onOpenEvent={(event, occurrenceDate) => setEventModal({ event, occurrenceDate })}
-              onOpenDog={openDog}
+              onOpenHealthEvent={setHealthEventModal}
             />
           )}
           {viewMode === "week" && (
@@ -1164,7 +1160,7 @@ export function CalendarView() {
               onSelectDay={selectDay}
               onOpenTask={(task, date) => setDetailTask({ task, date })}
               onOpenEvent={(event, occurrenceDate) => setEventModal({ event, occurrenceDate })}
-              onOpenDog={openDog}
+              onOpenHealthEvent={setHealthEventModal}
             />
           )}
           {viewMode === "month" && (
@@ -1335,6 +1331,20 @@ export function CalendarView() {
           onConfirm={(scope, note) => deleteCalendarEvent(deleteTarget.event, scope, deleteTarget.occurrenceDate, note)}
           onDone={() => setDeleteTarget(null)}
         />
+      )}
+
+      {healthEventModal && (
+        <Modal title="Edit health event" onClose={() => setHealthEventModal(null)}>
+          <HealthEventForm
+            initial={healthEventModal}
+            dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
+            onCancel={() => setHealthEventModal(null)}
+            onSubmit={(values) => {
+              healthEvents.update(healthEventModal.id, healthEventFormValuesToEvent(values, healthEventModal.id));
+              setHealthEventModal(null);
+            }}
+          />
+        </Modal>
       )}
     </section>
   );
