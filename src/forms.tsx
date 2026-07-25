@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Info } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import {
@@ -22,7 +22,7 @@ import {
   Task,
 } from "./types";
 import { makeId } from "./store";
-import { computeEventTimes, to12Hour, to24Hour } from "./utils";
+import { computeEventCoverageNeeded, computeEventTimes, dogsNeedingCoverage, to12Hour, to24Hour } from "./utils";
 
 // Alphabetical by label — CategoryPicker and every plain <select> that maps over
 // this array inherit the order, so there's one place that controls it.
@@ -935,6 +935,8 @@ const calendarEventSchema = z
     dogIds: z.array(z.string()),
     aloneTimeRequired: z.enum(["all", "partial", "no"]),
     aloneTimeRequiredAmount: z.number().min(0).optional(),
+    coverageConfirmed: z.boolean(),
+    coverageNotes: z.string(),
     status: z.enum(["confirmed", "placeholder"]),
     notes: z.string(),
   })
@@ -948,6 +950,9 @@ const calendarEventSchema = z
     }
     if (values.aloneTimeRequired === "partial" && !(values.aloneTimeRequiredAmount && values.aloneTimeRequiredAmount > 0)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["aloneTimeRequiredAmount"], message: "Enter how much alone time this event needs" });
+    }
+    if (values.coverageConfirmed && !values.coverageNotes.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["coverageNotes"], message: "Explain what the arranged coverage is" });
     }
   });
 
@@ -985,6 +990,8 @@ export function calendarEventFormValuesToEvent(
     dogIds: values.dogIds.length > 0 ? values.dogIds : undefined,
     aloneTimeRequired: values.aloneTimeRequired,
     aloneTimeRequiredAmount: values.aloneTimeRequired === "partial" ? values.aloneTimeRequiredAmount : undefined,
+    coverageConfirmed: values.aloneTimeRequired !== "no" ? values.coverageConfirmed : undefined,
+    coverageNotes: values.aloneTimeRequired !== "no" && values.coverageNotes ? values.coverageNotes : undefined,
     status: values.status,
     notes: values.notes,
     ...extra,
@@ -995,6 +1002,7 @@ export function CalendarEventForm({
   initial,
   peopleOptions,
   dogOptions,
+  aloneTimeLogs,
   onSubmit,
   onCancel,
   onDelete,
@@ -1002,6 +1010,8 @@ export function CalendarEventForm({
   initial?: CalendarEvent;
   peopleOptions: { id: string; name: string }[];
   dogOptions: { id: string; name: string }[];
+  /** Used to preview live whether this event's dogIds selection will need coverage arranged, and for whom. */
+  aloneTimeLogs: AloneTimeLog[];
   onSubmit: (values: CalendarEventFormValues) => Promise<boolean>;
   onCancel: () => void;
   onDelete?: () => void;
@@ -1031,6 +1041,8 @@ export function CalendarEventForm({
       dogIds: initial?.dogIds ?? [],
       aloneTimeRequired: initial?.aloneTimeRequired ?? "no",
       aloneTimeRequiredAmount: initial?.aloneTimeRequiredAmount,
+      coverageConfirmed: initial?.coverageConfirmed ?? false,
+      coverageNotes: initial?.coverageNotes ?? "",
       status: initial?.status ?? "placeholder",
       notes: initial?.notes ?? "",
     },
@@ -1040,9 +1052,21 @@ export function CalendarEventForm({
   const endMode = watch("endMode");
   const category = watch("category");
   const aloneTimeRequired = watch("aloneTimeRequired");
+  const aloneTimeRequiredAmount = watch("aloneTimeRequiredAmount");
+  const durationHours = watch("durationHours");
   const daysOfWeek = watch("daysOfWeek");
   const attendees = watch("attendees");
   const dogIds = watch("dogIds");
+  const coverageManuallySet = useRef(false);
+  const allDogIds = dogOptions.map((dog) => dog.id);
+  const coverageNeeded = computeEventCoverageNeeded(
+    { aloneTimeRequired, aloneTimeRequiredAmount, durationHours, dogIds },
+    allDogIds,
+    aloneTimeLogs,
+  );
+  const dogsNeedingCoverageNames = dogsNeedingCoverage({ aloneTimeRequired, dogIds }, allDogIds)
+    .map((id) => dogOptions.find((dog) => dog.id === id)?.name ?? id)
+    .join(" & ");
 
   function toggleDayOfWeek(day: DayOfWeek) {
     const current = getValues("daysOfWeek");
@@ -1054,9 +1078,22 @@ export function CalendarEventForm({
     setValue("attendees", current.includes(id) ? current.filter((a) => a !== id) : [...current, id]);
   }
 
+  // Dogs involved (who's actually going) and dog coverage (who's left home and for
+  // how long) are separate fields, but selecting dogs involved suggests an obvious
+  // starting point for coverage: both dogs going along means nobody's home alone, so
+  // default coverage to "no"; a partial selection means at least one dog is staying
+  // behind, so default to "all" (the full event duration). An empty selection doesn't
+  // necessarily mean anything about coverage (this field is often left blank for
+  // events that aren't dog-specific at all), so it's left alone. This is only a
+  // starting suggestion — once the user edits the coverage field directly, autofill
+  // stops so it never clobbers a deliberate choice.
   function toggleDogId(id: string) {
     const current = getValues("dogIds");
-    setValue("dogIds", current.includes(id) ? current.filter((d) => d !== id) : [...current, id]);
+    const next = current.includes(id) ? current.filter((d) => d !== id) : [...current, id];
+    setValue("dogIds", next);
+    if (!coverageManuallySet.current && next.length > 0) {
+      setValue("aloneTimeRequired", next.length === dogOptions.length ? "no" : "all");
+    }
   }
 
   async function submitForm(values: CalendarEventFormValues) {
@@ -1080,6 +1117,7 @@ export function CalendarEventForm({
   const startTimeReg = register("startTime");
   const endTimeReg = register("endTime");
   const durationReg = register("durationHours", { valueAsNumber: true });
+  const aloneTimeRequiredReg = register("aloneTimeRequired");
 
   if (saveState === "saved") {
     return (
@@ -1224,7 +1262,13 @@ export function CalendarEventForm({
 
         <label>
           Dog alone time required
-          <select {...register("aloneTimeRequired")}>
+          <select
+            {...aloneTimeRequiredReg}
+            onChange={(e) => {
+              coverageManuallySet.current = true;
+              aloneTimeRequiredReg.onChange(e);
+            }}
+          >
             <option value="no">No</option>
             <option value="all">Yes — all of it</option>
             <option value="partial">Yes — partial</option>
@@ -1236,6 +1280,24 @@ export function CalendarEventForm({
             <input type="number" min={0} step="any" {...register("aloneTimeRequiredAmount", { valueAsNumber: true })} />
             {errors.aloneTimeRequiredAmount && <small className="form-error">{errors.aloneTimeRequiredAmount.message}</small>}
           </label>
+        )}
+
+        {coverageNeeded && (
+          <div className="coverage-confirm">
+            <p className="form-error">
+              This needs more coverage than {dogsNeedingCoverageNames || "the dog(s) left home"} {dogsNeedingCoverageNames.includes("&") ? "have" : "has"} proven{" "}
+              they can handle — arrange a sitter and confirm below.
+            </p>
+            <label className="checkbox-row">
+              <input type="checkbox" {...register("coverageConfirmed")} />
+              Coverage is arranged
+            </label>
+            <label>
+              What's the coverage plan? (required once confirmed)
+              <textarea rows={2} {...register("coverageNotes")} />
+              {errors.coverageNotes && <small className="form-error">{errors.coverageNotes.message}</small>}
+            </label>
+          </div>
         )}
 
         <label>
@@ -1275,26 +1337,36 @@ export function CalendarEventForm({
 const aloneTimeLogSchema = z.object({
   date: z.string().min(1),
   durationMinutes: z.number().min(1),
+  dogIds: z.array(z.string()).min(1, "Select which dog(s) this session covers"),
   notes: z.string(),
 });
 
 type AloneTimeLogFormValues = z.infer<typeof aloneTimeLogSchema>;
 
 export function aloneTimeLogFormValuesToLog(values: AloneTimeLogFormValues, id: string): AloneTimeLog {
-  return { id, date: values.date, durationMinutes: values.durationMinutes, notes: values.notes };
+  return { id, date: values.date, durationMinutes: values.durationMinutes, dogIds: values.dogIds, notes: values.notes };
 }
 
 export function AloneTimeLogForm({
+  dogOptions,
   onSubmit,
   onCancel,
 }: {
+  dogOptions: { id: string; name: string }[];
   onSubmit: (values: AloneTimeLogFormValues) => void;
   onCancel: () => void;
 }) {
-  const { register, handleSubmit } = useForm<AloneTimeLogFormValues>({
+  const { register, handleSubmit, watch, setValue, getValues, formState: { errors } } = useForm<AloneTimeLogFormValues>({
     resolver: zodResolver(aloneTimeLogSchema),
-    defaultValues: { date: new Date().toISOString().slice(0, 10), durationMinutes: 30, notes: "" },
+    defaultValues: { date: new Date().toISOString().slice(0, 10), durationMinutes: 30, dogIds: dogOptions.map((dog) => dog.id), notes: "" },
   });
+  const dogIds = watch("dogIds");
+
+  function toggleDogId(id: string) {
+    const current = getValues("dogIds");
+    setValue("dogIds", current.includes(id) ? current.filter((d) => d !== id) : [...current, id]);
+  }
+
   return (
     <form className="entity-form" onSubmit={handleSubmit(onSubmit)}>
       <div className="form-grid">
@@ -1307,6 +1379,17 @@ export function AloneTimeLogForm({
           <input type="number" min={1} {...register("durationMinutes", { valueAsNumber: true })} />
         </label>
       </div>
+      <label>
+        Which dog(s) was this?
+        <div className="subtabs" role="group" aria-label="Dogs covered">
+          {dogOptions.map((dog) => (
+            <button key={dog.id} type="button" className={dogIds.includes(dog.id) ? "active" : ""} onClick={() => toggleDogId(dog.id)}>
+              {dog.name}
+            </button>
+          ))}
+        </div>
+        {errors.dogIds && <small className="form-error">{errors.dogIds.message}</small>}
+      </label>
       <label>
         Notes
         <textarea rows={2} {...register("notes")} placeholder="How did it go? Any signs of stress?" />

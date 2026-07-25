@@ -373,6 +373,8 @@ export const calendarEvent = {
       prepSteps: row.prep_steps ?? undefined,
       roverInstructions: row.rover_instructions ?? undefined,
       postSteps: row.post_steps ?? undefined,
+      coverageConfirmed: row.coverage_confirmed ?? undefined,
+      coverageNotes: row.coverage_notes ?? undefined,
     };
   },
   toRow(item: CalendarEvent, householdId: string) {
@@ -399,6 +401,8 @@ export const calendarEvent = {
       prep_steps: item.prepSteps ?? [],
       rover_instructions: item.roverInstructions ?? [],
       post_steps: item.postSteps ?? [],
+      coverage_confirmed: item.coverageConfirmed ?? false,
+      coverage_notes: item.coverageNotes ?? "",
     };
   },
 };
@@ -457,7 +461,7 @@ export const taskDeletion = {
 
 export const aloneTimeLog = {
   fromRow(row: any): AloneTimeLog {
-    return { id: row.id, date: row.date, durationMinutes: row.duration_minutes, notes: row.notes };
+    return { id: row.id, date: row.date, durationMinutes: row.duration_minutes, dogIds: row.dog_ids ?? [], notes: row.notes };
   },
   toRow(item: AloneTimeLog, householdId: string) {
     return {
@@ -465,6 +469,7 @@ export const aloneTimeLog = {
       household_id: householdId,
       date: item.date,
       duration_minutes: item.durationMinutes,
+      dog_ids: item.dogIds,
       notes: item.notes,
     };
   },

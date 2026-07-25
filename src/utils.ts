@@ -5,6 +5,7 @@ import {
   ChecklistItemValue,
   DailyFeedback,
   DayOfWeek,
+  Dog,
   GroceryListItem,
   HealthEvent,
   InventoryItem,
@@ -189,17 +190,33 @@ export function weeklyAloneTimeLoadMinutes(events: CalendarEvent[], rangeStart: 
   return byWeek;
 }
 
+/** Max proven alone-time stretch (minutes) for one specific dog, from logged sessions
+ * that included that dog. Tracked per dog — not a single household number — since an
+ * adult dog and a puppy build tolerance at very different paces. */
+export function dogAloneTimeReadinessMinutes(dogId: string, logs: AloneTimeLog[]): number {
+  return logs.reduce((max, log) => (log.dogIds.includes(dogId) ? Math.max(max, log.durationMinutes) : max), 0);
+}
+
+/** Which dog(s) this event actually leaves home alone: every dog NOT tagged in
+ * dogIds ("dogs involved"/attending), when the event needs any coverage at all.
+ * Empty when coverage isn't required or every dog is attending. */
+export function dogsNeedingCoverage(event: Pick<CalendarEvent, "aloneTimeRequired" | "dogIds">, allDogIds: string[]): string[] {
+  if (event.aloneTimeRequired === "no") return [];
+  const involved = new Set(event.dogIds ?? []);
+  return allDogIds.filter((id) => !involved.has(id));
+}
+
 // A week is "busy" when the dog-alone-time coverage it needs exceeds what the dogs
 // have actually proven they can sustain across 7 days — i.e. the household would need
 // to arrange more coverage (Rover, split trips, shorter outings) than a normal week.
-// "Normal" is calibrated to the dogs' own logged alone-time record (their single best
-// proven stretch × 7) rather than a guessed constant, so the bar rises automatically
-// as the dogs get more comfortable being left alone. Replaces the old manual
-// "importance: marquee" checkbox — this one formula now drives every heavy/busy-week
-// indicator in the app (Month view highlighting, Upcoming list tags).
-export function heavyWeeks(events: CalendarEvent[], logs: AloneTimeLog[], rangeStart: Date, rangeEnd: Date): Set<string> {
-  const maxAchievedMinutes = logs.reduce((max, log) => Math.max(max, log.durationMinutes), 0);
-  const weeklyBudgetMinutes = maxAchievedMinutes * 7;
+// "Normal" is calibrated to the household's weakest-linked dog (the lowest of each
+// dog's own single best proven stretch × 7), since a week that overloads even one dog
+// counts as busy for the household. Replaces the old manual "importance: marquee"
+// checkbox — this one formula now drives every heavy/busy-week indicator in the app
+// (Month view highlighting, Upcoming list tags).
+export function heavyWeeks(events: CalendarEvent[], logs: AloneTimeLog[], allDogIds: string[], rangeStart: Date, rangeEnd: Date): Set<string> {
+  const readinessMinutes = allDogIds.length > 0 ? Math.min(...allDogIds.map((id) => dogAloneTimeReadinessMinutes(id, logs))) : 0;
+  const weeklyBudgetMinutes = readinessMinutes * 7;
   const byWeek = weeklyAloneTimeLoadMinutes(events, rangeStart, rangeEnd);
   const heavy = new Set<string>();
   byWeek.forEach((minutes, week) => {
@@ -310,16 +327,25 @@ export function computeEventTimes(input: {
   return input;
 }
 
-/** Does this event need dog coverage arranged, given the household's current proven
- * alone-time tolerance (maxAchievedMinutes from computeAloneTimeReadiness)? Simple
- * threshold comparison — the formula Andrew asked for, kept deliberately dumb. */
+/** Does this event need more dog coverage than the dog(s) actually left home alone
+ * have proven they can handle? "Left home alone" is whichever dogs aren't tagged in
+ * dogIds (dogs involved/attending) — so selecting only Bree+Mara on an event means
+ * Griz is the one needing coverage, and his own readiness is what's checked. When
+ * more than one dog is left home together, the threshold is the minimum of their
+ * individual readiness values (the group can't safely go longer than its
+ * least-tolerant member) — a global rule computed from whichever dogs are actually
+ * involved, never a hardcoded dog. */
 export function computeEventCoverageNeeded(
-  event: Pick<CalendarEvent, "aloneTimeRequired" | "aloneTimeRequiredAmount" | "durationHours">,
-  currentAloneTimeReadinessMinutes: number,
+  event: Pick<CalendarEvent, "aloneTimeRequired" | "aloneTimeRequiredAmount" | "durationHours" | "dogIds">,
+  allDogIds: string[],
+  logs: AloneTimeLog[],
 ): boolean {
-  if (event.aloneTimeRequired === "no") return false;
+  const needing = dogsNeedingCoverage(event, allDogIds);
+  if (needing.length === 0) return false;
   const neededMinutes = (event.aloneTimeRequired === "all" ? (event.durationHours ?? 0) : (event.aloneTimeRequiredAmount ?? 0)) * 60;
-  return neededMinutes > currentAloneTimeReadinessMinutes;
+  if (neededMinutes <= 0) return false;
+  const threshold = Math.min(...needing.map((id) => dogAloneTimeReadinessMinutes(id, logs)));
+  return neededMinutes > threshold;
 }
 
 export function isSameDay(a: Date, b: Date): boolean {
@@ -411,11 +437,18 @@ export type AloneTimeReadiness = {
   ready: boolean;
 };
 
-export function computeAloneTimeReadiness(logs: AloneTimeLog[], events: CalendarEvent[]): AloneTimeReadiness {
-  const maxAchievedMinutes = logs.reduce((max, log) => Math.max(max, log.durationMinutes), 0);
+/** One dog's own readiness picture: their proven max, and the next upcoming event
+ * that actually leaves THEM home alone (i.e. this dog is in dogsNeedingCoverage for
+ * it) — not just any event with coverage required, since an event either dog is
+ * attending doesn't apply to the one staying home. */
+export function computeDogAloneTimeReadiness(dogId: string, allDogIds: string[], logs: AloneTimeLog[], events: CalendarEvent[]): AloneTimeReadiness {
+  const maxAchievedMinutes = dogAloneTimeReadinessMinutes(dogId, logs);
   const now = Date.now();
   const upcoming = events
-    .filter((event) => event.aloneTimeRequired !== "no" && event.date && parseLocalDate(event.date).getTime() >= now)
+    .filter(
+      (event) =>
+        dogsNeedingCoverage(event, allDogIds).includes(dogId) && event.date && parseLocalDate(event.date).getTime() >= now,
+    )
     .sort((a, b) => parseLocalDate(a.date as string).getTime() - parseLocalDate(b.date as string).getTime());
   const nextEvent = upcoming[0] ?? null;
   const requiredMinutes = nextEvent
@@ -430,6 +463,9 @@ export function computeNotifications(
   feedback: DailyFeedback[],
   healthEvents: HealthEvent[],
   milestones: Milestone[],
+  calendarEvents: CalendarEvent[],
+  dogs: Pick<Dog, "id" | "name">[],
+  aloneTimeLogs: AloneTimeLog[],
 ): NotificationItem[] {
   const notifications: NotificationItem[] = [];
   const now = new Date();
@@ -484,6 +520,29 @@ export function computeNotifications(
         severity: "info",
       });
     }
+  });
+
+  // Any occurrence in the next 7 days that needs more coverage than the dog(s) left
+  // home alone have proven they can handle, and hasn't been confirmed arranged,
+  // surfaces as a warning so it doesn't get missed just because the calendar view
+  // happens to be scrolled elsewhere.
+  const allDogIds = dogs.map((dog) => dog.id);
+  const dogName = (id: string) => dogs.find((dog) => dog.id === id)?.name ?? id;
+  const sevenDaysOut = addDays(now, 7);
+  calendarEvents.forEach((event) => {
+    if (event.coverageConfirmed) return;
+    if (!computeEventCoverageNeeded(event, allDogIds, aloneTimeLogs)) return;
+    const needing = dogsNeedingCoverage(event, allDogIds).map(dogName).join(" & ");
+    generateOccurrences(event, now, sevenDaysOut).forEach((dateKey) => {
+      notifications.push({
+        id: `coverage-${event.id}-${dateKey}`,
+        kind: "coverage-needed",
+        title: `${event.title} needs coverage arranged`,
+        detail: `${formatDate(dateKey)} needs more coverage than ${needing} ${needing.includes("&") ? "have" : "has"} proven they can handle — confirm a sitter is arranged.`,
+        date: dateKey,
+        severity: "warning",
+      });
+    });
   });
 
   return notifications.sort((a, b) => {

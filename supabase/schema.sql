@@ -302,7 +302,9 @@ create table if not exists calendar_events (
   rover_visits int,
   prep_steps text[] not null default '{}',
   rover_instructions text[] not null default '{}',
-  post_steps text[] not null default '{}'
+  post_steps text[] not null default '{}',
+  coverage_confirmed boolean not null default false,
+  coverage_notes text not null default ''
 );
 
 -- `create table if not exists` above is a no-op once the table already exists in
@@ -323,6 +325,8 @@ alter table calendar_events add column if not exists start_time text;
 alter table calendar_events add column if not exists end_time text;
 alter table calendar_events add column if not exists alone_time_required text not null default 'no';
 alter table calendar_events add column if not exists alone_time_required_amount numeric;
+alter table calendar_events add column if not exists coverage_confirmed boolean not null default false;
+alter table calendar_events add column if not exists coverage_notes text not null default '';
 
 -- Audit trail for deleted calendar events/occurrences — a note is required at
 -- delete time (enforced in the app, not here) and kept even after the event
@@ -360,8 +364,11 @@ create table if not exists alone_time_logs (
   household_id uuid not null references households (id) on delete cascade,
   date date not null,
   duration_minutes int not null,
+  dog_ids uuid[] not null default '{}',
   notes text not null default ''
 );
+
+alter table alone_time_logs add column if not exists dog_ids uuid[] not null default '{}';
 
 -- In-app feedback submitted via the sidebar wizard — bugs, feature ideas,
 -- comments, questions. Pulled into markdown via scripts/export-feedback.ts

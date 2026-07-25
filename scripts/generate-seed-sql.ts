@@ -221,15 +221,16 @@ lines.push("");
 
 calendarEvents.forEach((event, index) => {
   lines.push(
-    `insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, rover_visits, prep_steps, rover_instructions, post_steps) values (`,
+    `insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (`,
     `  ${str(seedId("calendar_events", index))}, ${str(HOUSEHOLD_ID)}, ${str(event.title)}, ${str(event.category)}, ${str(event.kind)}, ${event.recurrence ? jsonb(event.recurrence) : "NULL"}, ${dateArray(event.excludedDates ?? [])}, ${event.date ? str(event.date) : "NULL"},`,
     `  ${str(event.windowLabel)}, ${event.startTime ? str(event.startTime) : "NULL"}, ${event.endTime ? str(event.endTime) : "NULL"}, ${num(event.durationHours ?? null)}, ${str(event.aloneTimeRequired)}, ${num(event.aloneTimeRequiredAmount ?? null)}, ${str(event.status)}, ${str(event.notes)},`,
-    `  ${uuidArray((event.attendees ?? []).map(personRef))}, ${num(event.roverVisits ?? null)}, ${textArray(event.prepSteps ?? [])}, ${textArray(event.roverInstructions ?? [])}, ${textArray(event.postSteps ?? [])}`,
+    `  ${uuidArray((event.attendees ?? []).map(personRef))}, ${uuidArray((event.dogIds ?? []).map(dogRef))}, ${num(event.roverVisits ?? null)}, ${textArray(event.prepSteps ?? [])}, ${textArray(event.roverInstructions ?? [])}, ${textArray(event.postSteps ?? [])}, ${event.coverageConfirmed ? "true" : "false"}, ${str(event.coverageNotes ?? "")}`,
     ")",
     upsertClause([
       "title", "category", "kind", "recurrence", "excluded_dates", "date", "window_label",
       "start_time", "end_time", "duration_hours", "alone_time_required", "alone_time_required_amount",
-      "status", "notes", "attendees", "rover_visits", "prep_steps", "rover_instructions", "post_steps",
+      "status", "notes", "attendees", "dog_ids", "rover_visits", "prep_steps", "rover_instructions", "post_steps",
+      "coverage_confirmed", "coverage_notes",
     ]),
   );
 });
@@ -237,8 +238,8 @@ lines.push("");
 
 aloneTimeLogs.forEach((log, index) => {
   lines.push(
-    `insert into alone_time_logs (id, household_id, date, duration_minutes, notes) values (${str(seedId("alone_time_logs", index))}, ${str(HOUSEHOLD_ID)}, ${str(log.date)}, ${num(log.durationMinutes)}, ${str(log.notes)})`,
-    upsertClause(["date", "duration_minutes", "notes"]),
+    `insert into alone_time_logs (id, household_id, date, duration_minutes, dog_ids, notes) values (${str(seedId("alone_time_logs", index))}, ${str(HOUSEHOLD_ID)}, ${str(log.date)}, ${num(log.durationMinutes)}, ${uuidArray(log.dogIds.map(dogRef))}, ${str(log.notes)})`,
+    upsertClause(["date", "duration_minutes", "dog_ids", "notes"]),
   );
 });
 

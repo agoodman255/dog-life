@@ -294,7 +294,7 @@ export type RelationshipLog = {
 
 export type NotificationItem = {
   id: string;
-  kind: "overdue-task" | "upcoming-health" | "milestone-unlocked" | "missed-task";
+  kind: "overdue-task" | "upcoming-health" | "milestone-unlocked" | "missed-task" | "coverage-needed";
   title: string;
   detail: string;
   date: string;
@@ -365,6 +365,12 @@ export type CalendarEvent = {
   roverInstructions?: string[];
   /** Checklist for the moment someone gets home. */
   postSteps?: string[];
+  /** Has a human confirmed coverage is arranged for this event? Only meaningful
+   * when computeEventCoverageNeeded(event, readiness) is true — required before
+   * the "needs coverage" warning can be dismissed. */
+  coverageConfirmed?: boolean;
+  /** Required alongside coverageConfirmed — what the arranged coverage actually is. */
+  coverageNotes?: string;
 };
 
 export type CalendarEventDeletionScope = "instance" | "series";
@@ -385,6 +391,9 @@ export type AloneTimeLog = {
   id: string;
   date: string;
   durationMinutes: number;
+  /** Which dog(s) this session actually covers — readiness is tracked per dog since
+   * an adult dog and a puppy build alone-time tolerance at very different paces. */
+  dogIds: string[];
   notes: string;
 };
 

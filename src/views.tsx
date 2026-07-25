@@ -58,6 +58,7 @@ import { useNavigation } from "./navigation";
 import { setPassword as setAccountPassword, signOut, useSession } from "./auth";
 import { isBackendConfigured } from "./supabaseClient";
 import {
+  AloneTimeLog,
   CalendarEvent,
   CalendarEventDeletionScope,
   Category,
@@ -79,11 +80,12 @@ import {
   addDays,
   addMonths,
   ageLabel,
-  computeAloneTimeReadiness,
+  computeDogAloneTimeReadiness,
   computeEventCoverageNeeded,
   computeEventTimes,
   computeNotifications,
   dayLoadMinutes,
+  dogsNeedingCoverage,
   formatDate,
   formatMinutes,
   generateGroceryList,
@@ -107,9 +109,17 @@ import {
 } from "./utils";
 
 export function NotificationBell() {
-  const { tasks, feedback, healthEvents, milestones } = useStore();
+  const { tasks, feedback, healthEvents, milestones, calendarEvents, aloneTimeLogs, dogs } = useStore();
   const [open, setOpen] = useState(false);
-  const notifications = computeNotifications(tasks.items, feedback, healthEvents.items, milestones.items);
+  const notifications = computeNotifications(
+    tasks.items,
+    feedback,
+    healthEvents.items,
+    milestones.items,
+    calendarEvents.items,
+    dogs.items,
+    aloneTimeLogs.items,
+  );
   return (
     <div className="notification-wrap">
       <button className="icon-button" type="button" onClick={() => setOpen((prev) => !prev)} aria-label="Notifications">
@@ -132,6 +142,67 @@ export function NotificationBell() {
   );
 }
 
+/** "480" -> "8h", "30" -> "30m", "90" -> "1.5h" — precise enough to distinguish a
+ * puppy's 30-minute record from an adult dog's 8-hour one, unlike rounding to hours. */
+function formatAloneTimeMinutes(minutes: number): string {
+  if (minutes < 60) return `${Math.round(minutes)}m`;
+  const hours = minutes / 60;
+  return `${Number.isInteger(hours) ? hours : hours.toFixed(1)}h`;
+}
+
+/** Per-dog alone-time readiness — each dog tracks its own proven record and its own
+ * next coverage-needing event, since an adult dog and a puppy build tolerance at very
+ * different paces. Shared between Dashboard and Training. */
+function AloneTimeReadinessPanel({
+  dogs,
+  allDogIds,
+  aloneTimeLogs,
+  calendarEvents,
+  onLog,
+}: {
+  dogs: Dog[];
+  allDogIds: string[];
+  aloneTimeLogs: AloneTimeLog[];
+  calendarEvents: CalendarEvent[];
+  onLog: () => void;
+}) {
+  return (
+    <section className="panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Alone-time readiness</p>
+          <h2 style={{ fontSize: "1.1rem" }}>How long can each dog be left alone?</h2>
+        </div>
+        <button className="text-button" type="button" onClick={onLog}>
+          <Plus size={16} aria-hidden /> Log
+        </button>
+      </div>
+      {dogs.map((dog) => {
+        const readiness = computeDogAloneTimeReadiness(dog.id, allDogIds, aloneTimeLogs, calendarEvents);
+        return (
+          <div className="alone-time-readiness-row" key={dog.id}>
+            <div className="row between">
+              <strong>{dog.name}</strong>
+              <span>{formatAloneTimeMinutes(readiness.maxAchievedMinutes)} proven</span>
+            </div>
+            {readiness.nextEvent ? (
+              <p className={`readiness-note ${readiness.ready ? "ready" : "gap"}`}>
+                {readiness.ready
+                  ? `Already meets the ${formatAloneTimeMinutes(readiness.requiredMinutes)} needed for ${readiness.nextEvent.title}.`
+                  : `${readiness.nextEvent.title} on ${
+                      readiness.nextEvent.date ? formatDate(readiness.nextEvent.date) : "an upcoming date"
+                    } needs ${formatAloneTimeMinutes(readiness.requiredMinutes)} — ${formatAloneTimeMinutes(readiness.gapMinutes)} gap to close.`}
+              </p>
+            ) : (
+              <p className="small">Nothing upcoming leaves {dog.name} needing coverage.</p>
+            )}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 export function DashboardView() {
   const { tasks, feedback, milestones, dogs, completeTask, aloneTimeLogs, calendarEvents, journalEntries } = useStore();
   const adaptive = useAdaptivePlan(tasks.items, feedback);
@@ -143,7 +214,7 @@ export function DashboardView() {
   const puppy = dogs.items.find((dog) => dog.status === "puppy") ?? dogs.items[0];
   const currentMilestone =
     milestones.items.find((item) => item.status !== "completed" && item.dependencies.length > 0) ?? milestones.items[0];
-  const readiness = computeAloneTimeReadiness(aloneTimeLogs.items, calendarEvents.items);
+  const allDogIds = dogs.items.map((dog) => dog.id);
 
   function jumpTo(id: string) {
     const el = document.getElementById(id);
@@ -231,28 +302,13 @@ export function DashboardView() {
                 ))}
               </section>
             )}
-            <section className="panel">
-              <div className="section-heading">
-                <div>
-                  <p className="eyebrow">Alone-time readiness</p>
-                  <h2 style={{ fontSize: "1.1rem" }}>
-                    {readiness.nextEvent ? readiness.nextEvent.title : "Nothing upcoming needs coverage"}
-                  </h2>
-                </div>
-                <button className="text-button" type="button" onClick={() => setAloneTimeModal(true)}>
-                  <Plus size={16} aria-hidden /> Log
-                </button>
-              </div>
-              {readiness.nextEvent && (
-                <p className={`readiness-note ${readiness.ready ? "ready" : "gap"}`}>
-                  {readiness.ready
-                    ? `Logged max of ${Math.round(readiness.maxAchievedMinutes / 60)}h already meets the ${readiness.requiredMinutes / 60}h needed for ${readiness.nextEvent.title}.`
-                    : `Best logged so far is ${Math.round(readiness.maxAchievedMinutes / 60)}h, but ${readiness.nextEvent.title} on ${
-                        readiness.nextEvent.date ? formatDate(readiness.nextEvent.date) : "an upcoming date"
-                      } needs ${readiness.requiredMinutes / 60}h — ${Math.round(readiness.gapMinutes / 60)}h gap to close.`}
-                </p>
-              )}
-            </section>
+            <AloneTimeReadinessPanel
+              dogs={dogs.items}
+              allDogIds={allDogIds}
+              aloneTimeLogs={aloneTimeLogs.items}
+              calendarEvents={calendarEvents.items}
+              onLog={() => setAloneTimeModal(true)}
+            />
           </div>
         </div>
       </section>
@@ -260,6 +316,7 @@ export function DashboardView() {
       {aloneTimeModal && (
         <Modal title="Log alone time" onClose={() => setAloneTimeModal(false)}>
           <AloneTimeLogForm
+            dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
             onCancel={() => setAloneTimeModal(false)}
             onSubmit={(values) => {
               aloneTimeLogs.add(aloneTimeLogFormValuesToLog(values, makeId("alone")));
@@ -388,6 +445,9 @@ type AgendaItem = {
   state?: TaskState;
   healthEvent?: HealthEvent;
   calendarEvent?: CalendarEvent;
+  /** True when this calendar event needs more coverage than the dogs have proven
+   * they can handle and it hasn't been confirmed arranged yet — see computeEventCoverageNeeded. */
+  coverageNeeded: boolean;
 };
 
 function buildAgendaForDate(
@@ -397,8 +457,10 @@ function buildAgendaForDate(
   calendarEvents: CalendarEvent[],
   dogs: Dog[],
   instances: TaskInstance[],
+  aloneTimeLogs: AloneTimeLog[],
 ): AgendaItem[] {
   const dateKey = toDateKey(date);
+  const allDogIds = dogs.map((dog) => dog.id);
   const dogName = (id: string) => dogs.find((dog) => dog.id === id)?.name ?? id;
   const items: AgendaItem[] = [];
 
@@ -419,6 +481,7 @@ function buildAgendaForDate(
       task,
       date: dateKey,
       state: natural?.state ?? "not_started",
+      coverageNeeded: false,
     });
   });
 
@@ -441,6 +504,7 @@ function buildAgendaForDate(
         task: template,
         date: dateKey,
         state: instance.state,
+        coverageNeeded: false,
       });
     });
 
@@ -456,6 +520,7 @@ function buildAgendaForDate(
       placeholder: false,
       source: "health",
       healthEvent: event,
+      coverageNeeded: false,
     });
   });
 
@@ -472,6 +537,7 @@ function buildAgendaForDate(
       placeholder: event.status === "placeholder",
       source: "calendar",
       calendarEvent: event,
+      coverageNeeded: computeEventCoverageNeeded(event, allDogIds, aloneTimeLogs) && !event.coverageConfirmed,
     });
   });
 
@@ -483,16 +549,21 @@ function monthDaySummary(
   healthEvents: HealthEvent[],
   calendarEvents: CalendarEvent[],
   heavyWeekSet: Set<string>,
-): { count: number; heavy: boolean } {
+  allDogIds: string[],
+  aloneTimeLogs: AloneTimeLog[],
+): { count: number; heavy: boolean; needsCoverage: boolean } {
   const key = toDateKey(day);
   let count = 0;
+  let needsCoverage = false;
   healthEvents.forEach((event) => {
     if (event.date === key) count++;
   });
   calendarEvents.forEach((event) => {
-    if (generateOccurrences(event, day, day).length > 0) count++;
+    if (generateOccurrences(event, day, day).length === 0) return;
+    count++;
+    if (computeEventCoverageNeeded(event, allDogIds, aloneTimeLogs) && !event.coverageConfirmed) needsCoverage = true;
   });
-  return { count, heavy: heavyWeekSet.has(weekStartKey(key)) };
+  return { count, heavy: heavyWeekSet.has(weekStartKey(key)), needsCoverage };
 }
 
 // Assigns each item a track (column) and a trackCount scoped to its own cluster
@@ -558,6 +629,8 @@ function CalendarMonthGrid({
   healthEvents,
   calendarEvents,
   heavyWeekSet,
+  allDogIds,
+  aloneTimeLogs,
   onSelectDay,
 }: {
   cursor: Date;
@@ -565,6 +638,8 @@ function CalendarMonthGrid({
   healthEvents: HealthEvent[];
   calendarEvents: CalendarEvent[];
   heavyWeekSet: Set<string>;
+  allDogIds: string[];
+  aloneTimeLogs: AloneTimeLog[];
   onSelectDay: (date: Date) => void;
 }) {
   const days = monthGridDays(cursor);
@@ -576,13 +651,13 @@ function CalendarMonthGrid({
         </div>
       ))}
       {days.map((day, index) => {
-        const info = monthDaySummary(day, healthEvents, calendarEvents, heavyWeekSet);
+        const info = monthDaySummary(day, healthEvents, calendarEvents, heavyWeekSet, allDogIds, aloneTimeLogs);
         const inMonth = day.getMonth() === cursor.getMonth();
         return (
           <button
             key={index}
             type="button"
-            className={`month-cell ${inMonth ? "" : "outside"} ${isSameDay(day, today) ? "is-today" : ""} ${info.heavy ? "heavy-week" : ""}`}
+            className={`month-cell ${inMonth ? "" : "outside"} ${isSameDay(day, today) ? "is-today" : ""} ${info.heavy ? "heavy-week" : ""} ${info.needsCoverage ? "needs-coverage" : ""}`}
             onClick={() => onSelectDay(day)}
           >
             <span className="month-cell-date">{day.getDate()}</span>
@@ -591,6 +666,7 @@ function CalendarMonthGrid({
                 {Array.from({ length: Math.min(info.count, 5) }).map((_, dotIndex) => (
                   <span key={dotIndex} className="month-dot" />
                 ))}
+                {info.needsCoverage && <span className="month-dot coverage-dot" aria-label="Needs coverage arranged" />}
               </span>
             )}
           </button>
@@ -642,7 +718,7 @@ function CalendarWeekStrip({
                 <button
                   key={item.id}
                   type="button"
-                  className={`week-day-item ${item.placeholder ? "placeholder" : ""}`}
+                  className={`week-day-item ${item.placeholder ? "placeholder" : ""} ${item.coverageNeeded ? "needs-coverage" : ""}`}
                   onClick={() => openItem(item)}
                 >
                   {formatMinutes(item.startMinutes!)} · {item.title}
@@ -718,7 +794,7 @@ function CalendarDayAgenda({
             <button
               key={item.id}
               type="button"
-              className={`day-block ${item.source} ${item.placeholder ? "placeholder" : ""} ${shouldDim(item) ? "dimmed" : ""} state-${item.state ?? ""}`}
+              className={`day-block ${item.source} ${item.placeholder ? "placeholder" : ""} ${shouldDim(item) ? "dimmed" : ""} ${item.coverageNeeded ? "needs-coverage" : ""} state-${item.state ?? ""}`}
               style={{ top, height, width: `calc(${width}% - 6px)`, left: `${left}%` }}
               onClick={() => openItem(item)}
             >
@@ -942,10 +1018,28 @@ export function CalendarView() {
   const categoryFilteredEvents =
     categoryFilter.size === 0 ? calendarEvents.items : calendarEvents.items.filter((event) => categoryFilter.has(event.category));
 
-  const dayAgenda = buildAgendaForDate(cursorDate, categoryFilteredTasks, healthEvents.items, categoryFilteredEvents, dogs.items, taskInstances.items);
+  const allDogIds = dogs.items.map((dog) => dog.id);
+  const dogName = (id: string) => dogs.items.find((dog) => dog.id === id)?.name ?? id;
+  const dayAgenda = buildAgendaForDate(
+    cursorDate,
+    categoryFilteredTasks,
+    healthEvents.items,
+    categoryFilteredEvents,
+    dogs.items,
+    taskInstances.items,
+    aloneTimeLogs.items,
+  );
   const weekAgenda = weekDays(cursorDate).map((day) => ({
     day,
-    items: buildAgendaForDate(day, categoryFilteredTasks, healthEvents.items, categoryFilteredEvents, dogs.items, taskInstances.items),
+    items: buildAgendaForDate(
+      day,
+      categoryFilteredTasks,
+      healthEvents.items,
+      categoryFilteredEvents,
+      dogs.items,
+      taskInstances.items,
+      aloneTimeLogs.items,
+    ),
   }));
 
   const isGridMode = viewMode === "day" || viewMode === "week" || viewMode === "month";
@@ -966,8 +1060,7 @@ export function CalendarView() {
     .filter((event) => event.kind === "one-off")
     .slice()
     .sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999"));
-  const weeks = heavyWeeks(calendarEvents.items, aloneTimeLogs.items, addDays(today, -7), addDays(today, 365));
-  const aloneReadiness = computeAloneTimeReadiness(aloneTimeLogs.items, calendarEvents.items);
+  const weeks = heavyWeeks(calendarEvents.items, aloneTimeLogs.items, allDogIds, addDays(today, -7), addDays(today, 365));
 
   return (
     <section className="panel">
@@ -1081,6 +1174,8 @@ export function CalendarView() {
               healthEvents={healthEvents.items}
               calendarEvents={categoryFilteredEvents}
               heavyWeekSet={weeks}
+              allDogIds={allDogIds}
+              aloneTimeLogs={aloneTimeLogs.items}
               onSelectDay={selectDay}
             />
           )}
@@ -1149,8 +1244,11 @@ export function CalendarView() {
                     Rover × {event.roverVisits} visit{event.roverVisits === 1 ? "" : "s"}
                   </small>
                 )}
-                {computeEventCoverageNeeded(event, aloneReadiness.maxAchievedMinutes) && (
-                  <small className="rover-tag">Needs coverage arranged</small>
+                {computeEventCoverageNeeded(event, allDogIds, aloneTimeLogs.items) && (
+                  <small className="rover-tag">
+                    Needs coverage arranged{" "}
+                    {dogsNeedingCoverage(event, allDogIds).map((id) => dogName(id)).join(" & ")}
+                  </small>
                 )}
                 <small>{event.notes}</small>
                 {(event.prepSteps?.length || event.roverInstructions?.length || event.postSteps?.length) && (
@@ -1201,6 +1299,7 @@ export function CalendarView() {
             initial={eventModal === "new" ? undefined : eventModal.event}
             peopleOptions={people.items.map((person) => ({ id: person.id, name: person.name }))}
             dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
+            aloneTimeLogs={aloneTimeLogs.items}
             onCancel={() => setEventModal(null)}
             onSubmit={(values) =>
               eventModal === "new"
@@ -1454,13 +1553,16 @@ function ExposureGrid({ category }: { category: ExposureCategory }) {
 }
 
 export function TrainingView() {
-  const { milestones } = useStore();
-  const [tab, setTab] = useState<"obedience" | ExposureCategory>("obedience");
+  const { milestones, dogs, aloneTimeLogs, calendarEvents } = useStore();
+  const [tab, setTab] = useState<"obedience" | ExposureCategory | "alone-time">("obedience");
+  const [aloneTimeModal, setAloneTimeModal] = useState(false);
+  const allDogIds = dogs.items.map((dog) => dog.id);
   const tabs: { id: typeof tab; label: string }[] = [
     { id: "obedience", label: "Obedience" },
     { id: "socialization", label: "Socialization" },
     { id: "confidence", label: "Confidence" },
     { id: "handling", label: "Handling" },
+    { id: "alone-time", label: "Alone Time" },
   ];
   return (
     <div className="stack">
@@ -1480,7 +1582,28 @@ export function TrainingView() {
             ))}
         </section>
       )}
-      {tab !== "obedience" && <ExposureGrid category={tab} />}
+      {tab === "alone-time" && (
+        <AloneTimeReadinessPanel
+          dogs={dogs.items}
+          allDogIds={allDogIds}
+          aloneTimeLogs={aloneTimeLogs.items}
+          calendarEvents={calendarEvents.items}
+          onLog={() => setAloneTimeModal(true)}
+        />
+      )}
+      {tab !== "obedience" && tab !== "alone-time" && <ExposureGrid category={tab} />}
+      {aloneTimeModal && (
+        <Modal title="Log alone time" onClose={() => setAloneTimeModal(false)}>
+          <AloneTimeLogForm
+            dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
+            onCancel={() => setAloneTimeModal(false)}
+            onSubmit={(values) => {
+              aloneTimeLogs.add(aloneTimeLogFormValuesToLog(values, makeId("alone")));
+              setAloneTimeModal(false);
+            }}
+          />
+        </Modal>
+      )}
     </div>
   );
 }

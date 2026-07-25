@@ -1067,6 +1067,19 @@ textarea:focus-visible,
   color: var(--teal);
 }
 
+.coverage-tag {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-weight: 800;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  background: var(--gold);
+  color: var(--green);
+}
+
 .event.downtime {
   border-style: dotted;
 }
@@ -1473,6 +1486,14 @@ textarea:focus-visible,
   border-color: var(--coral);
 }
 
+.month-cell.needs-coverage {
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+
+.month-dot.coverage-dot {
+  background: var(--gold);
+}
+
 .month-cell-date {
   font-weight: 700;
 }
@@ -1549,6 +1570,13 @@ textarea:focus-visible,
 
 .week-day-item.placeholder {
   font-style: italic;
+}
+
+.week-day-item.needs-coverage {
+  box-shadow: inset 3px 0 0 var(--gold);
+  padding-left: 6px;
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .week-day-more {
@@ -1647,6 +1675,19 @@ textarea:focus-visible,
 
 .day-block.calendar {
   border-left: 4px solid var(--blue);
+}
+
+.day-block.needs-coverage {
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+
+.day-block.needs-coverage::after {
+  content: "\26A0";
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 0.7rem;
+  color: var(--gold);
 }
 
 .day-block.placeholder {
@@ -1984,6 +2025,24 @@ textarea:focus-visible,
 .form-error {
   color: var(--coral);
   font-weight: 400;
+}
+
+.coverage-confirm {
+  border: 1px solid var(--gold);
+  background: rgba(214, 166, 87, 0.1);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.checkbox-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
 }
 
 .form-success {
