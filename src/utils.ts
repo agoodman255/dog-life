@@ -1,23 +1,26 @@
 import { useMemo } from "react";
 import {
   AloneTimeLog,
-  CalendarEvent,
+  Category,
+  ChecklistItemDef,
   ChecklistItemValue,
   DailyFeedback,
   DayOfWeek,
   Dog,
   GroceryListItem,
-  HealthEvent,
   InventoryItem,
+  Item,
+  ItemIntent,
+  ItemState,
+  LogFieldDef,
+  LogFieldValue,
   Meal,
   Milestone,
   NotificationItem,
   RecipeIngredient,
-  Task,
-  TaskState,
 } from "./types";
 
-export const taskStateLabels: Record<TaskState, string> = {
+export const itemStateLabels: Record<ItemState, string> = {
   not_started: "Not started",
   in_progress: "In progress",
   completed: "Completed",
@@ -27,19 +30,128 @@ export const taskStateLabels: Record<TaskState, string> = {
   reassigned: "Reassigned",
 };
 
-/** Builds the default (all-empty) checklist values for a task instance from its
- * template — used both when a lifecycle action first materializes an instance
- * and when the End Task review step needs a starting point to edit. */
-export function buildDefaultChecklist(template: Task): ChecklistItemValue[] {
-  if (template.checklistSchema && template.checklistSchema.length > 0) {
-    return template.checklistSchema.map((def) => ({
-      itemName: def.itemName,
-      dataType: def.dataType,
-      value: def.dataType === "boolean" ? false : def.dataType === "free_text" ? "" : 0,
-      notes: "",
-    }));
+/** What each Add-menu preset turns on, and the plain-language promise shown on the
+ * button. Presets exist so the choice at creation time is "what am I doing?" rather
+ * than "which of three data types is this?" — the old framing nobody could follow. */
+export const ITEM_INTENT_PRESETS: {
+  id: ItemIntent;
+  label: string;
+  blurb: string;
+  requiresCompletion: boolean;
+  requiresLog: boolean;
+  defaultCategory: Category;
+  defaultKind: "recurring" | "one-off";
+}[] = [
+  {
+    id: "routine",
+    label: "Routine or to-do",
+    blurb: "You check it off. Asks for a checklist and a score when you finish.",
+    requiresCompletion: true,
+    requiresLog: false,
+    defaultCategory: "potty",
+    defaultKind: "recurring",
+  },
+  {
+    id: "event",
+    label: "Event",
+    blurb: "Just goes on the calendar. Nothing to complete, nothing to log.",
+    requiresCompletion: false,
+    requiresLog: false,
+    defaultCategory: "social",
+    defaultKind: "one-off",
+  },
+  {
+    id: "training",
+    label: "Training session",
+    blurb: "Check off each step and log how it went — feeds milestone progress.",
+    requiresCompletion: true,
+    requiresLog: true,
+    defaultCategory: "training",
+    defaultKind: "recurring",
+  },
+  {
+    id: "appointment",
+    label: "Appointment",
+    blurb: "Vet, groomer, anything you record details from afterwards.",
+    requiresCompletion: false,
+    requiresLog: true,
+    defaultCategory: "vet",
+    defaultKind: "one-off",
+  },
+  {
+    id: "health-record",
+    label: "Health record",
+    blurb: "A weight, a dose, a vaccine — logged data, no scheduling needed.",
+    requiresCompletion: false,
+    requiresLog: true,
+    defaultCategory: "health",
+    defaultKind: "one-off",
+  },
+];
+
+/** Structured fields an item starts with when you turn logging on, keyed by
+ * category. Only a starting point — the form lets you add/remove rows. Anything
+ * without an entry here logs free text only, which is the honest default: most
+ * categories have no obvious numbers worth prompting for. */
+export const DEFAULT_LOG_FIELDS: Partial<Record<Category, LogFieldDef[]>> = {
+  vet: [
+    { fieldName: "Weight", dataType: "number", unit: "lbs" },
+    { fieldName: "Temperature", dataType: "number", unit: "°F" },
+    { fieldName: "Cost", dataType: "number", unit: "$" },
+    { fieldName: "Next due", dataType: "date" },
+  ],
+  vaccine: [
+    { fieldName: "Vaccine name", dataType: "text" },
+    { fieldName: "Next due", dataType: "date" },
+    { fieldName: "Cost", dataType: "number", unit: "$" },
+  ],
+  medication: [
+    { fieldName: "Dose", dataType: "text" },
+    { fieldName: "Cost", dataType: "number", unit: "$" },
+  ],
+  grooming: [
+    { fieldName: "Weight", dataType: "number", unit: "lbs" },
+    { fieldName: "Cost", dataType: "number", unit: "$" },
+  ],
+  health: [
+    { fieldName: "Weight", dataType: "number", unit: "lbs" },
+    { fieldName: "Cost", dataType: "number", unit: "$" },
+  ],
+  training: [{ fieldName: "Reps", dataType: "number" }],
+  meals: [{ fieldName: "Amount eaten", dataType: "text" }],
+  "alone-time": [{ fieldName: "Duration", dataType: "number", unit: "min" }],
+};
+
+export function defaultLogFieldsFor(category: Category): LogFieldDef[] {
+  return (DEFAULT_LOG_FIELDS[category] ?? []).map((field) => ({ ...field }));
+}
+
+export function emptyLogValues(fields: LogFieldDef[]): LogFieldValue[] {
+  return fields.map((field) => ({ fieldName: field.fieldName, dataType: field.dataType, unit: field.unit, value: null }));
+}
+
+/** The checklist definition an item actually runs, which is either its own
+ * hand-typed rows or — when linked to a milestone — that milestone's steps. Keeping
+ * this derived rather than copied means editing the milestone updates every item
+ * pulling from it, instead of leaving stale duplicates behind. */
+export function resolveChecklistDefs(item: Item, milestones: Milestone[]): ChecklistItemDef[] {
+  if (item.checklistSourceMilestoneId) {
+    const milestone = milestones.find((entry) => entry.id === item.checklistSourceMilestoneId);
+    if (milestone) return milestone.steps.map((step) => ({ itemName: step.title, dataType: "boolean" as const }));
   }
-  return template.checklist.map((item) => ({ itemName: item, dataType: "boolean" as const, value: false, notes: "" }));
+  return item.checklist;
+}
+
+/** Builds the default (all-empty) checklist values for an occurrence — used both
+ * when a lifecycle action first materializes one and when the completion review
+ * step needs a starting point to edit. */
+export function buildDefaultChecklist(item: Item, milestones: Milestone[] = []): ChecklistItemValue[] {
+  return resolveChecklistDefs(item, milestones).map((def) => ({
+    itemName: def.itemName,
+    dataType: def.dataType,
+    value: def.dataType === "boolean" ? false : def.dataType === "free_text" ? "" : 0,
+    notes: "",
+  }));
 }
 
 // `new Date("2026-08-01")` parses as UTC midnight per spec, which renders as
@@ -132,23 +244,24 @@ export function readinessScore(
   return Math.max(5, Math.min(98, Math.round(base + skillBonus + vaccineBonus - dampener)));
 }
 
-export function useAdaptivePlan(tasks: Task[], feedback: DailyFeedback[]) {
+export function useAdaptivePlan(items: Item[], feedback: DailyFeedback[]) {
   return useMemo(() => {
     const hardDays = feedback.slice(-6).filter((item) => item.rating <= 2 || item.fear || item.guarding).length;
     const optionalLimit = hardDays >= 3 ? 1 : 3;
     const completed = new Set(feedback.filter((item) => item.completed).map((item) => item.taskId));
-    const visibleTasks = tasks
-      .filter((task) => task.priority !== "optional" || optionalLimit > 1 || completed.has(task.id))
+    const visibleTasks = items
+      .filter((item) => item.requiresCompletion)
+      .filter((item) => item.priority !== "optional" || optionalLimit > 1 || completed.has(item.id))
       .slice()
       .sort((a, b) => {
         const aDone = completed.has(a.id);
         const bDone = completed.has(b.id);
         if (aDone !== bDone) return aDone ? 1 : -1;
-        return (parseTimeLabel(a.time) ?? 0) - (parseTimeLabel(b.time) ?? 0);
+        return (parseTimeLabel(a.startTime ?? "") ?? 0) - (parseTimeLabel(b.startTime ?? "") ?? 0);
       });
     const trainingMinutes = visibleTasks
-      .filter((task) => task.category === "training" || task.category === "handling" || task.category === "relationship")
-      .reduce((sum, task) => sum + task.duration, 0);
+      .filter((item) => item.category === "training" || item.category === "handling" || item.category === "relationship")
+      .reduce((sum, item) => sum + itemDurationMinutes(item), 0);
     return {
       hardDays,
       optionalLimit,
@@ -162,7 +275,14 @@ export function useAdaptivePlan(tasks: Task[], feedback: DailyFeedback[]) {
           ? "Several difficult logs were detected, so tomorrow should protect essentials and reduce optional training."
           : "Today is balanced: short structured sessions, relationship care, and essential health routines stay visible.",
     };
-  }, [tasks, feedback]);
+  }, [items, feedback]);
+}
+
+/** Minutes an item occupies. Items store hours (the calendar's unit) but tasks were
+ * always authored in minutes, so every duration read goes through here rather than
+ * scattering `* 60` across callsites. */
+export function itemDurationMinutes(item: Pick<Item, "durationHours">): number {
+  return Math.round((item.durationHours ?? 0) * 60);
 }
 
 export function weekStart(dateStr: string): string {
@@ -175,7 +295,7 @@ export function weekStart(dateStr: string): string {
  * an occurrence that week, keyed by the week's Sunday (YYYY-MM-DD). Only counts events
  * with aloneTimeRequired !== "no" — "all" uses the event's own duration, "partial" uses
  * the user-entered aloneTimeRequiredAmount, mirroring computeEventCoverageNeeded. */
-export function weeklyAloneTimeLoadMinutes(events: CalendarEvent[], rangeStart: Date, rangeEnd: Date): Map<string, number> {
+export function weeklyAloneTimeLoadMinutes(events: Item[], rangeStart: Date, rangeEnd: Date): Map<string, number> {
   const byWeek = new Map<string, number>();
   events.forEach((event) => {
     if (event.aloneTimeRequired === "no") return;
@@ -200,7 +320,7 @@ export function dogAloneTimeReadinessMinutes(dogId: string, logs: AloneTimeLog[]
 /** Which dog(s) this event actually leaves home alone: every dog NOT tagged in
  * dogIds ("dogs involved"/attending), when the event needs any coverage at all.
  * Empty when coverage isn't required or every dog is attending. */
-export function dogsNeedingCoverage(event: Pick<CalendarEvent, "aloneTimeRequired" | "dogIds">, allDogIds: string[]): string[] {
+export function dogsNeedingCoverage(event: Pick<Item, "aloneTimeRequired" | "dogIds">, allDogIds: string[]): string[] {
   if (event.aloneTimeRequired === "no") return [];
   const involved = new Set(event.dogIds ?? []);
   return allDogIds.filter((id) => !involved.has(id));
@@ -214,7 +334,7 @@ export function dogsNeedingCoverage(event: Pick<CalendarEvent, "aloneTimeRequire
 // counts as busy for the household. Replaces the old manual "importance: marquee"
 // checkbox — this one formula now drives every heavy/busy-week indicator in the app
 // (Month view highlighting, Upcoming list tags).
-export function heavyWeeks(events: CalendarEvent[], logs: AloneTimeLog[], allDogIds: string[], rangeStart: Date, rangeEnd: Date): Set<string> {
+export function heavyWeeks(events: Item[], logs: AloneTimeLog[], allDogIds: string[], rangeStart: Date, rangeEnd: Date): Set<string> {
   const readinessMinutes = allDogIds.length > 0 ? Math.min(...allDogIds.map((id) => dogAloneTimeReadinessMinutes(id, logs))) : 0;
   const weeklyBudgetMinutes = readinessMinutes * 7;
   const byWeek = weeklyAloneTimeLoadMinutes(events, rangeStart, rangeEnd);
@@ -225,7 +345,7 @@ export function heavyWeeks(events: CalendarEvent[], logs: AloneTimeLog[], allDog
   return heavy;
 }
 
-export function isHeavyWeek(event: CalendarEvent, weeks: Set<string>): boolean {
+export function isHeavyWeek(event: Item, weeks: Set<string>): boolean {
   return !!event.date && weeks.has(weekStart(event.date));
 }
 
@@ -239,10 +359,10 @@ export function dayOfWeekName(date: Date): DayOfWeek {
 
 /** Every date (as YYYY-MM-DD keys) this event occurs on within [rangeStart, rangeEnd],
  * inclusive, respecting excludedDates. The single source of truth for expanding a
- * CalendarEvent into occurrences — replaces the old per-callsite dayOfWeek/activeFrom/
+ * Item into occurrences — replaces the old per-callsite dayOfWeek/activeFrom/
  * activeTo checks. Recurring series are walked from `recurrence.startDate` every call
  * (not incrementally cached), capped at ITER_CAP periods as a safety bound. */
-export function generateOccurrences(event: CalendarEvent, rangeStart: Date, rangeEnd: Date): string[] {
+export function generateOccurrences(event: Item, rangeStart: Date, rangeEnd: Date): string[] {
   const rangeStartKey = toDateKey(rangeStart);
   const rangeEndKey = toDateKey(rangeEnd);
   const excluded = new Set(event.excludedDates ?? []);
@@ -336,7 +456,7 @@ export function computeEventTimes(input: {
  * least-tolerant member) — a global rule computed from whichever dogs are actually
  * involved, never a hardcoded dog. */
 export function computeEventCoverageNeeded(
-  event: Pick<CalendarEvent, "aloneTimeRequired" | "aloneTimeRequiredAmount" | "durationHours" | "dogIds">,
+  event: Pick<Item, "aloneTimeRequired" | "aloneTimeRequiredAmount" | "durationHours" | "dogIds">,
   allDogIds: string[],
   logs: AloneTimeLog[],
 ): boolean {
@@ -431,7 +551,7 @@ export function to24Hour(label: string): string {
 
 export type AloneTimeReadiness = {
   maxAchievedMinutes: number;
-  nextEvent: CalendarEvent | null;
+  nextEvent: Item | null;
   requiredMinutes: number;
   gapMinutes: number;
   ready: boolean;
@@ -441,7 +561,7 @@ export type AloneTimeReadiness = {
  * that actually leaves THEM home alone (i.e. this dog is in dogsNeedingCoverage for
  * it) — not just any event with coverage required, since an event either dog is
  * attending doesn't apply to the one staying home. */
-export function computeDogAloneTimeReadiness(dogId: string, allDogIds: string[], logs: AloneTimeLog[], events: CalendarEvent[]): AloneTimeReadiness {
+export function computeDogAloneTimeReadiness(dogId: string, allDogIds: string[], logs: AloneTimeLog[], events: Item[]): AloneTimeReadiness {
   const maxAchievedMinutes = dogAloneTimeReadinessMinutes(dogId, logs);
   const now = Date.now();
   const upcoming = events
@@ -458,51 +578,59 @@ export function computeDogAloneTimeReadiness(dogId: string, allDogIds: string[],
   return { maxAchievedMinutes, nextEvent, requiredMinutes, gapMinutes, ready: requiredMinutes > 0 && gapMinutes === 0 };
 }
 
+/** Categories that represent a dog's health record rather than general household
+ * life — drives the Health tab's lens and the overdue/upcoming health warnings. */
+export const HEALTH_CATEGORIES: Category[] = ["health", "vet", "vaccine", "medication", "grooming"];
+
+export function isHealthItem(item: Pick<Item, "category">): boolean {
+  return HEALTH_CATEGORIES.includes(item.category);
+}
+
 export function computeNotifications(
-  tasks: Task[],
+  items: Item[],
   feedback: DailyFeedback[],
-  healthEvents: HealthEvent[],
   milestones: Milestone[],
-  calendarEvents: CalendarEvent[],
   dogs: Pick<Dog, "id" | "name">[],
   aloneTimeLogs: AloneTimeLog[],
 ): NotificationItem[] {
   const notifications: NotificationItem[] = [];
   const now = new Date();
-  const completedTaskIds = new Set(feedback.filter((item) => item.completed).map((item) => item.taskId));
+  const completedItemIds = new Set(feedback.filter((item) => item.completed).map((item) => item.taskId));
 
-  tasks.forEach((task) => {
-    if (task.priority === "essential" && !completedTaskIds.has(task.id)) {
+  items.forEach((item) => {
+    if (!item.requiresCompletion) return;
+    if (item.priority === "essential" && !completedItemIds.has(item.id)) {
       notifications.push({
-        id: `overdue-${task.id}`,
+        id: `overdue-${item.id}`,
         kind: "overdue-task",
-        title: `${task.title} is not logged yet`,
-        detail: `Essential task assigned at ${task.time}.`,
+        title: `${item.title} is not logged yet`,
+        detail: `Essential item assigned at ${item.startTime ?? "no set time"}.`,
         date: now.toISOString(),
         severity: "warning",
       });
     }
   });
 
-  healthEvents.forEach((event) => {
-    const eventDate = parseLocalDate(event.date);
-    const daysAway = Math.ceil((eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  items.forEach((item) => {
+    if (!isHealthItem(item) || !item.date) return;
+    const itemDate = parseLocalDate(item.date);
+    const daysAway = Math.ceil((itemDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     if (daysAway < 0) {
       notifications.push({
-        id: `overdue-health-${event.id}`,
+        id: `overdue-health-${item.id}`,
         kind: "upcoming-health",
-        title: `${event.title} is overdue`,
-        detail: `${event.kind} was due ${eventDate.toLocaleDateString()}.`,
-        date: event.date,
+        title: `${item.title} is overdue`,
+        detail: `${item.category} was due ${itemDate.toLocaleDateString()}.`,
+        date: item.date,
         severity: "critical",
       });
     } else if (daysAway <= 3) {
       notifications.push({
-        id: `upcoming-health-${event.id}`,
+        id: `upcoming-health-${item.id}`,
         kind: "upcoming-health",
-        title: `${event.title} coming up`,
-        detail: `${event.kind} scheduled ${eventDate.toLocaleDateString()}.`,
-        date: event.date,
+        title: `${item.title} coming up`,
+        detail: `${item.category} scheduled ${itemDate.toLocaleDateString()}.`,
+        date: item.date,
         severity: "info",
       });
     }
@@ -529,7 +657,7 @@ export function computeNotifications(
   const allDogIds = dogs.map((dog) => dog.id);
   const dogName = (id: string) => dogs.find((dog) => dog.id === id)?.name ?? id;
   const sevenDaysOut = addDays(now, 7);
-  calendarEvents.forEach((event) => {
+  items.forEach((event) => {
     if (event.coverageConfirmed) return;
     if (!computeEventCoverageNeeded(event, allDogIds, aloneTimeLogs)) return;
     const needing = dogsNeedingCoverage(event, allDogIds).map(dogName).join(" & ");
@@ -565,13 +693,11 @@ export function isExpired(item: InventoryItem): boolean {
 
 /** Rough total-scheduled-minutes for a day, used to warn when assigning a meal
  * with a long combined prep+cook time to an already-packed evening. */
-export function dayLoadMinutes(dateKey: string, tasks: Task[], calendarEvents: CalendarEvent[]): number {
-  const taskMinutes = tasks.reduce((sum, task) => sum + task.duration, 0);
+export function dayLoadMinutes(dateKey: string, items: Item[]): number {
   const day = parseLocalDate(dateKey);
-  const eventMinutes = calendarEvents
-    .filter((event) => generateOccurrences(event, day, day).length > 0)
-    .reduce((sum, event) => sum + (event.durationHours ?? 0) * 60, 0);
-  return taskMinutes + eventMinutes;
+  return items
+    .filter((item) => generateOccurrences(item, day, day).length > 0)
+    .reduce((sum, item) => sum + itemDurationMinutes(item), 0);
 }
 
 /** Diffs the ingredients needed for meals planned within `dateKeys` against

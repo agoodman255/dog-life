@@ -30,29 +30,25 @@ import {
   ProgressBar,
   Sparkline,
   TaskCard,
-  TaskDetailModal,
+  ItemDetailModal,
   TimezonePicker,
 } from "./components";
 import { Modal } from "./components";
 import {
   AloneTimeLogForm,
-  CalendarEventForm,
   DogForm,
   ExposureLogForm,
-  HealthEventForm,
+  ItemForm,
   JournalForm,
   PersonForm,
   RelationshipLogForm,
-  TaskForm,
   CATEGORY_LABELS,
   CATEGORY_OPTIONS,
   aloneTimeLogFormValuesToLog,
-  calendarEventFormValuesToEvent,
   dogFormValuesToDog,
-  healthEventFormValuesToEvent,
+  itemFormValuesToItem,
   journalFormValuesToEntry,
   relationshipLogFormValuesToLog,
-  taskFormValuesToTask,
 } from "./forms";
 import { makeId, useStore } from "./store";
 import { useNavigation } from "./navigation";
@@ -60,22 +56,21 @@ import { setPassword as setAccountPassword, signOut, useSession } from "./auth";
 import { isBackendConfigured } from "./supabaseClient";
 import {
   AloneTimeLog,
-  CalendarEvent,
-  CalendarEventDeletionScope,
   Category,
   Dog,
   ExposureCategory,
   ExposureItem,
   FeedbackLoopRule,
-  HealthEvent,
   InboxRequest,
   InventoryItem,
+  Item,
+  ItemDeletionScope,
+  ItemIntent,
+  ItemOccurrence,
+  ItemState,
   Milestone,
   NotificationItem,
   Recurrence,
-  Task,
-  TaskInstance,
-  TaskState,
 } from "./types";
 import {
   addDays,
@@ -100,8 +95,11 @@ import {
   monthGridDays,
   parseLocalDate,
   parseTimeLabel,
+  isHealthItem,
+  itemDurationMinutes,
+  itemStateLabels,
+  ITEM_INTENT_PRESETS,
   readinessScore,
-  taskStateLabels,
   toDateKey,
   useAdaptivePlan,
   weekDays,
@@ -110,19 +108,11 @@ import {
 } from "./utils";
 
 export function NotificationBell() {
-  const { tasks, feedback, healthEvents, milestones, calendarEvents, aloneTimeLogs, dogs } = useStore();
+  const { items, feedback, milestones, aloneTimeLogs, dogs } = useStore();
   const [open, setOpen] = useState(false);
   const [panelPos, setPanelPos] = useState<{ top: number; right: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const notifications = computeNotifications(
-    tasks.items,
-    feedback,
-    healthEvents.items,
-    milestones.items,
-    calendarEvents.items,
-    dogs.items,
-    aloneTimeLogs.items,
-  );
+  const notifications = computeNotifications(items.items, feedback, milestones.items, dogs.items, aloneTimeLogs.items);
 
   function toggleOpen() {
     if (!open && buttonRef.current) {
@@ -178,7 +168,7 @@ function AloneTimeReadinessPanel({
   dogs: Dog[];
   allDogIds: string[];
   aloneTimeLogs: AloneTimeLog[];
-  calendarEvents: CalendarEvent[];
+  calendarEvents: Item[];
   onLog: () => void;
 }) {
   return (
@@ -219,10 +209,10 @@ function AloneTimeReadinessPanel({
 }
 
 export function DashboardView() {
-  const { tasks, feedback, milestones, dogs, completeTask, aloneTimeLogs, calendarEvents, journalEntries } = useStore();
-  const adaptive = useAdaptivePlan(tasks.items, feedback);
+  const { items, feedback, milestones, dogs, completeTask, aloneTimeLogs, journalEntries } = useStore();
+  const adaptive = useAdaptivePlan(items.items, feedback);
   const feedbackByTask = new Map(feedback.map((item) => [item.taskId, item]));
-  const [detailTask, setDetailTask] = useState<Task | null>(null);
+  const [detailTask, setDetailTask] = useState<Item | null>(null);
   const [aloneTimeModal, setAloneTimeModal] = useState(false);
   const [quickLogModal, setQuickLogModal] = useState(false);
   const todayKey = toDateKey(new Date());
@@ -282,7 +272,7 @@ export function DashboardView() {
               />
             ))}
           </div>
-          {detailTask && <TaskDetailModal task={detailTask} date={todayKey} onClose={() => setDetailTask(null)} />}
+          {detailTask && <ItemDetailModal task={detailTask} date={todayKey} onClose={() => setDetailTask(null)} />}
         </div>
 
         <div className="stack">
@@ -321,7 +311,7 @@ export function DashboardView() {
               dogs={dogs.items}
               allDogIds={allDogIds}
               aloneTimeLogs={aloneTimeLogs.items}
-              calendarEvents={calendarEvents.items}
+              calendarEvents={items.items}
               onLog={() => setAloneTimeModal(true)}
             />
           </div>
@@ -452,117 +442,73 @@ type AgendaItem = {
   dogNames: string;
   priority?: string;
   placeholder: boolean;
-  source: "task" | "health" | "calendar";
-  task?: Task;
-  /** The date (YYYY-MM-DD) this task item is being rendered for — needed to
-   * resolve the right TaskInstance, since a template has no date of its own. */
-  date?: string;
-  state?: TaskState;
-  healthEvent?: HealthEvent;
-  calendarEvent?: CalendarEvent;
-  /** True when this calendar event needs more coverage than the dogs have proven
-   * they can handle and it hasn't been confirmed arranged yet — see computeEventCoverageNeeded. */
+  item: Item;
+  /** The date (YYYY-MM-DD) this is being rendered for — needed to resolve the right
+   * ItemOccurrence, since a recurring item has no date of its own. */
+  date: string;
+  /** Only meaningful when item.requiresCompletion. */
+  state?: ItemState;
+  /** True when this needs more coverage than the dogs have proven they can handle
+   * and it hasn't been confirmed arranged yet — see computeEventCoverageNeeded. */
   coverageNeeded: boolean;
 };
 
+// One loop now, where there used to be four: tasks, rescheduled task instances,
+// health events, and calendar events each had their own block producing subtly
+// different agenda rows. Unifying the type collapsed all of that into a single
+// occurrence expansion, which is most of why recurrence and completion finally
+// work on the same object.
 function buildAgendaForDate(
   date: Date,
-  tasks: Task[],
-  healthEvents: HealthEvent[],
-  calendarEvents: CalendarEvent[],
+  items: Item[],
   dogs: Dog[],
-  instances: TaskInstance[],
+  occurrences: ItemOccurrence[],
   aloneTimeLogs: AloneTimeLog[],
 ): AgendaItem[] {
   const dateKey = toDateKey(date);
   const allDogIds = dogs.map((dog) => dog.id);
   const dogName = (id: string) => dogs.find((dog) => dog.id === id)?.name ?? id;
-  const items: AgendaItem[] = [];
+  const agenda: AgendaItem[] = [];
 
-  tasks.forEach((task) => {
-    const natural = instances.find((instance) => instance.templateId === task.id && instance.originalDate === dateKey);
+  function push(item: Item, occurrence: ItemOccurrence | undefined, rescheduled: boolean) {
+    agenda.push({
+      id: `item-${item.id}-${dateKey}${rescheduled ? "-rescheduled" : ""}`,
+      title: rescheduled ? `${item.title} (rescheduled)` : item.title,
+      category: item.category,
+      startMinutes: parseTimeLabel(occurrence?.scheduledTime || item.startTime || ""),
+      durationMinutes: itemDurationMinutes(item) || 60,
+      assignedTo: occurrence?.assignedTo ?? item.assignedTo,
+      dogNames: (item.dogIds ?? []).map(dogName).join(" & "),
+      priority: item.priority,
+      placeholder: item.status === "placeholder",
+      item,
+      date: dateKey,
+      state: item.requiresCompletion ? (occurrence?.state ?? "not_started") : undefined,
+      coverageNeeded: computeEventCoverageNeeded(item, allDogIds, aloneTimeLogs) && !item.coverageConfirmed,
+    });
+  }
+
+  items.forEach((item) => {
+    if (generateOccurrences(item, date, date).length === 0) return;
+    const natural = occurrences.find((entry) => entry.itemId === item.id && entry.originalDate === dateKey);
     if (natural && natural.date !== dateKey) return; // rescheduled away from this date
-    items.push({
-      id: `task-${task.id}-${dateKey}`,
-      title: task.title,
-      category: task.category,
-      startMinutes: parseTimeLabel(natural?.scheduledTime ?? task.time),
-      durationMinutes: task.duration,
-      assignedTo: natural?.assignedTo ?? task.assignedTo,
-      dogNames: task.dogIds.map(dogName).join(" & "),
-      priority: task.priority,
-      placeholder: false,
-      source: "task",
-      task,
-      date: dateKey,
-      state: natural?.state ?? "not_started",
-      coverageNeeded: false,
-    });
+    push(item, natural, false);
   });
 
-  instances
-    .filter((instance) => instance.date === dateKey && instance.originalDate !== dateKey)
-    .forEach((instance) => {
-      const template = tasks.find((item) => item.id === instance.templateId);
-      if (!template) return;
-      items.push({
-        id: `task-${template.id}-${dateKey}-rescheduled`,
-        title: `${template.title} (rescheduled)`,
-        category: template.category,
-        startMinutes: parseTimeLabel(instance.scheduledTime),
-        durationMinutes: template.duration,
-        assignedTo: instance.assignedTo,
-        dogNames: template.dogIds.map(dogName).join(" & "),
-        priority: template.priority,
-        placeholder: false,
-        source: "task",
-        task: template,
-        date: dateKey,
-        state: instance.state,
-        coverageNeeded: false,
-      });
+  occurrences
+    .filter((entry) => entry.date === dateKey && entry.originalDate !== dateKey)
+    .forEach((entry) => {
+      const item = items.find((candidate) => candidate.id === entry.itemId);
+      if (!item) return;
+      push(item, entry, true);
     });
 
-  healthEvents.forEach((event) => {
-    if (event.date !== dateKey) return;
-    items.push({
-      id: `health-${event.id}`,
-      title: event.title,
-      category: event.kind,
-      startMinutes: parseTimeLabel(event.notes),
-      durationMinutes: 60,
-      dogNames: dogName(event.dogId),
-      placeholder: false,
-      source: "health",
-      healthEvent: event,
-      coverageNeeded: false,
-    });
-  });
-
-  calendarEvents.forEach((event) => {
-    if (generateOccurrences(event, date, date).length === 0) return;
-    items.push({
-      id: `event-${event.id}-${dateKey}`,
-      title: event.title,
-      category: event.category,
-      startMinutes: event.startTime ? parseTimeLabel(event.startTime) : null,
-      durationMinutes: (event.durationHours ?? 1) * 60,
-      dogNames: (event.dogIds ?? []).map(dogName).join(" & "),
-      date: dateKey,
-      placeholder: event.status === "placeholder",
-      source: "calendar",
-      calendarEvent: event,
-      coverageNeeded: computeEventCoverageNeeded(event, allDogIds, aloneTimeLogs) && !event.coverageConfirmed,
-    });
-  });
-
-  return items;
+  return agenda;
 }
 
 function monthDaySummary(
   day: Date,
-  healthEvents: HealthEvent[],
-  calendarEvents: CalendarEvent[],
+  items: Item[],
   heavyWeekSet: Set<string>,
   allDogIds: string[],
   aloneTimeLogs: AloneTimeLog[],
@@ -570,13 +516,10 @@ function monthDaySummary(
   const key = toDateKey(day);
   let count = 0;
   let needsCoverage = false;
-  healthEvents.forEach((event) => {
-    if (event.date === key) count++;
-  });
-  calendarEvents.forEach((event) => {
-    if (generateOccurrences(event, day, day).length === 0) return;
+  items.forEach((item) => {
+    if (generateOccurrences(item, day, day).length === 0) return;
     count++;
-    if (computeEventCoverageNeeded(event, allDogIds, aloneTimeLogs) && !event.coverageConfirmed) needsCoverage = true;
+    if (computeEventCoverageNeeded(item, allDogIds, aloneTimeLogs) && !item.coverageConfirmed) needsCoverage = true;
   });
   return { count, heavy: heavyWeekSet.has(weekStartKey(key)), needsCoverage };
 }
@@ -641,8 +584,7 @@ function useIsMobile(): boolean {
 function CalendarMonthGrid({
   cursor,
   today,
-  healthEvents,
-  calendarEvents,
+  items,
   heavyWeekSet,
   allDogIds,
   aloneTimeLogs,
@@ -650,8 +592,7 @@ function CalendarMonthGrid({
 }: {
   cursor: Date;
   today: Date;
-  healthEvents: HealthEvent[];
-  calendarEvents: CalendarEvent[];
+  items: Item[];
   heavyWeekSet: Set<string>;
   allDogIds: string[];
   aloneTimeLogs: AloneTimeLog[];
@@ -666,7 +607,7 @@ function CalendarMonthGrid({
         </div>
       ))}
       {days.map((day, index) => {
-        const info = monthDaySummary(day, healthEvents, calendarEvents, heavyWeekSet, allDogIds, aloneTimeLogs);
+        const info = monthDaySummary(day, items, heavyWeekSet, allDogIds, aloneTimeLogs);
         const inMonth = day.getMonth() === cursor.getMonth();
         return (
           <button
@@ -696,22 +637,16 @@ function CalendarWeekStrip({
   today,
   agendaByDay,
   onSelectDay,
-  onOpenTask,
-  onOpenEvent,
-  onOpenHealthEvent,
+  onOpenItem,
 }: {
   cursor: Date;
   today: Date;
   agendaByDay: { day: Date; items: AgendaItem[] }[];
   onSelectDay: (date: Date) => void;
-  onOpenTask: (task: Task, date: string) => void;
-  onOpenEvent: (event: CalendarEvent, occurrenceDate?: string) => void;
-  onOpenHealthEvent: (event: HealthEvent) => void;
+  onOpenItem: (item: Item, date: string) => void;
 }) {
-  function openItem(item: AgendaItem) {
-    if (item.task) onOpenTask(item.task, item.date ?? toDateKey(new Date()));
-    else if (item.calendarEvent) onOpenEvent(item.calendarEvent, item.date);
-    else if (item.healthEvent) onOpenHealthEvent(item.healthEvent);
+  function openItem(entry: AgendaItem) {
+    onOpenItem(entry.item, entry.date);
   }
 
   return (
@@ -755,15 +690,11 @@ function CalendarWeekStrip({
 function CalendarDayAgenda({
   items,
   shouldDim,
-  onOpenTask,
-  onOpenEvent,
-  onOpenHealthEvent,
+  onOpenItem,
 }: {
   items: AgendaItem[];
   shouldDim: (item: AgendaItem) => boolean;
-  onOpenTask: (task: Task, date: string) => void;
-  onOpenEvent: (event: CalendarEvent, occurrenceDate?: string) => void;
-  onOpenHealthEvent: (event: HealthEvent) => void;
+  onOpenItem: (item: Item, date: string) => void;
 }) {
   const isMobile = useIsMobile();
   const hourHeight = isMobile ? MOBILE_HOUR_HEIGHT : HOUR_HEIGHT;
@@ -772,10 +703,8 @@ function CalendarDayAgenda({
   const totalHours = (DAY_END_MIN - DAY_START_MIN) / 60;
   const hours = Array.from({ length: totalHours + 1 }, (_, i) => DAY_START_MIN + i * 60);
 
-  function openItem(item: AgendaItem) {
-    if (item.task) onOpenTask(item.task, item.date ?? toDateKey(new Date()));
-    else if (item.calendarEvent) onOpenEvent(item.calendarEvent, item.date);
-    else if (item.healthEvent) onOpenHealthEvent(item.healthEvent);
+  function openItem(entry: AgendaItem) {
+    onOpenItem(entry.item, entry.date);
   }
 
   return (
@@ -809,7 +738,7 @@ function CalendarDayAgenda({
             <button
               key={item.id}
               type="button"
-              className={`day-block ${item.source} ${item.placeholder ? "placeholder" : ""} ${shouldDim(item) ? "dimmed" : ""} ${item.coverageNeeded ? "needs-coverage" : ""} state-${item.state ?? ""}`}
+              className={`day-block ${item.item.requiresCompletion ? "completable" : "informational"} ${item.placeholder ? "placeholder" : ""} ${shouldDim(item) ? "dimmed" : ""} ${item.coverageNeeded ? "needs-coverage" : ""} state-${item.state ?? ""}`}
               style={{ top, height, width: `calc(${width}% - 6px)`, left: `${left}%` }}
               onClick={() => openItem(item)}
             >
@@ -817,7 +746,7 @@ function CalendarDayAgenda({
               <span>{formatMinutes(item.startMinutes!)}</span>
               {item.priority && <span className={`priority ${item.priority}`}>{item.priority}</span>}
               {item.dogNames && <span className="day-block-dogs">{item.dogNames}</span>}
-              {item.state && item.state !== "not_started" && <span className={`state-tag ${item.state}`}>{taskStateLabels[item.state]}</span>}
+              {item.state && item.state !== "not_started" && <span className={`state-tag ${item.state}`}>{itemStateLabels[item.state]}</span>}
             </button>
           );
         })}
@@ -833,13 +762,13 @@ function DeleteEventModal({
   onConfirm,
   onDone,
 }: {
-  event: CalendarEvent;
+  event: Item;
   occurrenceDate?: string;
   onCancel: () => void;
-  onConfirm: (scope: CalendarEventDeletionScope, note: string) => Promise<boolean>;
+  onConfirm: (scope: ItemDeletionScope, note: string) => Promise<boolean>;
   onDone: () => void;
 }) {
-  const [scope, setScope] = useState<CalendarEventDeletionScope>(occurrenceDate ? "instance" : "series");
+  const [scope, setScope] = useState<ItemDeletionScope>(occurrenceDate ? "instance" : "series");
   const [note, setNote] = useState("");
   const [noteError, setNoteError] = useState(false);
   const [saveError, setSaveError] = useState(false);
@@ -913,31 +842,26 @@ function DeleteEventModal({
   );
 }
 
-/** "+ Add" entry point shared by Calendar's grid views and Upcoming list — asks which
- * kind of item first (Task / Event / Health), then hands off to that type's own
- * existing form via the matching callback. Keeps one consistent creation entry point
- * even though each type edits in its own modal. */
+/** "+ Add" entry point shared by Calendar's grid views and Upcoming list.
+ *
+ * The old version asked "Task, Event, or Health?" — three data types, with no hint
+ * that picking one silently decided whether you would ever be asked to check
+ * anything off or record anything. These presets instead describe what the item
+ * *does*, and each one states its consequence directly on the button, so the
+ * difference between "I have to do this", "just be aware of this", and "record data
+ * from this" is visible at the moment you choose. All five open the same form. */
 function AddItemMenu({
-  onAddTask,
-  onAddEvent,
-  onAddHealth,
+  onPick,
   buttonClassName = "primary-button small",
   iconSize = 14,
   label = "Add",
 }: {
-  onAddTask: () => void;
-  onAddEvent: () => void;
-  onAddHealth: () => void;
+  onPick: (intent: ItemIntent) => void;
   buttonClassName?: string;
   iconSize?: number;
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
-
-  function choose(action: () => void) {
-    setOpen(false);
-    action();
-  }
 
   return (
     <div className="add-item-menu">
@@ -945,16 +869,26 @@ function AddItemMenu({
         <Plus size={iconSize} aria-hidden /> {label}
       </button>
       {open && (
-        <div className="add-item-menu-panel">
-          <button type="button" onClick={() => choose(onAddTask)}>
-            Task
-          </button>
-          <button type="button" onClick={() => choose(onAddEvent)}>
-            Event
-          </button>
-          <button type="button" onClick={() => choose(onAddHealth)}>
-            Health
-          </button>
+        <div className="add-item-menu-panel wide">
+          {ITEM_INTENT_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              className="add-item-preset"
+              onClick={() => {
+                setOpen(false);
+                onPick(preset.id);
+              }}
+            >
+              <strong>{preset.label}</strong>
+              <small>{preset.blurb}</small>
+              <span className="add-item-preset-tags">
+                {preset.requiresCompletion && <em className="capability-tag">Checklist</em>}
+                {preset.requiresLog && <em className="capability-tag">Logs data</em>}
+                {!preset.requiresCompletion && !preset.requiresLog && <em className="capability-tag muted">Calendar only</em>}
+              </span>
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -1012,20 +946,20 @@ function loadViewerId(fallback: string): string {
 }
 
 export function CalendarView() {
-  const { healthEvents, milestones, tasks, dogs, calendarEvents, taskInstances, people, aloneTimeLogs, deleteCalendarEvent } = useStore();
+  const { items, milestones, dogs, itemOccurrences, people, aloneTimeLogs, deleteItem } = useStore();
   const { navigate } = useNavigation();
   const attendeeNames = (ids?: string[]) =>
     !ids || ids.length === 0 ? "" : ids.map((id) => people.items.find((person) => person.id === id)?.name ?? id).join(" & ");
-  const [eventModal, setEventModal] = useState<"new" | { event: CalendarEvent; occurrenceDate?: string } | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ event: CalendarEvent; occurrenceDate?: string } | null>(null);
+  // "new" carries the preset the user picked in the Add menu, so the form opens with
+  // the right capability toggles already ticked.
+  const [eventModal, setEventModal] = useState<{ intent: ItemIntent } | { event: Item; occurrenceDate?: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ event: Item; occurrenceDate?: string } | null>(null);
   const [viewMode, setViewMode] = useState<"day" | "week" | "month" | "upcoming" | "milestones">("day");
   const [cursorDate, setCursorDate] = useState<Date>(() => new Date());
   const [viewerId, setViewerId] = useState<string>(() => loadViewerId(people.items[0]?.id ?? ""));
   const [filterMode, setFilterMode] = useState<"all" | "mine" | "other">("all");
   const [categoryFilter, setCategoryFilter] = useState<Set<Category>>(new Set());
-  const [detailTask, setDetailTask] = useState<{ task: Task; date: string } | null>(null);
-  const [healthEventModal, setHealthEventModal] = useState<"new" | HealthEvent | null>(null);
-  const [taskModal, setTaskModal] = useState(false);
+  const [detailTask, setDetailTask] = useState<{ task: Item; date: string } | null>(null);
   const touchStartX = useRef<number | null>(null);
   const today = new Date();
 
@@ -1072,34 +1006,17 @@ export function CalendarView() {
     touchStartX.current = null;
   }
 
-  // Health events aren't part of the shared Category taxonomy (they use HealthEvent's
-  // own "kind"), so they're left out of category filtering and always show through.
-  const categoryFilteredTasks = categoryFilter.size === 0 ? tasks.items : tasks.items.filter((task) => categoryFilter.has(task.category));
-  const categoryFilteredEvents =
-    categoryFilter.size === 0 ? calendarEvents.items : calendarEvents.items.filter((event) => categoryFilter.has(event.category));
+  // Health records now share the Category taxonomy (vet/vaccine/medication/grooming
+  // are real categories), so category filtering applies uniformly — no more special
+  // case where health rows ignored the filter because they lived on another type.
+  const filteredItems = categoryFilter.size === 0 ? items.items : items.items.filter((item) => categoryFilter.has(item.category));
 
   const allDogIds = dogs.items.map((dog) => dog.id);
   const dogName = (id: string) => dogs.items.find((dog) => dog.id === id)?.name ?? id;
-  const dayAgenda = buildAgendaForDate(
-    cursorDate,
-    categoryFilteredTasks,
-    healthEvents.items,
-    categoryFilteredEvents,
-    dogs.items,
-    taskInstances.items,
-    aloneTimeLogs.items,
-  );
+  const dayAgenda = buildAgendaForDate(cursorDate, filteredItems, dogs.items, itemOccurrences.items, aloneTimeLogs.items);
   const weekAgenda = weekDays(cursorDate).map((day) => ({
     day,
-    items: buildAgendaForDate(
-      day,
-      categoryFilteredTasks,
-      healthEvents.items,
-      categoryFilteredEvents,
-      dogs.items,
-      taskInstances.items,
-      aloneTimeLogs.items,
-    ),
+    items: buildAgendaForDate(day, filteredItems, dogs.items, itemOccurrences.items, aloneTimeLogs.items),
   }));
 
   const isGridMode = viewMode === "day" || viewMode === "week" || viewMode === "month";
@@ -1115,12 +1032,12 @@ export function CalendarView() {
             ? "Upcoming events"
             : "Milestones";
 
-  const recurring = categoryFilteredEvents.filter((event) => event.kind === "recurring");
-  const upcoming = categoryFilteredEvents
-    .filter((event) => event.kind === "one-off")
+  const recurring = filteredItems.filter((item) => item.kind === "recurring");
+  const upcoming = filteredItems
+    .filter((item) => item.kind === "one-off")
     .slice()
     .sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999"));
-  const weeks = heavyWeeks(calendarEvents.items, aloneTimeLogs.items, allDogIds, addDays(today, -7), addDays(today, 365));
+  const weeks = heavyWeeks(items.items, aloneTimeLogs.items, allDogIds, addDays(today, -7), addDays(today, 365));
 
   return (
     <section className="panel">
@@ -1156,11 +1073,7 @@ export function CalendarView() {
         )}
         {isGridMode && (
           <div className="calendar-add-event-row">
-            <AddItemMenu
-              onAddTask={() => setTaskModal(true)}
-              onAddEvent={() => setEventModal("new")}
-              onAddHealth={() => setHealthEventModal("new")}
-            />
+            <AddItemMenu onPick={(intent) => setEventModal({ intent })} />
           </div>
         )}
         {!isGridMode && <h2>{headingLabel}</h2>}
@@ -1213,9 +1126,7 @@ export function CalendarView() {
             <CalendarDayAgenda
               items={dayAgenda}
               shouldDim={shouldDim}
-              onOpenTask={(task, date) => setDetailTask({ task, date })}
-              onOpenEvent={(event, occurrenceDate) => setEventModal({ event, occurrenceDate })}
-              onOpenHealthEvent={setHealthEventModal}
+              onOpenItem={(item, date) => setDetailTask({ task: item, date })}
             />
           )}
           {viewMode === "week" && (
@@ -1224,17 +1135,14 @@ export function CalendarView() {
               today={today}
               agendaByDay={weekAgenda}
               onSelectDay={selectDay}
-              onOpenTask={(task, date) => setDetailTask({ task, date })}
-              onOpenEvent={(event, occurrenceDate) => setEventModal({ event, occurrenceDate })}
-              onOpenHealthEvent={setHealthEventModal}
+              onOpenItem={(item, date) => setDetailTask({ task: item, date })}
             />
           )}
           {viewMode === "month" && (
             <CalendarMonthGrid
               cursor={cursorDate}
               today={today}
-              healthEvents={healthEvents.items}
-              calendarEvents={categoryFilteredEvents}
+              items={filteredItems}
               heavyWeekSet={weeks}
               allDogIds={allDogIds}
               aloneTimeLogs={aloneTimeLogs.items}
@@ -1245,7 +1153,7 @@ export function CalendarView() {
       )}
 
       {detailTask && (
-        <TaskDetailModal
+        <ItemDetailModal
           task={detailTask.task}
           date={detailTask.date}
           onClose={() => setDetailTask(null)}
@@ -1259,13 +1167,7 @@ export function CalendarView() {
               <p className="eyebrow">Recurring commitments</p>
               <h3 style={{ margin: 0 }}>Weekly household schedule</h3>
             </div>
-            <AddItemMenu
-              buttonClassName="primary-button"
-              iconSize={16}
-              onAddTask={() => setTaskModal(true)}
-              onAddEvent={() => setEventModal("new")}
-              onAddHealth={() => setHealthEventModal("new")}
-            />
+            <AddItemMenu buttonClassName="primary-button" iconSize={16} onPick={(intent) => setEventModal({ intent })} />
           </div>
           <div className="calendar-grid">
             {recurring.map((event) => (
@@ -1360,19 +1262,24 @@ export function CalendarView() {
       {viewMode === "milestones" && <CalendarMilestonesPanel milestonesList={milestones.items} onNavigate={() => navigate("training")} />}
 
       {eventModal && (
-        <Modal title={eventModal === "new" ? "Add calendar event" : "Edit calendar event"} onClose={() => setEventModal(null)}>
-          <CalendarEventForm
-            initial={eventModal === "new" ? undefined : eventModal.event}
+        <Modal
+          title={"intent" in eventModal ? `Add — ${ITEM_INTENT_PRESETS.find((p) => p.id === eventModal.intent)?.label}` : "Edit item"}
+          onClose={() => setEventModal(null)}
+        >
+          <ItemForm
+            initial={"intent" in eventModal ? undefined : eventModal.event}
+            presetIntent={"intent" in eventModal ? eventModal.intent : undefined}
             peopleOptions={people.items.map((person) => ({ id: person.id, name: person.name }))}
             dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
+            milestoneOptions={milestones.items}
             aloneTimeLogs={aloneTimeLogs.items}
             onCancel={() => setEventModal(null)}
             onSubmit={(values) =>
-              eventModal === "new"
-                ? calendarEvents.add(calendarEventFormValuesToEvent(values, makeId("event")))
-                : calendarEvents.update(
+              "intent" in eventModal
+                ? items.add(itemFormValuesToItem(values, makeId("item")))
+                : items.update(
                     eventModal.event.id,
-                    calendarEventFormValuesToEvent(values, eventModal.event.id, {
+                    itemFormValuesToItem(values, eventModal.event.id, {
                       excludedDates: eventModal.event.excludedDates,
                       roverVisits: eventModal.event.roverVisits,
                       prepSteps: eventModal.event.prepSteps,
@@ -1382,12 +1289,12 @@ export function CalendarView() {
                   )
             }
             onDelete={
-              eventModal !== "new"
-                ? () => {
+              "intent" in eventModal
+                ? undefined
+                : () => {
                     setDeleteTarget(eventModal);
                     setEventModal(null);
                   }
-                : undefined
             }
           />
         </Modal>
@@ -1398,41 +1305,9 @@ export function CalendarView() {
           event={deleteTarget.event}
           occurrenceDate={deleteTarget.occurrenceDate}
           onCancel={() => setDeleteTarget(null)}
-          onConfirm={(scope, note) => deleteCalendarEvent(deleteTarget.event, scope, deleteTarget.occurrenceDate, note)}
+          onConfirm={(scope, note) => deleteItem(deleteTarget.event, scope, deleteTarget.occurrenceDate, note)}
           onDone={() => setDeleteTarget(null)}
         />
-      )}
-
-      {healthEventModal && (
-        <Modal title={healthEventModal === "new" ? "Add health event" : "Edit health event"} onClose={() => setHealthEventModal(null)}>
-          <HealthEventForm
-            initial={healthEventModal === "new" ? undefined : healthEventModal}
-            dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
-            onCancel={() => setHealthEventModal(null)}
-            onSubmit={(values) => {
-              if (healthEventModal === "new") {
-                healthEvents.add(healthEventFormValuesToEvent(values, makeId("health")));
-              } else {
-                healthEvents.update(healthEventModal.id, healthEventFormValuesToEvent(values, healthEventModal.id));
-              }
-              setHealthEventModal(null);
-            }}
-          />
-        </Modal>
-      )}
-
-      {taskModal && (
-        <Modal title="Add task" onClose={() => setTaskModal(false)}>
-          <TaskForm
-            peopleOptions={people.items.map((person) => ({ id: person.id, name: person.name }))}
-            dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
-            onCancel={() => setTaskModal(false)}
-            onSubmit={(values) => {
-              tasks.add(taskFormValuesToTask(values, makeId("task")));
-              setTaskModal(false);
-            }}
-          />
-        </Modal>
       )}
     </section>
   );
@@ -1651,7 +1526,7 @@ function ExposureGrid({ category }: { category: ExposureCategory }) {
 }
 
 export function TrainingView() {
-  const { milestones, dogs, aloneTimeLogs, calendarEvents } = useStore();
+  const { milestones, dogs, aloneTimeLogs, items } = useStore();
   const [tab, setTab] = useState<"obedience" | ExposureCategory | "alone-time">("obedience");
   const [aloneTimeModal, setAloneTimeModal] = useState(false);
   const allDogIds = dogs.items.map((dog) => dog.id);
@@ -1685,7 +1560,7 @@ export function TrainingView() {
           dogs={dogs.items}
           allDogIds={allDogIds}
           aloneTimeLogs={aloneTimeLogs.items}
-          calendarEvents={calendarEvents.items}
+          calendarEvents={items.items}
           onLog={() => setAloneTimeModal(true)}
         />
       )}
@@ -1768,11 +1643,17 @@ export function JournalView() {
   );
 }
 
+// Health is now a lens over items rather than its own type: everything in a health
+// category, newest first, with its logged entries inline. Same data the calendar
+// shows, filtered — so a vet visit added from the calendar shows up here for free.
 export function HealthView() {
-  const { dogs, healthEvents } = useStore();
-  const [modal, setModal] = useState<"new" | HealthEvent | null>(null);
+  const { dogs, items, itemLogs, milestones, people, aloneTimeLogs } = useStore();
+  const [modal, setModal] = useState<"new" | Item | null>(null);
   const dogName = (id: string) => dogs.items.find((dog) => dog.id === id)?.name ?? id;
-  const sortedEvents = healthEvents.items.slice().sort((a, b) => b.date.localeCompare(a.date));
+  const sortedEvents = items.items
+    .filter(isHealthItem)
+    .slice()
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
   return (
     <div className="stack">
       <CalendarView />
@@ -1783,7 +1664,7 @@ export function HealthView() {
             <h2>Growth charts and upcoming care</h2>
           </div>
           <button className="primary-button" type="button" onClick={() => setModal("new")}>
-            <Plus size={16} aria-hidden /> Add health event
+            <Plus size={16} aria-hidden /> Add health record
           </button>
         </div>
         <div className="growth-grid">
@@ -1806,42 +1687,55 @@ export function HealthView() {
         </div>
         <div className="task-list">
           {sortedEvents.length === 0 && <p className="small">Nothing logged yet.</p>}
-          {sortedEvents.map((event) => (
-            <article className="event health-event-row" key={event.id} onClick={() => setModal(event)}>
-              <span>
-                {formatDate(event.date)} · {dogName(event.dogId)}
-              </span>
-              <strong>{event.title}</strong>
-              <p className="small">{event.kind}</p>
-              {event.notes && <small>{event.notes}</small>}
-              {event.documentUrl && (
-                <a
-                  href={event.documentUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(clickEvent) => clickEvent.stopPropagation()}
-                >
-                  View record / receipt
-                </a>
-              )}
-            </article>
-          ))}
+          {sortedEvents.map((event) => {
+            const logs = itemLogs.items.filter((log) => log.itemId === event.id);
+            return (
+              <article className="event health-event-row" key={event.id} onClick={() => setModal(event)}>
+                <span>
+                  {event.date ? formatDate(event.date) : "No date"} · {(event.dogIds ?? []).map(dogName).join(" & ") || "No dog tagged"}
+                </span>
+                <strong>{event.title}</strong>
+                <p className="small">{CATEGORY_LABELS[event.category]}</p>
+                {event.notes && <small>{event.notes}</small>}
+                {logs.map((log) => (
+                  <small key={log.id} className="health-log-line">
+                    {new Date(log.loggedAt).toLocaleDateString()}
+                    {log.values.length > 0
+                      ? ` — ${log.values.map((value) => `${value.fieldName}: ${value.value}${value.unit ? ` ${value.unit}` : ""}`).join(", ")}`
+                      : ""}
+                    {log.text ? ` — ${log.text}` : ""}
+                  </small>
+                ))}
+                {event.documentUrl && (
+                  <a
+                    href={event.documentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(clickEvent) => clickEvent.stopPropagation()}
+                  >
+                    View record / receipt
+                  </a>
+                )}
+              </article>
+            );
+          })}
         </div>
       </section>
       {modal && (
-        <Modal title={modal === "new" ? "Add health event" : "Edit health event"} onClose={() => setModal(null)}>
-          <HealthEventForm
+        <Modal title={modal === "new" ? "Add health record" : "Edit health record"} onClose={() => setModal(null)}>
+          <ItemForm
             initial={modal === "new" ? undefined : modal}
+            presetIntent={modal === "new" ? "health-record" : undefined}
+            peopleOptions={people.items.map((person) => ({ id: person.id, name: person.name }))}
             dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
+            milestoneOptions={milestones.items}
+            aloneTimeLogs={aloneTimeLogs.items}
             onCancel={() => setModal(null)}
-            onSubmit={(values) => {
-              if (modal === "new") {
-                healthEvents.add(healthEventFormValuesToEvent(values, makeId("health")));
-              } else {
-                healthEvents.update(modal.id, healthEventFormValuesToEvent(values, modal.id));
-              }
-              setModal(null);
-            }}
+            onSubmit={(values) =>
+              modal === "new"
+                ? items.add(itemFormValuesToItem(values, makeId("item")))
+                : items.update(modal.id, itemFormValuesToItem(values, modal.id))
+            }
           />
         </Modal>
       )}
@@ -1849,56 +1743,61 @@ export function HealthView() {
   );
 }
 
+// Tasks is a lens too: every item that has to be checked off, regardless of where
+// it was created. Items that only log data, or only sit on the calendar, don't
+// belong here — that filter is the whole definition of the view now.
 export function TasksView() {
-  const { tasks, feedback, people, dogs, completeTask } = useStore();
+  const { items, feedback, people, dogs, milestones, aloneTimeLogs, completeTask } = useStore();
   const [open, setOpen] = useState(false);
-  const [detailTask, setDetailTask] = useState<Task | null>(null);
+  const [detailTask, setDetailTask] = useState<Item | null>(null);
   const feedbackByTask = new Map(feedback.map((item) => [item.taskId, item]));
   const todayKey = toDateKey(new Date());
+  const completable = items.items.filter((item) => item.requiresCompletion);
   return (
     <section className="panel">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">All tasks</p>
-          <h2>Full task list</h2>
+          <p className="eyebrow">Needs completing</p>
+          <h2>Everything you have to check off</h2>
         </div>
         <button className="primary-button" type="button" onClick={() => setOpen(true)}>
-          <Plus size={16} aria-hidden /> Add task
+          <Plus size={16} aria-hidden /> Add
         </button>
       </div>
       <div className="task-list">
-        {tasks.items.map((task: Task) => (
+        {completable.length === 0 && <p className="small">Nothing needs completing right now.</p>}
+        {completable.map((task) => (
           <TaskCard
             key={task.id}
             task={task}
             feedback={feedbackByTask.get(task.id)}
             dogs={dogs.items}
             onComplete={completeTask}
-            onDelete={(target) => tasks.remove(target.id)}
+            onDelete={(target) => items.remove(target.id)}
             onOpenDetail={setDetailTask}
           />
         ))}
       </div>
       {open && (
-        <Modal title="Add task" onClose={() => setOpen(false)}>
-          <TaskForm
+        <Modal title="Add — Routine or to-do" onClose={() => setOpen(false)}>
+          <ItemForm
+            presetIntent="routine"
             peopleOptions={people.items.map((person) => ({ id: person.id, name: person.name }))}
             dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
+            milestoneOptions={milestones.items}
+            aloneTimeLogs={aloneTimeLogs.items}
             onCancel={() => setOpen(false)}
-            onSubmit={(values) => {
-              tasks.add(taskFormValuesToTask(values, makeId("task")));
-              setOpen(false);
-            }}
+            onSubmit={(values) => items.add(itemFormValuesToItem(values, makeId("item")))}
           />
         </Modal>
       )}
-      {detailTask && <TaskDetailModal task={detailTask} date={todayKey} onClose={() => setDetailTask(null)} />}
+      {detailTask && <ItemDetailModal task={detailTask} date={todayKey} onClose={() => setDetailTask(null)} />}
     </section>
   );
 }
 
 export function InboxView() {
-  const { inboxRequests, taskInstances, tasks, people, respondToDelegation } = useStore();
+  const { inboxRequests, itemOccurrences, items, people, respondToDelegation } = useStore();
   const [error, setError] = useState<string | null>(null);
 
   const pending = inboxRequests.items
@@ -1910,10 +1809,10 @@ export function InboxView() {
     .slice()
     .sort((a, b) => (b.respondedAt ?? "").localeCompare(a.respondedAt ?? ""));
 
-  function taskTitleFor(taskInstanceId: string) {
-    const instance = taskInstances.items.find((item) => item.id === taskInstanceId);
-    const template = instance ? tasks.items.find((item) => item.id === instance.templateId) : undefined;
-    return { title: template?.title ?? "Unknown task", date: instance?.date };
+  function taskTitleFor(itemOccurrenceId: string) {
+    const occurrence = itemOccurrences.items.find((entry) => entry.id === itemOccurrenceId);
+    const item = occurrence ? items.items.find((entry) => entry.id === occurrence.itemId) : undefined;
+    return { title: item?.title ?? "Unknown item", date: occurrence?.date };
   }
 
   async function respond(requestId: string, accept: boolean) {
@@ -1934,7 +1833,7 @@ export function InboxView() {
       <div className="inbox-list">
         {pending.length === 0 && <p className="small">Nothing pending.</p>}
         {pending.map((request) => {
-          const { title, date } = taskTitleFor(request.taskInstanceId);
+          const { title, date } = taskTitleFor(request.itemOccurrenceId);
           return (
             <article className="inbox-card" key={request.id}>
               <div>
@@ -1966,7 +1865,7 @@ export function InboxView() {
           </div>
           <div className="inbox-list">
             {resolved.map((request) => {
-              const { title } = taskTitleFor(request.taskInstanceId);
+              const { title } = taskTitleFor(request.itemOccurrenceId);
               return (
                 <article className="inbox-card" key={request.id}>
                   <div>
@@ -2392,7 +2291,7 @@ function InventoryItemForm({
 }
 
 export function MealsView() {
-  const { meals, recipeIngredients, inventory, groceryList, tasks, calendarEvents } = useStore();
+  const { meals, recipeIngredients, inventory, groceryList, items } = useStore();
   const [mealModal, setMealModal] = useState(false);
   const [inventoryModal, setInventoryModal] = useState(false);
   const [weekStart, setWeekStart] = useState<Date>(() => weekStartDate(new Date()));
@@ -2482,7 +2381,7 @@ export function MealsView() {
           {week.map((day) => {
             const dateKey = toDateKey(day);
             const dayMeals = meals.items.filter((meal) => meal.plannedDate === dateKey);
-            const load = dayLoadMinutes(dateKey, tasks.items, calendarEvents.items);
+            const load = dayLoadMinutes(dateKey, items.items);
             const busy = load >= 120;
             return (
               <div key={dateKey} className="week-day meal-day">

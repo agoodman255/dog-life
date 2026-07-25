@@ -1,14 +1,13 @@
 import { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import {
   aloneTimeLogs as seedAloneTimeLogs,
-  calendarEvents as seedCalendarEvents,
   dogs as seedDogs,
   exposureItems as seedExposureItems,
   feedbackLoopRules,
   groceryList as seedGroceryList,
-  healthEvents as seedHealthEvents,
   households as seedHouseholds,
   inventory as seedInventory,
+  items as seedItems,
   journalEntries as seedJournalEntries,
   locations,
   meals as seedMeals,
@@ -17,24 +16,25 @@ import {
   recipeIngredients as seedRecipeIngredients,
   relationshipLogs as seedRelationshipLogs,
   shelfLifeDefaultsDays,
-  todayTasks as seedTasks,
 } from "./data";
 import * as mapping from "./dataMapping";
 import { getSupabaseClient, isBackendConfigured } from "./supabaseClient";
 import {
   AloneTimeLog,
-  CalendarEvent,
-  CalendarEventDeletion,
-  CalendarEventDeletionScope,
   ChecklistItemValue,
   DailyFeedback,
   Dog,
   ExposureItem,
   GroceryListItem,
-  HealthEvent,
   Household,
   InboxRequest,
   InventoryItem,
+  Item,
+  ItemDeletion,
+  ItemDeletionScope,
+  ItemHistoryEntry,
+  ItemLog,
+  ItemOccurrence,
   JournalEntry,
   Meal,
   Milestone,
@@ -42,13 +42,8 @@ import {
   ProductFeedback,
   RecipeIngredient,
   RelationshipLog,
-  Task,
-  TaskDeletion,
-  TaskDeletionScope,
-  TaskHistoryEntry,
-  TaskInstance,
 } from "./types";
-import { buildDefaultChecklist, computeMilestoneStatus } from "./utils";
+import { buildDefaultChecklist, computeMilestoneStatus, resolveChecklistDefs } from "./utils";
 
 const PREFIX = "dog-life-os";
 
@@ -237,9 +232,8 @@ function useDataStore() {
   const households = usePersistedCollection<Household>("households", seedHouseholds);
   const dogs = useCollection<Dog>("dogs", seedDogs, "dogs", mapping.dog);
   const people = useCollection<Person>("people", seedPeople, "people", mapping.person);
-  const tasks = useCollection<Task>("tasks", seedTasks, "tasks", mapping.task);
+  const items = useCollection<Item>("items", seedItems, "items", mapping.item);
   const milestones = useCollection<Milestone>("milestones", seedMilestones, "milestones", mapping.milestone, "client");
-  const healthEvents = useCollection<HealthEvent>("health-events", seedHealthEvents, "health_events", mapping.healthEvent);
   const journalEntries = useCollection<JournalEntry>("journal-entries", seedJournalEntries, "journal_entries", mapping.journalEntry);
   const exposureItems = useCollection<ExposureItem>(
     "exposure-items",
@@ -250,17 +244,10 @@ function useDataStore() {
   );
   const relationshipLogs = useCollection<RelationshipLog>("relationship-logs", seedRelationshipLogs, "relationship_logs", mapping.relationshipLog);
   const productFeedback = useCollection<ProductFeedback>("product-feedback", [], "product_feedback", mapping.productFeedback);
-  const calendarEvents = useCollection<CalendarEvent>("calendar-events", seedCalendarEvents, "calendar_events", mapping.calendarEvent);
-  const calendarEventDeletions = useCollection<CalendarEventDeletion>(
-    "calendar-event-deletions",
-    [],
-    "calendar_event_deletions",
-    mapping.calendarEventDeletion,
-    "client",
-  );
-  const taskDeletions = useCollection<TaskDeletion>("task-deletions", [], "task_deletions", mapping.taskDeletion, "client");
+  const itemDeletions = useCollection<ItemDeletion>("item-deletions", [], "item_deletions", mapping.itemDeletion, "client");
   const aloneTimeLogs = useCollection<AloneTimeLog>("alone-time-logs", seedAloneTimeLogs, "alone_time_logs", mapping.aloneTimeLog);
-  const taskInstances = useCollection<TaskInstance>("task-instances", [], "task_instances", mapping.taskInstance, "client");
+  const itemOccurrences = useCollection<ItemOccurrence>("item-occurrences", [], "item_occurrences", mapping.itemOccurrence, "client");
+  const itemLogs = useCollection<ItemLog>("item-logs", [], "item_logs", mapping.itemLog, "client");
   const inboxRequests = useCollection<InboxRequest>("inbox-requests", [], "inbox_requests", mapping.inboxRequest, "client");
   const meals = useCollection<Meal>("meals", seedMeals, "meals", mapping.meal);
   const recipeIngredients = useCollection<RecipeIngredient>("recipe-ingredients", seedRecipeIngredients, "recipe_ingredients", mapping.recipeIngredient);
@@ -320,7 +307,7 @@ function useDataStore() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [milestones.items]);
 
-  async function completeTask(task: Task, rating: number) {
+  async function completeTask(task: Item, rating: number) {
     const entry: DailyFeedback = {
       taskId: task.id,
       completed: true,
@@ -371,25 +358,20 @@ function useDataStore() {
     exposureItems.update(itemId, { log: [...current.log, entry], status });
   }
 
-  // Deleting "this occurrence" of a recurring event doesn't remove the event row —
+  // Deleting "this occurrence" of a recurring item doesn't remove the item row —
   // it adds the date to excludedDates so generateOccurrences skips it, keeping the
-  // rest of the series intact. Deleting "the series" (or a one-off event) removes
+  // rest of the series intact. Deleting "the series" (or a one-off item) removes
   // the row outright. Either way a required note gets logged for the record.
-  async function deleteCalendarEvent(
-    event: CalendarEvent,
-    scope: CalendarEventDeletionScope,
-    occurrenceDate: string | undefined,
-    note: string,
-  ) {
+  async function deleteItem(item: Item, scope: ItemDeletionScope, occurrenceDate: string | undefined, note: string) {
     const ok =
       scope === "instance" && occurrenceDate
-        ? await calendarEvents.update(event.id, { excludedDates: [...(event.excludedDates ?? []), occurrenceDate] })
-        : await calendarEvents.remove(event.id);
+        ? await items.update(item.id, { excludedDates: [...(item.excludedDates ?? []), occurrenceDate] })
+        : await items.remove(item.id);
     if (!ok) return false;
-    return calendarEventDeletions.add({
-      id: makeId("evtdel"),
-      eventId: event.id,
-      eventTitle: event.title,
+    return itemDeletions.add({
+      id: makeId("itemdel"),
+      itemId: item.id,
+      itemTitle: item.title,
       scope,
       occurrenceDate: scope === "instance" ? occurrenceDate : undefined,
       note,
@@ -397,27 +379,27 @@ function useDataStore() {
     });
   }
 
-  // --- Task lifecycle workflow (start/stop/delegate/reschedule/skip) --------
+  // --- Item lifecycle workflow (start/stop/delegate/reschedule/skip) --------
 
-  // Looks up by originalDate (the template's natural recurring slot), not the
-  // possibly-rescheduled current `date`, so a moved instance is still found when
+  // Looks up by originalDate (the item's natural recurring slot), not the
+  // possibly-rescheduled current `date`, so a moved occurrence is still found when
   // re-visiting the day it was originally supposed to happen.
-  function getInstance(templateId: string, originalDate: string): TaskInstance | undefined {
-    return taskInstances.items.find((instance) => instance.templateId === templateId && instance.originalDate === originalDate);
+  function getInstance(itemId: string, originalDate: string): ItemOccurrence | undefined {
+    return itemOccurrences.items.find((occurrence) => occurrence.itemId === itemId && occurrence.originalDate === originalDate);
   }
 
-  function ensureInstance(template: Task, date: string): TaskInstance {
+  function ensureInstance(item: Item, date: string): ItemOccurrence {
     return (
-      getInstance(template.id, date) ?? {
-        id: makeId("instance"),
-        templateId: template.id,
+      getInstance(item.id, date) ?? {
+        id: makeId("occurrence"),
+        itemId: item.id,
         originalDate: date,
         date,
         state: "not_started",
-        assignedTo: template.assignedTo,
-        originalAssignedTo: template.assignedTo,
-        scheduledTime: template.time,
-        checklist: buildDefaultChecklist(template),
+        assignedTo: item.assignedTo,
+        originalAssignedTo: item.assignedTo,
+        scheduledTime: item.startTime ?? "",
+        checklist: buildDefaultChecklist(item, milestones.items),
         history: [],
       }
     );
@@ -426,20 +408,20 @@ function useDataStore() {
   // Instances currently scheduled on `date` due to a reschedule that moved them
   // in from a different original day — used so the destination day's agenda
   // shows them too, not just the day they were originally supposed to happen.
-  function getRescheduledInto(date: string): TaskInstance[] {
-    return taskInstances.items.filter((instance) => instance.date === date && instance.originalDate !== date);
+  function getRescheduledInto(date: string): ItemOccurrence[] {
+    return itemOccurrences.items.filter((occurrence) => occurrence.date === date && occurrence.originalDate !== date);
   }
 
-  function withHistory(instance: TaskInstance, entry: Omit<TaskHistoryEntry, "id" | "timestamp">): TaskHistoryEntry[] {
+  function withHistory(instance: ItemOccurrence, entry: Omit<ItemHistoryEntry, "id" | "timestamp">): ItemHistoryEntry[] {
     return [...instance.history, { ...entry, id: makeId("hist"), timestamp: new Date().toISOString() }];
   }
 
-  async function persistInstance(instance: TaskInstance) {
-    const exists = taskInstances.items.some((item) => item.id === instance.id);
-    return exists ? taskInstances.update(instance.id, instance) : taskInstances.add(instance);
+  async function persistInstance(instance: ItemOccurrence) {
+    const exists = itemOccurrences.items.some((occurrence) => occurrence.id === instance.id);
+    return exists ? itemOccurrences.update(instance.id, instance) : itemOccurrences.add(instance);
   }
 
-  async function startTask(template: Task, date: string, startTime: string, startTimeZone: string) {
+  async function startTask(template: Item, date: string, startTime: string, startTimeZone: string) {
     const instance = ensureInstance(template, date);
     return persistInstance({
       ...instance,
@@ -450,21 +432,53 @@ function useDataStore() {
     });
   }
 
-  async function endTask(instanceId: string, endTime: string, endTimeZone: string, checklist: ChecklistItemValue[], rating?: number) {
-    const instance = taskInstances.items.find((item) => item.id === instanceId);
+  // Ticking a checklist row that came from a milestone step is the same act as
+  // saying "we ran that step today" — so completing the item advances the milestone
+  // rather than making Andrew log the same session twice in two places. Only rows
+  // that are actually checked count, and only for items linked via
+  // checklistSourceMilestoneId (a plain relatedMilestoneId link is display-only).
+  async function advanceLinkedMilestone(item: Item, checklist: ChecklistItemValue[]) {
+    if (!item.checklistSourceMilestoneId) return;
+    const milestone = milestones.items.find((entry) => entry.id === item.checklistSourceMilestoneId);
+    if (!milestone) return;
+    const completedNames = new Set(checklist.filter((row) => row.value === true).map((row) => row.itemName));
+    if (completedNames.size === 0) return;
+    await milestones.update(milestone.id, {
+      steps: milestone.steps.map((step) =>
+        completedNames.has(step.title)
+          ? { ...step, completedSessions: Math.min(step.sessionsRequired, step.completedSessions + 1) }
+          : step,
+      ),
+    });
+  }
+
+  async function endTask(
+    instanceId: string,
+    endTime: string,
+    endTimeZone: string,
+    checklist: ChecklistItemValue[],
+    rating?: number,
+    ratingNotes?: string,
+  ) {
+    const instance = itemOccurrences.items.find((occurrence) => occurrence.id === instanceId);
     if (!instance) return false;
-    return persistInstance({
+    const ok = await persistInstance({
       ...instance,
       state: "completed",
       endTime,
       endTimeZone,
       checklist,
       rating,
+      ratingNotes,
       history: withHistory(instance, { type: "end", oldValue: instance.startTime ?? "", newValue: endTime, reason: "" }),
     });
+    if (!ok) return false;
+    const item = items.items.find((entry) => entry.id === instance.itemId);
+    if (item) await advanceLinkedMilestone(item, checklist);
+    return true;
   }
 
-  async function rescheduleTask(template: Task, date: string, newDate: string, newTime: string, reason: string) {
+  async function rescheduleTask(template: Item, date: string, newDate: string, newTime: string, reason: string) {
     const instance = ensureInstance(template, date);
     return persistInstance({
       ...instance,
@@ -480,7 +494,7 @@ function useDataStore() {
     });
   }
 
-  async function skipTask(template: Task, date: string, reason: string) {
+  async function skipTask(template: Item, date: string, reason: string) {
     const instance = ensureInstance(template, date);
     return persistInstance({
       ...instance,
@@ -489,27 +503,9 @@ function useDataStore() {
     });
   }
 
-  // Deleting "just today" reuses skipTask (already requires + logs a reason on the
-  // instance) so there's one code path for "not doing this occurrence." Deleting
-  // "the whole routine" removes the task template outright. Either way a required
-  // note also gets logged to task_deletions for the record, mirroring deleteCalendarEvent.
-  async function deleteTask(task: Task, scope: TaskDeletionScope, date: string, note: string) {
-    const ok = scope === "instance" ? await skipTask(task, date, note) : await tasks.remove(task.id);
-    if (!ok) return false;
-    return taskDeletions.add({
-      id: makeId("taskdel"),
-      taskId: task.id,
-      taskTitle: task.title,
-      scope,
-      occurrenceDate: scope === "instance" ? date : undefined,
-      note,
-      deletedAt: new Date().toISOString(),
-    });
-  }
-
-  async function delegateTask(template: Task, date: string, fromPersonId: string, toPersonId: string) {
+  async function delegateTask(template: Item, date: string, fromPersonId: string, toPersonId: string) {
     const instance = ensureInstance(template, date);
-    const updated: TaskInstance = {
+    const updated: ItemOccurrence = {
       ...instance,
       state: "assigned_pending",
       history: withHistory(instance, { type: "delegate", oldValue: fromPersonId, newValue: toPersonId, reason: "" }),
@@ -518,12 +514,32 @@ function useDataStore() {
     if (!ok) return false;
     return inboxRequests.add({
       id: makeId("inbox"),
-      taskInstanceId: updated.id,
+      itemOccurrenceId: updated.id,
       fromPersonId,
       toPersonId,
       status: "pending",
       createdAt: new Date().toISOString(),
     });
+  }
+
+  // --- Logging --------------------------------------------------------------
+
+  async function addItemLog(entry: Omit<ItemLog, "id" | "loggedAt">) {
+    return itemLogs.add({ ...entry, id: makeId("log"), loggedAt: new Date().toISOString() });
+  }
+
+  /** Called by the review-logs skill after it has folded a batch into the dog
+   * record / milestones / docs, so the next run only reads what's new. */
+  async function markLogsProcessed(logIds: string[]) {
+    const stamp = new Date().toISOString();
+    const results = await Promise.all(logIds.map((id) => itemLogs.update(id, { processedAt: stamp })));
+    return results.every(Boolean);
+  }
+
+  function logsForItem(itemId: string, occurrenceDate?: string): ItemLog[] {
+    return itemLogs.items
+      .filter((log) => log.itemId === itemId && (!occurrenceDate || log.occurrenceDate === occurrenceDate))
+      .sort((a, b) => b.loggedAt.localeCompare(a.loggedAt));
   }
 
   // Declined delegations silently fall back to the original assignee rather than
@@ -533,7 +549,7 @@ function useDataStore() {
     if (!request) return false;
     const responded = await inboxRequests.update(requestId, { status: accept ? "accepted" : "declined", respondedAt: new Date().toISOString() });
     if (!responded) return false;
-    const instance = taskInstances.items.find((item) => item.id === request.taskInstanceId);
+    const instance = itemOccurrences.items.find((occurrence) => occurrence.id === request.itemOccurrenceId);
     if (!instance) return true;
     if (accept) {
       return persistInstance({
@@ -556,9 +572,9 @@ function useDataStore() {
       households: households.items,
       dogs: dogs.items,
       people: people.items,
-      tasks: tasks.items,
+      items: items.items,
+      itemLogs: itemLogs.items,
       milestones: milestones.items,
-      healthEvents: healthEvents.items,
       journalEntries: journalEntries.items,
       exposureItems: exposureItems.items,
       relationshipLogs: relationshipLogs.items,
@@ -570,9 +586,9 @@ function useDataStore() {
     if (Array.isArray(payload.households)) households.setItems(payload.households);
     if (Array.isArray(payload.dogs)) dogs.setItems(payload.dogs);
     if (Array.isArray(payload.people)) people.setItems(payload.people);
-    if (Array.isArray(payload.tasks)) tasks.setItems(payload.tasks);
+    if (Array.isArray(payload.items)) items.setItems(payload.items);
+    if (Array.isArray(payload.itemLogs)) itemLogs.setItems(payload.itemLogs);
     if (Array.isArray(payload.milestones)) milestones.setItems(payload.milestones);
-    if (Array.isArray(payload.healthEvents)) healthEvents.setItems(payload.healthEvents);
     if (Array.isArray(payload.journalEntries)) journalEntries.setItems(payload.journalEntries);
     if (Array.isArray(payload.exposureItems)) exposureItems.setItems(payload.exposureItems);
     if (Array.isArray(payload.relationshipLogs)) relationshipLogs.setItems(payload.relationshipLogs);
@@ -603,20 +619,20 @@ function useDataStore() {
     households,
     dogs,
     people,
-    tasks,
+    items,
     milestones,
-    healthEvents,
     journalEntries,
     exposureItems,
     relationshipLogs,
     productFeedback,
-    calendarEvents,
-    calendarEventDeletions,
-    deleteCalendarEvent,
-    taskDeletions,
-    deleteTask,
+    itemDeletions,
+    deleteItem,
     aloneTimeLogs,
-    taskInstances,
+    itemOccurrences,
+    itemLogs,
+    addItemLog,
+    markLogsProcessed,
+    logsForItem,
     inboxRequests,
     meals,
     recipeIngredients,

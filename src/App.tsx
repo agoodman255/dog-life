@@ -56,7 +56,7 @@ const navItems = [
   { id: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
-const searchTargets: Record<string, string> = { Task: "tasks", Milestone: "milestones", Journal: "journal" };
+const searchTargets: Record<string, string> = { Item: "calendar", Milestone: "milestones", Journal: "journal" };
 
 const themeKey = "dog-life-os-theme";
 const largeTextKey = "dog-life-os-large-text";
@@ -104,12 +104,12 @@ function Shell() {
 
   const searchResults = useMemo(() => {
     const haystack = [
-      ...store.tasks.items.map((item) => ({ type: "Task", title: item.title, detail: item.notes })),
+      ...store.items.items.map((item) => ({ type: "Item", title: item.title, detail: item.notes })),
       ...store.milestones.items.map((item) => ({ type: "Milestone", title: item.title, detail: item.why })),
       ...store.journalEntries.items.map((item) => ({ type: "Journal", title: item.title, detail: item.text })),
     ];
     return query ? haystack.filter((item) => `${item.title} ${item.detail}`.toLowerCase().includes(query.toLowerCase())) : [];
-  }, [query, store.tasks.items, store.milestones.items, store.journalEntries.items]);
+  }, [query, store.items.items, store.milestones.items, store.journalEntries.items]);
 
   function exportData() {
     const payload = store.snapshot();

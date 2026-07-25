@@ -416,6 +416,10 @@ alter table meals enable row level security;
 alter table recipe_ingredients enable row level security;
 alter table inventory enable row level security;
 alter table grocery_list enable row level security;
+alter table items enable row level security;
+alter table item_occurrences enable row level security;
+alter table item_logs enable row level security;
+alter table item_deletions enable row level security;
 
 do $$
 declare
@@ -426,7 +430,8 @@ begin
     'health_events', 'journal_entries', 'exposure_items',
     'relationship_logs', 'feedback', 'product_feedback',
     'calendar_events', 'calendar_event_deletions', 'task_deletions', 'alone_time_logs', 'task_instances', 'inbox_requests',
-    'meals', 'recipe_ingredients', 'inventory', 'grocery_list'
+    'meals', 'recipe_ingredients', 'inventory', 'grocery_list',
+    'items', 'item_occurrences', 'item_logs', 'item_deletions'
   ])
   loop
     if not exists (
@@ -439,6 +444,130 @@ begin
     end if;
   end loop;
 end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- Unified items (2026-07-25)
+--
+-- Replaces the old tasks / calendar_events / health_events split. Those three
+-- tables held the same kind of thing with different capabilities bolted on:
+-- calendar_events had recurrence but no way to complete anything, tasks had the
+-- completion lifecycle but no recurrence at all, health_events had neither. An
+-- item now carries both, gated by two booleans (requires_completion / requires_log)
+-- so the UI can ask only for what a given item actually needs.
+--
+-- The old tables are intentionally NOT dropped here — run
+-- supabase/migrate-items-2026-07-25.sql to copy their rows across, verify the
+-- result, and only then drop them by hand.
+-- ---------------------------------------------------------------------------
+
+create table if not exists items (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households (id) on delete cascade,
+  title text not null,
+  category text not null,
+  intent text not null default 'event',
+  kind text not null default 'one-off',
+  recurrence jsonb,
+  excluded_dates date[] not null default '{}',
+  date date,
+  window_label text not null default '',
+  start_time text,
+  end_time text,
+  duration_hours numeric,
+  status text not null default 'confirmed',
+  assigned_to uuid references people (id) on delete set null,
+  attendees uuid[] not null default '{}',
+  dog_ids uuid[] not null default '{}',
+  requires_completion boolean not null default false,
+  checklist jsonb not null default '[]',
+  checklist_source_milestone_id text,
+  requires_log boolean not null default false,
+  log_fields jsonb not null default '[]',
+  alone_time_required text not null default 'no',
+  alone_time_required_amount numeric,
+  coverage_confirmed boolean not null default false,
+  coverage_notes text not null default '',
+  priority text not null default 'important',
+  supplies text[] not null default '{}',
+  setting text not null default 'either',
+  difficulty int not null default 1,
+  location text,
+  formation text,
+  related_milestone_id text,
+  document_url text,
+  rover_visits int,
+  prep_steps text[] not null default '{}',
+  rover_instructions text[] not null default '{}',
+  post_steps text[] not null default '{}',
+  notes text not null default ''
+);
+
+-- Same duplicate-insert guard the old tasks table needed: without it, re-running
+-- seed.sql silently inserts a second copy of every item.
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'items_household_title_key') then
+    alter table items add constraint items_household_title_key unique (household_id, title);
+  end if;
+end $$;
+
+-- Per-date state for an item. A recurring item needs independent completion state
+-- per occurrence — finishing Monday's must not finish Tuesday's — which is exactly
+-- what the old task_instances table did, generalized to every item.
+create table if not exists item_occurrences (
+  id text primary key,
+  household_id uuid not null references households (id) on delete cascade,
+  item_id uuid not null references items (id) on delete cascade,
+  original_date date not null,
+  date date not null,
+  state text not null default 'not_started',
+  assigned_to uuid references people (id) on delete set null,
+  original_assigned_to uuid references people (id) on delete set null,
+  scheduled_time text not null default '',
+  start_time timestamptz,
+  start_time_zone text,
+  end_time timestamptz,
+  end_time_zone text,
+  rating int,
+  rating_notes text,
+  checklist jsonb not null default '[]',
+  history jsonb not null default '[]'
+);
+
+-- Timestamped log entries against an item. Multiple per item (and per occurrence)
+-- is the point: weight over time, symptoms across days. `processed_at` is stamped
+-- by the review-logs skill so its next run only reads what is new.
+create table if not exists item_logs (
+  id text primary key,
+  household_id uuid not null references households (id) on delete cascade,
+  item_id uuid not null references items (id) on delete cascade,
+  occurrence_date date,
+  logged_at timestamptz not null default now(),
+  logged_by uuid references people (id) on delete set null,
+  text text not null default '',
+  values jsonb not null default '[]',
+  dog_ids uuid[] not null default '{}',
+  processed_at timestamptz
+);
+
+create index if not exists item_logs_unprocessed_idx on item_logs (processed_at) where processed_at is null;
+
+-- Merges the old calendar_event_deletions and task_deletions audit tables, which
+-- differed only in column naming.
+create table if not exists item_deletions (
+  id text primary key,
+  household_id uuid not null references households (id) on delete cascade,
+  item_id uuid not null,
+  item_title text not null,
+  scope text not null,
+  occurrence_date date,
+  note text not null,
+  deleted_at timestamptz not null default now()
+);
+
+-- inbox_requests now points at item_occurrences instead of task_instances.
+alter table inbox_requests add column if not exists item_occurrence_id text;
 
 -- ---------------------------------------------------------------------------
 -- Realtime
@@ -453,7 +582,8 @@ begin
     'health_events', 'journal_entries', 'exposure_items',
     'relationship_logs', 'feedback', 'product_feedback',
     'calendar_events', 'calendar_event_deletions', 'task_deletions', 'alone_time_logs', 'task_instances', 'inbox_requests',
-    'meals', 'recipe_ingredients', 'inventory', 'grocery_list'
+    'meals', 'recipe_ingredients', 'inventory', 'grocery_list',
+    'items', 'item_occurrences', 'item_logs', 'item_deletions'
   ])
   loop
     if not exists (

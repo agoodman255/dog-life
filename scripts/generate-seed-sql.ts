@@ -2,15 +2,13 @@ import { writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import {
   aloneTimeLogs,
-  calendarEvents,
   dogs,
   exposureItems,
-  healthEvents,
+  items,
   journalEntries,
   milestones,
   people,
   relationshipLogs,
-  todayTasks,
 } from "../src/data";
 
 const HOUSEHOLD_ID = "11111111-1111-1111-1111-111111111111";
@@ -152,25 +150,6 @@ for (const dog of dogs) {
   );
 }
 
-// Upserts on (household_id, title) — see the unique constraint added in
-// schema.sql. Previously this was a plain insert with no conflict handling,
-// so every re-run of this file added a fresh duplicate of every task.
-for (const task of todayTasks) {
-  lines.push(
-    `insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id, checklist_schema) values (`,
-    `  ${str(HOUSEHOLD_ID)}, ${str(task.title)}, ${str(task.category)}, ${str(personRef(task.assignedTo))}, ${str(task.time)}, ${num(task.duration)}, ${str(task.priority)}, ${textArray(task.supplies)}, ${str(task.setting)}, ${num(task.difficulty)}, ${uuidArray(task.dogIds.map(dogRef))}, ${textArray(task.checklist)}, ${str(task.grizParticipation)}, ${str(task.notes)},`,
-    `  ${task.location ? str(task.location) : "NULL"}, ${task.formation ? str(task.formation) : "NULL"}, ${task.relatedMilestoneId ? str(task.relatedMilestoneId) : "NULL"}, ${jsonb(task.checklistSchema ?? [])}`,
-    ")",
-    "on conflict (household_id, title) do update set",
-    "  category = excluded.category, assigned_to = excluded.assigned_to, time = excluded.time, duration = excluded.duration,",
-    "  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,",
-    "  dog_ids = excluded.dog_ids, checklist = excluded.checklist, griz_participation = excluded.griz_participation, notes = excluded.notes,",
-    "  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,",
-    "  checklist_schema = excluded.checklist_schema;",
-    "",
-  );
-}
-
 for (const milestone of milestones) {
   lines.push(
     `insert into milestones (id, household_id, title, track, status, dependencies, age_gate_weeks, dog_ids, steps, sources, why) values (`,
@@ -182,13 +161,6 @@ for (const milestone of milestones) {
   );
 }
 
-healthEvents.forEach((event, index) => {
-  lines.push(
-    `insert into health_events (id, household_id, dog_id, title, date, kind, notes, document_url) values (${str(seedId("health_events", index))}, ${str(HOUSEHOLD_ID)}, ${str(dogRef(event.dogId))}, ${str(event.title)}, ${str(event.date)}, ${str(event.kind)}, ${str(event.notes)}, ${event.documentUrl ? str(event.documentUrl) : "NULL"})`,
-    upsertClause(["dog_id", "title", "date", "kind", "notes", "document_url"]),
-  );
-});
-lines.push("");
 
 journalEntries.forEach((entry, index) => {
   lines.push(
@@ -219,19 +191,36 @@ relationshipLogs.forEach((log, index) => {
 });
 lines.push("");
 
-calendarEvents.forEach((event, index) => {
+// One insert covers what used to be three separate blocks (tasks, health_events,
+// calendar_events) — src/data.ts still authors the seed content in the old shapes
+// and converts it to Item on the way out, so the SQL only ever sees unified rows.
+// Upserts on (household_id, title), matching the unique constraint in schema.sql;
+// without it every re-run silently duplicated the whole seed.
+items.forEach((item) => {
   lines.push(
-    `insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (`,
-    `  ${str(seedId("calendar_events", index))}, ${str(HOUSEHOLD_ID)}, ${str(event.title)}, ${str(event.category)}, ${str(event.kind)}, ${event.recurrence ? jsonb(event.recurrence) : "NULL"}, ${dateArray(event.excludedDates ?? [])}, ${event.date ? str(event.date) : "NULL"},`,
-    `  ${str(event.windowLabel)}, ${event.startTime ? str(event.startTime) : "NULL"}, ${event.endTime ? str(event.endTime) : "NULL"}, ${num(event.durationHours ?? null)}, ${str(event.aloneTimeRequired)}, ${num(event.aloneTimeRequiredAmount ?? null)}, ${str(event.status)}, ${str(event.notes)},`,
-    `  ${uuidArray((event.attendees ?? []).map(personRef))}, ${uuidArray((event.dogIds ?? []).map(dogRef))}, ${num(event.roverVisits ?? null)}, ${textArray(event.prepSteps ?? [])}, ${textArray(event.roverInstructions ?? [])}, ${textArray(event.postSteps ?? [])}, ${event.coverageConfirmed ? "true" : "false"}, ${str(event.coverageNotes ?? "")}`,
+    `insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (`,
+    `  ${str(HOUSEHOLD_ID)}, ${str(item.title)}, ${str(item.category)}, ${str(item.intent)}, ${str(item.kind)}, ${item.recurrence ? jsonb(item.recurrence) : "NULL"}, ${dateArray(item.excludedDates ?? [])}, ${item.date ? str(item.date) : "NULL"},`,
+    `  ${str(item.windowLabel)}, ${item.startTime ? str(item.startTime) : "NULL"}, ${item.endTime ? str(item.endTime) : "NULL"}, ${num(item.durationHours ?? null)}, ${str(item.status)}, ${item.assignedTo ? str(personRef(item.assignedTo)) : "NULL"},`,
+    `  ${uuidArray((item.attendees ?? []).map(personRef))}, ${uuidArray((item.dogIds ?? []).map(dogRef))}, ${item.requiresCompletion ? "true" : "false"}, ${jsonb(item.checklist)}, ${item.checklistSourceMilestoneId ? str(item.checklistSourceMilestoneId) : "NULL"}, ${item.requiresLog ? "true" : "false"}, ${jsonb(item.logFields)},`,
+    `  ${str(item.aloneTimeRequired)}, ${num(item.aloneTimeRequiredAmount ?? null)}, ${item.coverageConfirmed ? "true" : "false"}, ${str(item.coverageNotes ?? "")}, ${str(item.priority)}, ${textArray(item.supplies)}, ${str(item.setting)}, ${num(item.difficulty)},`,
+    `  ${item.location ? str(item.location) : "NULL"}, ${item.formation ? str(item.formation) : "NULL"}, ${item.relatedMilestoneId ? str(item.relatedMilestoneId) : "NULL"}, ${item.documentUrl ? str(item.documentUrl) : "NULL"},`,
+    `  ${num(item.roverVisits ?? null)}, ${textArray(item.prepSteps ?? [])}, ${textArray(item.roverInstructions ?? [])}, ${textArray(item.postSteps ?? [])}, ${str(item.notes)}`,
     ")",
-    upsertClause([
-      "title", "category", "kind", "recurrence", "excluded_dates", "date", "window_label",
-      "start_time", "end_time", "duration_hours", "alone_time_required", "alone_time_required_amount",
-      "status", "notes", "attendees", "dog_ids", "rover_visits", "prep_steps", "rover_instructions", "post_steps",
-      "coverage_confirmed", "coverage_notes",
-    ]),
+    "on conflict (household_id, title) do update set",
+    "  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,",
+    "  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,",
+    "  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,",
+    "  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,",
+    "  requires_completion = excluded.requires_completion, checklist = excluded.checklist,",
+    "  checklist_source_milestone_id = excluded.checklist_source_milestone_id,",
+    "  requires_log = excluded.requires_log, log_fields = excluded.log_fields,",
+    "  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,",
+    "  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,",
+    "  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,",
+    "  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,",
+    "  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,",
+    "  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;",
+    "",
   );
 });
 lines.push("");

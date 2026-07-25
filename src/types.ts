@@ -59,12 +59,18 @@ export type Person = {
   color: string;
 };
 
-/** Unified category taxonomy shared by Tasks and CalendarEvents — one vocabulary across the app. */
+/** One vocabulary across the app. Also drives the default log fields an item
+ * offers (see DEFAULT_LOG_FIELDS in utils.ts) — picking "vet" pre-loads weight and
+ * temperature rather than making you invent the fields yourself. */
 export type Category =
   | "potty"
   | "meals"
   | "training"
   | "health"
+  | "vet"
+  | "vaccine"
+  | "medication"
+  | "grooming"
   | "handling"
   | "socialization"
   | "exercise"
@@ -82,33 +88,7 @@ export type Category =
 
 export type DogFormation = "together" | "parallel-buffered" | "separate-rooms" | "separate-locations" | "solo";
 
-export type Task = {
-  id: string;
-  title: string;
-  category: Category;
-  assignedTo: string;
-  time: string;
-  duration: number;
-  priority: "essential" | "important" | "optional";
-  supplies: string[];
-  setting: "indoor" | "outdoor" | "either";
-  difficulty: 1 | 2 | 3 | 4 | 5;
-  dogIds: string[];
-  checklist: string[];
-  grizParticipation: "yes" | "separate" | "managed" | "not yet";
-  notes: string;
-  /** Reference location id (see `locations` in data.ts). */
-  location?: string;
-  /** How the dogs are physically arranged during this activity. */
-  formation?: DogFormation;
-  /** Links a training task to its milestone for click-through (status, sources, next steps). */
-  relatedMilestoneId?: string;
-  /** Structured checklist definition for the lifecycle workflow (Start/End Task).
-   * Falls back to treating every `checklist` string as a boolean item when absent. */
-  checklistSchema?: ChecklistItemDef[];
-};
-
-// --- Task lifecycle workflow (start/stop/delegate/reschedule/skip) ---------
+// --- Checklists -------------------------------------------------------------
 
 export type ChecklistDataType = "boolean" | "counter" | "duration_minutes" | "free_text";
 
@@ -122,9 +102,149 @@ export type ChecklistItemValue = {
   dataType: ChecklistDataType;
   value: boolean | number | string | null;
   notes: string;
+  /** 1-5, per-row. Andrew's call (2026-07-25): every checklist row is scored on its
+   * own AND the item gets an overall score, so a bad step is visible even when the
+   * session as a whole went fine. */
+  rating?: number;
 };
 
-export type TaskState =
+// --- Logging ----------------------------------------------------------------
+
+export type LogFieldDataType = "number" | "text" | "date";
+
+/** A structured field an item prompts for each time it's logged. Seeded from the
+ * item's category (weight/temperature for health, reps for training…) but fully
+ * editable — the point is that the log has *some* structure the ingest pass can
+ * read without forcing every item into a fixed schema. */
+export type LogFieldDef = {
+  fieldName: string;
+  dataType: LogFieldDataType;
+  unit?: string;
+};
+
+export type LogFieldValue = {
+  fieldName: string;
+  dataType: LogFieldDataType;
+  unit?: string;
+  value: number | string | null;
+};
+
+/** One timestamped log against an item. Multiple entries per item (and per
+ * occurrence) are the point — weight over time, symptoms across days. Free text
+ * always allowed; structured `values` come from the item's logFields. */
+export type ItemLog = {
+  id: string;
+  itemId: string;
+  /** YYYY-MM-DD of the occurrence this log belongs to, when the item recurs. */
+  occurrenceDate?: string;
+  loggedAt: string;
+  loggedBy: string;
+  text: string;
+  values: LogFieldValue[];
+  dogIds: string[];
+  /** ISO timestamp set by the review-logs skill once it has folded this entry into
+   * the dog record / milestones / docs. Absent = not yet ingested, so re-runs stay
+   * incremental instead of re-reading the whole history. */
+  processedAt?: string;
+};
+
+// --- The unified item -------------------------------------------------------
+
+/** What the user is actually creating. Presets in the Add menu set the two
+ * capability flags (`requiresCompletion` / `requiresLog`) — the intent is stored
+ * so the UI can label the item and re-seed sensible defaults on edit. */
+export type ItemIntent = "routine" | "event" | "appointment" | "training" | "health-record";
+
+/** One type for everything that lands on the calendar. Replaces the old
+ * Task / CalendarEvent / HealthEvent split, which forced the scheduling machinery
+ * (recurrence, times, coverage) onto one type and the completion machinery
+ * (checklist, lifecycle, rating) onto another. Two independent capability flags
+ * decide what an item asks of you rather than three fixed types deciding for you. */
+export type Item = {
+  id: string;
+  title: string;
+  category: Category;
+  intent: ItemIntent;
+
+  // --- scheduling ---
+  kind: "recurring" | "one-off";
+  /** Required when kind is "recurring". */
+  recurrence?: Recurrence;
+  /** YYYY-MM-DD dates to skip — how a single occurrence of a recurring series gets deleted without deleting the whole series. */
+  excludedDates?: string[];
+  date?: string;
+  windowLabel: string;
+  /** Wall-clock start time, e.g. "7:00 PM". At least 2 of startTime/endTime/durationHours must be set — the third is derived. */
+  startTime?: string;
+  endTime?: string;
+  durationHours?: number;
+  status: "confirmed" | "placeholder";
+
+  // --- who ---
+  /** Person id who owns getting this done. Blank = whole household. */
+  assignedTo: string;
+  /** Person id(s) expected to attend. Omit for whole-household events. */
+  attendees?: string[];
+  /** Dog id(s) this item involves. Omit when it isn't dog-specific. */
+  dogIds?: string[];
+
+  // --- completion capability ---
+  /** True = this isn't done until someone checks it off. False = it just sits on
+   * the calendar (a concert, a work block) and asks nothing of you. */
+  requiresCompletion: boolean;
+  /** Sub-items that must be worked through before the item can close. Each row
+   * carries its own value, notes, and 1-5 score at completion time. */
+  checklist: ChecklistItemDef[];
+  /** When set, `checklist` is derived from this milestone's steps instead of being
+   * hand-typed, and ticking rows off advances the milestone's completedSessions. */
+  checklistSourceMilestoneId?: string;
+
+  // --- logging capability ---
+  /** True = prompt for a log entry (free text + `logFields`) so the weekly ingest
+   * pass has something to read. Independent of requiresCompletion: a vet visit logs
+   * without a checklist, a training session does both. */
+  requiresLog: boolean;
+  logFields: LogFieldDef[];
+
+  // --- dog coverage (unchanged from CalendarEvent) ---
+  aloneTimeRequired: "all" | "partial" | "no";
+  aloneTimeRequiredAmount?: number;
+  coverageConfirmed?: boolean;
+  coverageNotes?: string;
+
+  // --- carried over from Task ---
+  priority: "essential" | "important" | "optional";
+  supplies: string[];
+  setting: "indoor" | "outdoor" | "either";
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  /** Reference location id (see `locations` in data.ts). */
+  location?: string;
+  /** How the dogs are physically arranged during this activity. */
+  formation?: DogFormation;
+  /** Links to a milestone for click-through (status, sources, next steps). Separate
+   * from checklistSourceMilestoneId, which additionally drives the checklist. */
+  relatedMilestoneId?: string;
+
+  // --- carried over from HealthEvent ---
+  /** Link to a stored receipt/vaccine record/document. */
+  documentUrl?: string;
+
+  // --- away-from-home planning (carried over from CalendarEvent) ---
+  /** Number of Rover sitter visits recommended while away (0/undefined = none needed). */
+  roverVisits?: number;
+  /** Checklist to run through before leaving the house. */
+  prepSteps?: string[];
+  /** What the Rover sitter should do during each visit. */
+  roverInstructions?: string[];
+  /** Checklist for the moment someone gets home. */
+  postSteps?: string[];
+
+  notes: string;
+};
+
+// --- Item lifecycle workflow (start/stop/delegate/reschedule/skip) ----------
+
+export type ItemState =
   | "not_started"
   | "in_progress"
   | "completed"
@@ -133,49 +253,54 @@ export type TaskState =
   | "assigned_pending"
   | "reassigned";
 
-export type TaskHistoryEntryType = "start" | "end" | "reschedule" | "skip" | "delegate" | "accept" | "decline";
+export type ItemHistoryEntryType = "start" | "end" | "reschedule" | "skip" | "delegate" | "accept" | "decline";
 
-export type TaskHistoryEntry = {
+export type ItemHistoryEntry = {
   id: string;
-  type: TaskHistoryEntryType;
+  type: ItemHistoryEntryType;
   oldValue: string;
   newValue: string;
   reason: string;
   timestamp: string;
 };
 
-export type TaskInstance = {
+/** Per-date state for an item. Separate from `Item` because a recurring item needs
+ * independent completion state per occurrence — finishing Monday's must not finish
+ * Tuesday's. Invisible to the user; they only ever see "the item". */
+export type ItemOccurrence = {
   id: string;
-  templateId: string;
-  /** YYYY-MM-DD — the template's natural recurring slot this instance was generated
+  itemId: string;
+  /** YYYY-MM-DD — the item's natural recurring slot this occurrence was generated
    * for. Fixed at creation; used as the lookup key so a reschedule can move `date`
    * away without losing track of which day it was originally supposed to happen. */
   originalDate: string;
-  /** YYYY-MM-DD — the day this instance is currently scheduled for. Equals
+  /** YYYY-MM-DD — the day this occurrence is currently scheduled for. Equals
    * `originalDate` unless it's been rescheduled. */
   date: string;
-  state: TaskState;
+  state: ItemState;
   assignedTo: string;
   originalAssignedTo: string;
-  /** Wall-clock label for the day, e.g. "7:15 AM" — copied from the template, changes on reschedule. */
+  /** Wall-clock label for the day, e.g. "7:15 AM" — copied from the item, changes on reschedule. */
   scheduledTime: string;
   startTime?: string;
   startTimeZone?: string;
   endTime?: string;
   endTimeZone?: string;
+  /** Overall 1-5 for the item as a whole, alongside each checklist row's own score. */
   rating?: number;
+  ratingNotes?: string;
   checklist: ChecklistItemValue[];
-  history: TaskHistoryEntry[];
+  history: ItemHistoryEntry[];
 };
 
-export type TaskDeletionScope = "instance" | "series";
+export type ItemDeletionScope = "instance" | "series";
 
-/** Audit trail for deleted tasks/occurrences — required note captured at delete time. */
-export type TaskDeletion = {
+/** Audit trail for deleted items/occurrences — required note captured at delete time. */
+export type ItemDeletion = {
   id: string;
-  taskId: string;
-  taskTitle: string;
-  scope: TaskDeletionScope;
+  itemId: string;
+  itemTitle: string;
+  scope: ItemDeletionScope;
   /** YYYY-MM-DD — set only when scope is "instance". */
   occurrenceDate?: string;
   note: string;
@@ -186,7 +311,7 @@ export type InboxRequestStatus = "pending" | "accepted" | "declined";
 
 export type InboxRequest = {
   id: string;
-  taskInstanceId: string;
+  itemOccurrenceId: string;
   fromPersonId: string;
   toPersonId: string;
   status: InboxRequestStatus;
@@ -219,18 +344,6 @@ export type Milestone = {
   steps: MilestoneStep[];
   sources: TrainingSource[];
   why: string;
-};
-
-export type HealthEvent = {
-  id: string;
-  dogId: string;
-  title: string;
-  date: string;
-  kind: "vaccine" | "vet" | "medication" | "grooming" | "weight" | "insurance";
-  notes: string;
-  /** Link to a stored receipt/vaccine record/document — e.g. a URL from the
-   * Storage upload script (scripts/upload-asset.ts) or any external link. */
-  documentUrl?: string;
 };
 
 export type JournalEntry = {
@@ -331,60 +444,6 @@ export type Recurrence = {
   endDate?: string;
   /** Optional, mutually exclusive with endDate. Series stops after this many total occurrences. */
   occurrenceCount?: number;
-};
-
-export type CalendarEvent = {
-  id: string;
-  title: string;
-  category: Category;
-  kind: "recurring" | "one-off";
-  /** Required when kind is "recurring". */
-  recurrence?: Recurrence;
-  /** YYYY-MM-DD dates to skip — how a single occurrence of a recurring series gets deleted without deleting the whole series. */
-  excludedDates?: string[];
-  date?: string;
-  windowLabel: string;
-  /** Wall-clock start time, e.g. "7:00 PM". At least 2 of startTime/endTime/durationHours must be set — the third is derived. */
-  startTime?: string;
-  endTime?: string;
-  durationHours?: number;
-  /** Does this event need dog coverage arranged? "partial" carries a user-entered amount in aloneTimeRequiredAmount (hours). Whether that coverage is actually needed given proven alone-time tolerance is computed, not stored — see computeEventCoverageNeeded in utils.ts. */
-  aloneTimeRequired: "all" | "partial" | "no";
-  aloneTimeRequiredAmount?: number;
-  status: "confirmed" | "placeholder";
-  notes: string;
-  /** Person id(s) this block belongs to / is expected to attend. Omit for whole-household ("everyone") events. */
-  attendees?: string[];
-  /** Dog id(s) this event specifically involves. Omit when the event isn't dog-specific. */
-  dogIds?: string[];
-  /** Number of Rover sitter visits recommended while away (0/undefined = no rover needed). */
-  roverVisits?: number;
-  /** Checklist to run through before leaving the house. */
-  prepSteps?: string[];
-  /** What the Rover sitter should do during each visit. */
-  roverInstructions?: string[];
-  /** Checklist for the moment someone gets home. */
-  postSteps?: string[];
-  /** Has a human confirmed coverage is arranged for this event? Only meaningful
-   * when computeEventCoverageNeeded(event, readiness) is true — required before
-   * the "needs coverage" warning can be dismissed. */
-  coverageConfirmed?: boolean;
-  /** Required alongside coverageConfirmed — what the arranged coverage actually is. */
-  coverageNotes?: string;
-};
-
-export type CalendarEventDeletionScope = "instance" | "series";
-
-/** Audit trail for deleted calendar events/occurrences — required note captured at delete time. */
-export type CalendarEventDeletion = {
-  id: string;
-  eventId: string;
-  eventTitle: string;
-  scope: CalendarEventDeletionScope;
-  /** YYYY-MM-DD — set only when scope is "instance". */
-  occurrenceDate?: string;
-  note: string;
-  deletedAt: string;
 };
 
 export type AloneTimeLog = {

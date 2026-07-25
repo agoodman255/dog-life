@@ -1,15 +1,16 @@
 import {
   AloneTimeLog,
-  CalendarEvent,
-  CalendarEventDeletion,
   DailyFeedback,
   Dog,
   ExposureItem,
   GroceryListItem,
-  HealthEvent,
   Household,
   InboxRequest,
   InventoryItem,
+  Item,
+  ItemDeletion,
+  ItemLog,
+  ItemOccurrence,
   JournalEntry,
   Meal,
   Milestone,
@@ -17,9 +18,6 @@ import {
   ProductFeedback,
   RecipeIngredient,
   RelationshipLog,
-  Task,
-  TaskDeletion,
-  TaskInstance,
 } from "./types";
 
 // Each entity gets a fromRow (DB snake_case -> app camelCase) and toRow
@@ -119,50 +117,120 @@ export const dog = {
   },
 };
 
-export const task = {
-  fromRow(row: any): Task {
+export const item = {
+  fromRow(row: any): Item {
     return {
       id: row.id,
       title: row.title,
       category: row.category,
-      assignedTo: row.assigned_to,
-      time: row.time,
-      duration: row.duration,
-      priority: row.priority,
-      supplies: row.supplies ?? [],
-      setting: row.setting,
-      difficulty: row.difficulty,
-      dogIds: row.dog_ids ?? [],
+      intent: row.intent ?? "event",
+      kind: row.kind,
+      recurrence: row.recurrence ?? undefined,
+      excludedDates: row.excluded_dates ?? undefined,
+      date: row.date ?? undefined,
+      windowLabel: row.window_label ?? "",
+      startTime: row.start_time ?? undefined,
+      endTime: row.end_time ?? undefined,
+      durationHours: row.duration_hours ?? undefined,
+      status: row.status,
+      assignedTo: row.assigned_to ?? "",
+      attendees: row.attendees && row.attendees.length > 0 ? row.attendees : undefined,
+      dogIds: row.dog_ids && row.dog_ids.length > 0 ? row.dog_ids : undefined,
+      requiresCompletion: row.requires_completion ?? false,
       checklist: row.checklist ?? [],
-      grizParticipation: row.griz_participation,
-      notes: row.notes,
+      checklistSourceMilestoneId: row.checklist_source_milestone_id ?? undefined,
+      requiresLog: row.requires_log ?? false,
+      logFields: row.log_fields ?? [],
+      aloneTimeRequired: row.alone_time_required ?? "no",
+      aloneTimeRequiredAmount: row.alone_time_required_amount ?? undefined,
+      coverageConfirmed: row.coverage_confirmed ?? undefined,
+      coverageNotes: row.coverage_notes ?? undefined,
+      priority: row.priority ?? "important",
+      supplies: row.supplies ?? [],
+      setting: row.setting ?? "either",
+      difficulty: row.difficulty ?? 1,
       location: row.location ?? undefined,
       formation: row.formation ?? undefined,
       relatedMilestoneId: row.related_milestone_id ?? undefined,
-      checklistSchema: row.checklist_schema ?? undefined,
+      documentUrl: row.document_url ?? undefined,
+      roverVisits: row.rover_visits ?? undefined,
+      prepSteps: row.prep_steps ?? undefined,
+      roverInstructions: row.rover_instructions ?? undefined,
+      postSteps: row.post_steps ?? undefined,
+      notes: row.notes ?? "",
     };
   },
-  toRow(item: Task, householdId: string) {
+  toRow(entry: Item, householdId: string) {
     return {
-      id: item.id,
+      id: entry.id,
       household_id: householdId,
-      title: item.title,
-      category: item.category,
-      assigned_to: item.assignedTo,
-      time: item.time,
-      duration: item.duration,
-      priority: item.priority,
-      supplies: item.supplies,
-      setting: item.setting,
-      difficulty: item.difficulty,
-      dog_ids: item.dogIds,
-      checklist: item.checklist,
-      griz_participation: item.grizParticipation,
-      notes: item.notes,
-      location: item.location ?? null,
-      formation: item.formation ?? null,
-      related_milestone_id: item.relatedMilestoneId ?? null,
-      checklist_schema: item.checklistSchema ?? null,
+      title: entry.title,
+      category: entry.category,
+      intent: entry.intent,
+      kind: entry.kind,
+      recurrence: entry.recurrence ?? null,
+      excluded_dates: entry.excludedDates ?? [],
+      date: entry.date || null,
+      window_label: entry.windowLabel,
+      start_time: entry.startTime || null,
+      end_time: entry.endTime || null,
+      duration_hours: entry.durationHours ?? null,
+      status: entry.status,
+      assigned_to: entry.assignedTo || null,
+      attendees: entry.attendees ?? [],
+      dog_ids: entry.dogIds ?? [],
+      requires_completion: entry.requiresCompletion,
+      checklist: entry.checklist,
+      checklist_source_milestone_id: entry.checklistSourceMilestoneId ?? null,
+      requires_log: entry.requiresLog,
+      log_fields: entry.logFields,
+      alone_time_required: entry.aloneTimeRequired ?? "no",
+      alone_time_required_amount: entry.aloneTimeRequiredAmount ?? null,
+      coverage_confirmed: entry.coverageConfirmed ?? false,
+      coverage_notes: entry.coverageNotes ?? "",
+      priority: entry.priority,
+      supplies: entry.supplies,
+      setting: entry.setting,
+      difficulty: entry.difficulty,
+      location: entry.location ?? null,
+      formation: entry.formation ?? null,
+      related_milestone_id: entry.relatedMilestoneId ?? null,
+      document_url: entry.documentUrl ?? null,
+      rover_visits: entry.roverVisits ?? null,
+      prep_steps: entry.prepSteps ?? [],
+      rover_instructions: entry.roverInstructions ?? [],
+      post_steps: entry.postSteps ?? [],
+      notes: entry.notes,
+    };
+  },
+};
+
+export const itemLog = {
+  fromRow(row: any): ItemLog {
+    return {
+      id: row.id,
+      itemId: row.item_id,
+      occurrenceDate: row.occurrence_date ?? undefined,
+      loggedAt: row.logged_at,
+      loggedBy: row.logged_by ?? "",
+      text: row.text ?? "",
+      values: row.values ?? [],
+      dogIds: row.dog_ids ?? [],
+      processedAt: row.processed_at ?? undefined,
+    };
+  },
+  toRow(entry: ItemLog, householdId: string) {
+    return {
+      id: entry.id,
+      household_id: householdId,
+      item_id: entry.itemId,
+      occurrence_date: entry.occurrenceDate || null,
+      logged_at: entry.loggedAt,
+      logged_by: entry.loggedBy || null,
+      text: entry.text,
+      values: entry.values,
+      dog_ids: entry.dogIds,
+      processed_at: entry.processedAt ?? null,
     };
   },
 };
@@ -195,32 +263,6 @@ export const milestone = {
       steps: item.steps,
       sources: item.sources,
       why: item.why,
-    };
-  },
-};
-
-export const healthEvent = {
-  fromRow(row: any): HealthEvent {
-    return {
-      id: row.id,
-      dogId: row.dog_id,
-      title: row.title,
-      date: row.date,
-      kind: row.kind,
-      notes: row.notes,
-      documentUrl: row.document_url ?? undefined,
-    };
-  },
-  toRow(item: HealthEvent, householdId: string) {
-    return {
-      id: item.id,
-      household_id: householdId,
-      dog_id: item.dogId,
-      title: item.title,
-      date: item.date,
-      kind: item.kind,
-      notes: item.notes,
-      document_url: item.documentUrl ?? null,
     };
   },
 };
@@ -349,112 +391,28 @@ export const feedback = {
   },
 };
 
-export const calendarEvent = {
-  fromRow(row: any): CalendarEvent {
+export const itemDeletion = {
+  fromRow(row: any): ItemDeletion {
     return {
       id: row.id,
-      title: row.title,
-      category: row.category,
-      kind: row.kind,
-      recurrence: row.recurrence ?? undefined,
-      excludedDates: row.excluded_dates ?? undefined,
-      date: row.date ?? undefined,
-      windowLabel: row.window_label,
-      startTime: row.start_time ?? undefined,
-      endTime: row.end_time ?? undefined,
-      durationHours: row.duration_hours ?? undefined,
-      aloneTimeRequired: row.alone_time_required ?? "no",
-      aloneTimeRequiredAmount: row.alone_time_required_amount ?? undefined,
-      status: row.status,
-      notes: row.notes,
-      attendees: row.attendees && row.attendees.length > 0 ? row.attendees : undefined,
-      dogIds: row.dog_ids && row.dog_ids.length > 0 ? row.dog_ids : undefined,
-      roverVisits: row.rover_visits ?? undefined,
-      prepSteps: row.prep_steps ?? undefined,
-      roverInstructions: row.rover_instructions ?? undefined,
-      postSteps: row.post_steps ?? undefined,
-      coverageConfirmed: row.coverage_confirmed ?? undefined,
-      coverageNotes: row.coverage_notes ?? undefined,
-    };
-  },
-  toRow(item: CalendarEvent, householdId: string) {
-    return {
-      id: item.id,
-      household_id: householdId,
-      title: item.title,
-      category: item.category,
-      kind: item.kind,
-      recurrence: item.recurrence ?? null,
-      excluded_dates: item.excludedDates ?? [],
-      date: item.date || null,
-      window_label: item.windowLabel,
-      start_time: item.startTime || null,
-      end_time: item.endTime || null,
-      duration_hours: item.durationHours ?? null,
-      alone_time_required: item.aloneTimeRequired ?? "no",
-      alone_time_required_amount: item.aloneTimeRequiredAmount ?? null,
-      status: item.status,
-      notes: item.notes,
-      attendees: item.attendees ?? [],
-      dog_ids: item.dogIds ?? [],
-      rover_visits: item.roverVisits ?? null,
-      prep_steps: item.prepSteps ?? [],
-      rover_instructions: item.roverInstructions ?? [],
-      post_steps: item.postSteps ?? [],
-      coverage_confirmed: item.coverageConfirmed ?? false,
-      coverage_notes: item.coverageNotes ?? "",
-    };
-  },
-};
-
-export const calendarEventDeletion = {
-  fromRow(row: any): CalendarEventDeletion {
-    return {
-      id: row.id,
-      eventId: row.event_id,
-      eventTitle: row.event_title,
+      itemId: row.item_id,
+      itemTitle: row.item_title,
       scope: row.scope,
       occurrenceDate: row.occurrence_date ?? undefined,
       note: row.note,
       deletedAt: row.deleted_at,
     };
   },
-  toRow(item: CalendarEventDeletion, householdId: string) {
+  toRow(entry: ItemDeletion, householdId: string) {
     return {
-      id: item.id,
+      id: entry.id,
       household_id: householdId,
-      event_id: item.eventId,
-      event_title: item.eventTitle,
-      scope: item.scope,
-      occurrence_date: item.occurrenceDate || null,
-      note: item.note,
-      deleted_at: item.deletedAt,
-    };
-  },
-};
-
-export const taskDeletion = {
-  fromRow(row: any): TaskDeletion {
-    return {
-      id: row.id,
-      taskId: row.task_id,
-      taskTitle: row.task_title,
-      scope: row.scope,
-      occurrenceDate: row.occurrence_date ?? undefined,
-      note: row.note,
-      deletedAt: row.deleted_at,
-    };
-  },
-  toRow(item: TaskDeletion, householdId: string) {
-    return {
-      id: item.id,
-      household_id: householdId,
-      task_id: item.taskId,
-      task_title: item.taskTitle,
-      scope: item.scope,
-      occurrence_date: item.occurrenceDate || null,
-      note: item.note,
-      deleted_at: item.deletedAt,
+      item_id: entry.itemId,
+      item_title: entry.itemTitle,
+      scope: entry.scope,
+      occurrence_date: entry.occurrenceDate || null,
+      note: entry.note,
+      deleted_at: entry.deletedAt,
     };
   },
 };
@@ -475,11 +433,11 @@ export const aloneTimeLog = {
   },
 };
 
-export const taskInstance = {
-  fromRow(row: any): TaskInstance {
+export const itemOccurrence = {
+  fromRow(row: any): ItemOccurrence {
     return {
       id: row.id,
-      templateId: row.template_id,
+      itemId: row.item_id,
       originalDate: row.original_date,
       date: row.date,
       state: row.state,
@@ -491,28 +449,30 @@ export const taskInstance = {
       endTime: row.end_time ?? undefined,
       endTimeZone: row.end_time_zone ?? undefined,
       rating: row.rating ?? undefined,
+      ratingNotes: row.rating_notes ?? undefined,
       checklist: row.checklist ?? [],
       history: row.history ?? [],
     };
   },
-  toRow(item: TaskInstance, householdId: string) {
+  toRow(entry: ItemOccurrence, householdId: string) {
     return {
-      id: item.id,
+      id: entry.id,
       household_id: householdId,
-      template_id: item.templateId,
-      original_date: item.originalDate,
-      date: item.date,
-      state: item.state,
-      assigned_to: item.assignedTo,
-      original_assigned_to: item.originalAssignedTo,
-      scheduled_time: item.scheduledTime,
-      start_time: item.startTime ?? null,
-      start_time_zone: item.startTimeZone ?? null,
-      end_time: item.endTime ?? null,
-      end_time_zone: item.endTimeZone ?? null,
-      rating: item.rating ?? null,
-      checklist: item.checklist,
-      history: item.history,
+      item_id: entry.itemId,
+      original_date: entry.originalDate,
+      date: entry.date,
+      state: entry.state,
+      assigned_to: entry.assignedTo,
+      original_assigned_to: entry.originalAssignedTo,
+      scheduled_time: entry.scheduledTime,
+      start_time: entry.startTime ?? null,
+      start_time_zone: entry.startTimeZone ?? null,
+      end_time: entry.endTime ?? null,
+      end_time_zone: entry.endTimeZone ?? null,
+      rating: entry.rating ?? null,
+      rating_notes: entry.ratingNotes ?? null,
+      checklist: entry.checklist,
+      history: entry.history,
     };
   },
 };
@@ -521,7 +481,7 @@ export const inboxRequest = {
   fromRow(row: any): InboxRequest {
     return {
       id: row.id,
-      taskInstanceId: row.task_instance_id,
+      itemOccurrenceId: row.item_occurrence_id,
       fromPersonId: row.from_person_id,
       toPersonId: row.to_person_id,
       status: row.status,
@@ -529,16 +489,16 @@ export const inboxRequest = {
       respondedAt: row.responded_at ?? undefined,
     };
   },
-  toRow(item: InboxRequest, householdId: string) {
+  toRow(entry: InboxRequest, householdId: string) {
     return {
-      id: item.id,
+      id: entry.id,
       household_id: householdId,
-      task_instance_id: item.taskInstanceId,
-      from_person_id: item.fromPersonId,
-      to_person_id: item.toPersonId,
-      status: item.status,
-      created_at: item.createdAt,
-      responded_at: item.respondedAt ?? null,
+      item_occurrence_id: entry.itemOccurrenceId,
+      from_person_id: entry.fromPersonId,
+      to_person_id: entry.toPersonId,
+      status: entry.status,
+      created_at: entry.createdAt,
+      responded_at: entry.respondedAt ?? null,
     };
   },
 };

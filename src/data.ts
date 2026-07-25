@@ -1,23 +1,93 @@
 import {
   AloneTimeLog,
-  CalendarEvent,
+  Category,
+  ChecklistItemDef,
   Dog,
+  DogFormation,
   ExposureItem,
   FeedbackLoopRule,
   GroceryListItem,
-  HealthEvent,
   Household,
   InventoryCategory,
   InventoryItem,
+  Item,
   JournalEntry,
   Location,
   Meal,
   Milestone,
   Person,
   RecipeIngredient,
+  Recurrence,
   RelationshipLog,
-  Task,
 } from "./types";
+import { defaultLogFieldsFor } from "./utils";
+
+// The seed content below was authored against the old three-type split (Task /
+// HealthEvent / CalendarEvent). Rather than rewrite ~1,300 lines of hand-written
+// household detail by hand, the arrays keep their original shapes and get converted
+// to the unified `Item` on the way out (see `items` at the bottom of this file).
+// Anything authored from here on should be written directly as an `Item`.
+
+type TaskSeed = {
+  id: string;
+  title: string;
+  category: Category;
+  assignedTo: string;
+  time: string;
+  /** minutes */
+  duration: number;
+  priority: "essential" | "important" | "optional";
+  supplies: string[];
+  setting: "indoor" | "outdoor" | "either";
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  dogIds: string[];
+  checklist: string[];
+  checklistSchema?: ChecklistItemDef[];
+  /** Dropped in the unified model — `formation` + `dogIds` already carry this, and
+   * it hardcoded one specific dog's name into the schema. Kept on the seed type
+   * only so the existing entries below still parse. */
+  grizParticipation?: "yes" | "separate" | "managed" | "not yet";
+  notes: string;
+  location?: string;
+  formation?: DogFormation;
+  relatedMilestoneId?: string;
+};
+
+type HealthEventSeed = {
+  id: string;
+  dogId: string;
+  title: string;
+  date: string;
+  kind: "vaccine" | "vet" | "medication" | "grooming" | "weight" | "insurance";
+  notes: string;
+  documentUrl?: string;
+};
+
+type CalendarEventSeed = {
+  id: string;
+  title: string;
+  category: Category;
+  kind: "recurring" | "one-off";
+  recurrence?: Recurrence;
+  excludedDates?: string[];
+  date?: string;
+  windowLabel: string;
+  startTime?: string;
+  endTime?: string;
+  durationHours?: number;
+  aloneTimeRequired: "all" | "partial" | "no";
+  aloneTimeRequiredAmount?: number;
+  status: "confirmed" | "placeholder";
+  notes: string;
+  attendees?: string[];
+  dogIds?: string[];
+  roverVisits?: number;
+  prepSteps?: string[];
+  roverInstructions?: string[];
+  postSteps?: string[];
+  coverageConfirmed?: boolean;
+  coverageNotes?: string;
+};
 
 export const households: Household[] = [
   {
@@ -220,7 +290,7 @@ export const locations: Location[] = [
   },
 ];
 
-export const todayTasks: Task[] = [
+const todayTasks: TaskSeed[] = [
   {
     id: "morning-potty",
     title: "Morning potty",
@@ -975,7 +1045,7 @@ export const milestones: Milestone[] = [
   ] as Array<Omit<Milestone, "dogIds" | "status">>).map((milestone) => ({ ...milestone, dogIds: ["puppy"], status: "locked" as const })),
 ];
 
-export const healthEvents: HealthEvent[] = [
+const healthEvents: HealthEventSeed[] = [
   {
     id: "pickup-day",
     dogId: "puppy",
@@ -1238,9 +1308,9 @@ function footballGame(
   opponent: string,
   date: string,
   timeLabel: string,
-  status: CalendarEvent["status"],
+  status: CalendarEventSeed["status"],
   notes: string,
-): CalendarEvent {
+): CalendarEventSeed {
   const clean = CLEAN_TIME.test(timeLabel);
   return {
     id,
@@ -1256,7 +1326,7 @@ function footballGame(
   };
 }
 
-export const calendarEvents: CalendarEvent[] = [
+const calendarEvents: CalendarEventSeed[] = [
   // Recurring weekly commitments
   {
     id: "gym-concert-series",
@@ -1533,3 +1603,130 @@ export const calendarEvents: CalendarEvent[] = [
 // Empty — no alone-time practice has happened yet since the puppy isn't
 // picked up until 8/1/26. Log real entries via the app as training happens.
 export const aloneTimeLogs: AloneTimeLog[] = [];
+
+// --- Seed -> unified Item conversion ---------------------------------------
+
+/** Daily routines had no recurrence in the old model — they simply rendered on
+ * every day the calendar drew. The unified model makes that explicit, anchored to
+ * the day the puppy comes home so the routine doesn't back-fill months of history. */
+const ROUTINE_START_DATE = "2026-08-01";
+
+function taskSeedToItem(seed: TaskSeed): Item {
+  const isTraining = seed.category === "training" || seed.category === "handling" || seed.category === "socialization";
+  return {
+    id: seed.id,
+    title: seed.title,
+    category: seed.category,
+    intent: isTraining ? "training" : "routine",
+    kind: "recurring",
+    recurrence: { frequency: "daily", interval: 1, startDate: ROUTINE_START_DATE },
+    windowLabel: "",
+    startTime: seed.time,
+    durationHours: seed.duration / 60,
+    status: "confirmed",
+    assignedTo: seed.assignedTo,
+    dogIds: seed.dogIds.length > 0 ? seed.dogIds : undefined,
+    requiresCompletion: true,
+    checklist:
+      seed.checklistSchema && seed.checklistSchema.length > 0
+        ? seed.checklistSchema
+        : seed.checklist.map((name) => ({ itemName: name, dataType: "boolean" as const })),
+    requiresLog: isTraining,
+    logFields: isTraining ? defaultLogFieldsFor(seed.category) : [],
+    aloneTimeRequired: "no",
+    priority: seed.priority,
+    supplies: seed.supplies,
+    setting: seed.setting,
+    difficulty: seed.difficulty,
+    location: seed.location,
+    formation: seed.formation,
+    relatedMilestoneId: seed.relatedMilestoneId,
+    notes: seed.notes,
+  };
+}
+
+/** The old HealthEvent.kind carried both a category ("was this a vet visit?") and a
+ * measurement ("this row records a weight"). Categories absorb the former; the
+ * latter becomes a log field, which is strictly better — a weigh-in is now a value
+ * with a date attached rather than a row whose title has to spell the number out. */
+const HEALTH_KIND_TO_CATEGORY: Record<HealthEventSeed["kind"], Category> = {
+  vaccine: "vaccine",
+  vet: "vet",
+  medication: "medication",
+  grooming: "grooming",
+  weight: "health",
+  insurance: "health",
+};
+
+function healthSeedToItem(seed: HealthEventSeed): Item {
+  const category = HEALTH_KIND_TO_CATEGORY[seed.kind];
+  const scheduled = seed.kind === "vet" || seed.kind === "vaccine" || seed.kind === "grooming";
+  return {
+    id: seed.id,
+    title: seed.title,
+    category,
+    intent: scheduled ? "appointment" : "health-record",
+    kind: "one-off",
+    date: seed.date,
+    windowLabel: "",
+    durationHours: scheduled ? 1 : undefined,
+    status: "confirmed",
+    assignedTo: "",
+    dogIds: [seed.dogId],
+    requiresCompletion: false,
+    checklist: [],
+    requiresLog: true,
+    logFields: defaultLogFieldsFor(category),
+    aloneTimeRequired: "no",
+    priority: "important",
+    supplies: [],
+    setting: "either",
+    difficulty: 1,
+    documentUrl: seed.documentUrl,
+    notes: seed.notes,
+  };
+}
+
+function calendarSeedToItem(seed: CalendarEventSeed): Item {
+  return {
+    id: seed.id,
+    title: seed.title,
+    category: seed.category,
+    intent: "event",
+    kind: seed.kind,
+    recurrence: seed.recurrence,
+    excludedDates: seed.excludedDates,
+    date: seed.date,
+    windowLabel: seed.windowLabel,
+    startTime: seed.startTime,
+    endTime: seed.endTime,
+    durationHours: seed.durationHours,
+    status: seed.status,
+    assignedTo: "",
+    attendees: seed.attendees,
+    dogIds: seed.dogIds,
+    requiresCompletion: false,
+    checklist: [],
+    requiresLog: false,
+    logFields: [],
+    aloneTimeRequired: seed.aloneTimeRequired,
+    aloneTimeRequiredAmount: seed.aloneTimeRequiredAmount,
+    coverageConfirmed: seed.coverageConfirmed,
+    coverageNotes: seed.coverageNotes,
+    priority: "important",
+    supplies: [],
+    setting: "either",
+    difficulty: 1,
+    roverVisits: seed.roverVisits,
+    prepSteps: seed.prepSteps,
+    roverInstructions: seed.roverInstructions,
+    postSteps: seed.postSteps,
+    notes: seed.notes,
+  };
+}
+
+export const items: Item[] = [
+  ...todayTasks.map(taskSeedToItem),
+  ...healthEvents.map(healthSeedToItem),
+  ...calendarEvents.map(calendarSeedToItem),
+];

@@ -57,72 +57,6 @@ insert into dogs (id, household_id, name, breed, birthday, sex, color, weight, e
 )
 on conflict (id) do update set name = excluded.name, breed = excluded.breed, birthday = excluded.birthday, sex = excluded.sex, color = excluded.color, weight = excluded.weight, expected_adult_weight = excluded.expected_adult_weight, weight_history = excluded.weight_history, microchip = excluded.microchip, photo = excluded.photo, veterinarian = excluded.veterinarian, insurance = excluded.insurance, breeder = excluded.breeder, health_summary = excluded.health_summary, medical_history = excluded.medical_history, allergies = excluded.allergies, medication_entries = excluded.medication_entries, energy = excluded.energy, confidence = excluded.confidence, fearfulness = excluded.fearfulness, resource_guarding = excluded.resource_guarding, dog_friendliness = excluded.dog_friendliness, human_friendliness = excluded.human_friendliness, noise_sensitivity = excluded.noise_sensitivity, favorite_rewards = excluded.favorite_rewards, favorite_toys = excluded.favorite_toys, mastered_commands = excluded.mastered_commands, exercise_need = excluded.exercise_need, status = excluded.status;
 
-insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id, checklist_schema) values (
-  '11111111-1111-1111-1111-111111111111', 'Morning potty', 'potty', '11111111-1111-1111-1111-111111111112', '7:15 AM', 5, 'essential', ARRAY['Treat pouch', 'Leash']::text[], 'outdoor', 1, ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], ARRAY['Outside', 'Reward', 'Pee', 'Poop', 'No accidents']::text[], 'yes', 'Keep it boring, reward fast, log how quickly the puppy goes. Real cadence once home: potty every ~2 hours (rule of thumb — hourly frequency roughly equals age in months), always right after eating or waking. Griz''s morning-walk poop happens naturally in this same window, so this is one joint trip out rather than two separate ones — his schedule is flexible enough to slide onto the puppy''s timing (see the merged-schedule note in the knowledge doc). No playtime or extra praise during the potty trip itself — calm acknowledgment only when the behavior happens, then a short play reward after.',
-  'home-fenced-yard', 'together', NULL, '[{"itemName":"Peed","dataType":"counter"},{"itemName":"Pooped","dataType":"counter"},{"itemName":"Playtime occurred","dataType":"boolean"},{"itemName":"Playtime duration (min)","dataType":"duration_minutes"},{"itemName":"Treats given","dataType":"counter"},{"itemName":"Notes","dataType":"free_text"}]'::jsonb
-)
-on conflict (household_id, title) do update set
-  category = excluded.category, assigned_to = excluded.assigned_to, time = excluded.time, duration = excluded.duration,
-  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
-  dog_ids = excluded.dog_ids, checklist = excluded.checklist, griz_participation = excluded.griz_participation, notes = excluded.notes,
-  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
-  checklist_schema = excluded.checklist_schema;
-
-insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id, checklist_schema) values (
-  '11111111-1111-1111-1111-111111111111', 'Breakfast + settle reset', 'meals', '11111111-1111-1111-1111-111111111113', '7:45 AM', 15, 'essential', ARRAY['Food', 'Water', 'Crate', 'Puzzle feeder']::text[], 'indoor', 2, ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], ARRAY['Separate meals', 'Water refreshed', 'Calm release', 'Two-minute settle']::text[], 'separate', 'Feed separately until relationship score stays above 80 for two weeks. Real cadence once home: puppy ~0.25 cup per serving, 4x/day total; water refreshed every ~2 hours (~1 oz per lb body weight/day total). Griz''s usual ~1 cup morning meal (+ Gabapentin, Carprofen, salmon oil, Dasuquin chew) is folded into this same slot instead of running on his own separate morning schedule.',
-  'home-indoor', 'separate-rooms', NULL, '[]'::jsonb
-)
-on conflict (household_id, title) do update set
-  category = excluded.category, assigned_to = excluded.assigned_to, time = excluded.time, duration = excluded.duration,
-  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
-  dog_ids = excluded.dog_ids, checklist = excluded.checklist, griz_participation = excluded.griz_participation, notes = excluded.notes,
-  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
-  checklist_schema = excluded.checklist_schema;
-
-insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id, checklist_schema) values (
-  '11111111-1111-1111-1111-111111111111', 'Evening meal (both dogs)', 'meals', '11111111-1111-1111-1111-111111111112', '6:00 PM', 10, 'essential', ARRAY['Food', 'Water', 'Crate', 'Griz''s meds']::text[], 'indoor', 1, ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], ARRAY['Separate meals', 'Griz''s evening meds + FortiFlora given', 'Water refreshed', 'Calm release']::text[], 'separate', 'Griz''s second daily meal (+ Gabapentin, Carprofen, FortiFlora probiotic) is scheduled here instead of on his own timetable, right before the 6:15 PM parallel walk — he''s a flexible, chill adult who adapts easily to the puppy''s cadence. This is one of the puppy''s 4 daily feeds; the other two (midday) are puppy-only and don''t need to move Griz''s routine at all.',
-  'home-indoor', 'separate-rooms', NULL, '[]'::jsonb
-)
-on conflict (household_id, title) do update set
-  category = excluded.category, assigned_to = excluded.assigned_to, time = excluded.time, duration = excluded.duration,
-  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
-  dog_ids = excluded.dog_ids, checklist = excluded.checklist, griz_participation = excluded.griz_participation, notes = excluded.notes,
-  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
-  checklist_schema = excluded.checklist_schema;
-
-insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id, checklist_schema) values (
-  '11111111-1111-1111-1111-111111111111', 'Name + recall foundation', 'training', '11111111-1111-1111-1111-111111111112', '12:15 PM', 6, 'important', ARRAY['Soft treats', 'Clicker or marker word']::text[], 'indoor', 2, ARRAY['11111111-1111-1111-1111-111111111114']::uuid[], ARRAY['Say name once', 'Mark eye contact', 'Treat at leg', 'Five happy recalls']::text[], 'managed', 'End before attention fades. Griz can practice place for parallel rewards. Week 1 focus per the real training schedule: Name/Look at Me, Leash, Leave It, and Sit are taught in parallel starting pickup week.',
-  'home-indoor', 'solo', 'name-recognition', '[]'::jsonb
-)
-on conflict (household_id, title) do update set
-  category = excluded.category, assigned_to = excluded.assigned_to, time = excluded.time, duration = excluded.duration,
-  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
-  dog_ids = excluded.dog_ids, checklist = excluded.checklist, griz_participation = excluded.griz_participation, notes = excluded.notes,
-  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
-  checklist_schema = excluded.checklist_schema;
-
-insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id, checklist_schema) values (
-  '11111111-1111-1111-1111-111111111111', 'Parallel decompression walk', 'relationship', '11111111-1111-1111-1111-111111111113', '6:15 PM', 18, 'important', ARRAY['Two leashes', 'Treats', 'Water']::text[], 'outdoor', 3, ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], ARRAY['Start with distance', 'Reward check-ins', 'No shared toy', 'Log body language']::text[], 'yes', 'Keep dogs parallel, not face-to-face — ideally a human walking each dog with a person-width gap between them (dog, human, human, dog), not dog-to-dog. Increase distance if either dog stiffens.',
-  'walking-paths', 'parallel-buffered', NULL, '[]'::jsonb
-)
-on conflict (household_id, title) do update set
-  category = excluded.category, assigned_to = excluded.assigned_to, time = excluded.time, duration = excluded.duration,
-  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
-  dog_ids = excluded.dog_ids, checklist = excluded.checklist, griz_participation = excluded.griz_participation, notes = excluded.notes,
-  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
-  checklist_schema = excluded.checklist_schema;
-
-insert into tasks (household_id, title, category, assigned_to, time, duration, priority, supplies, setting, difficulty, dog_ids, checklist, griz_participation, notes, location, formation, related_milestone_id, checklist_schema) values (
-  '11111111-1111-1111-1111-111111111111', 'Cooperative handling minis', 'handling', '11111111-1111-1111-1111-111111111113', '8:30 PM', 7, 'optional', ARRAY['Brush', 'Treats', 'Toothbrush']::text[], 'indoor', 2, ARRAY['11111111-1111-1111-1111-111111111114']::uuid[], ARRAY['Touch paws', 'Lift lips', 'Brush one stroke', 'End with play']::text[], 'managed', 'Consent-based pace. If the puppy withdraws twice, stop and make tomorrow easier. Real cadence once home: brush hair daily (evenings), dental treats 2x/week (Mon, Thu), ear cleaning + teeth brushing weekly (Sunday), bath bi-weekly.',
-  'home-indoor', 'solo', 'grooming-desensitizing', '[]'::jsonb
-)
-on conflict (household_id, title) do update set
-  category = excluded.category, assigned_to = excluded.assigned_to, time = excluded.time, duration = excluded.duration,
-  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
-  dog_ids = excluded.dog_ids, checklist = excluded.checklist, griz_participation = excluded.griz_participation, notes = excluded.notes,
-  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
-  checklist_schema = excluded.checklist_schema;
-
 insert into milestones (id, household_id, title, track, status, dependencies, age_gate_weeks, dog_ids, steps, sources, why) values (
   'marker-word', '11111111-1111-1111-1111-111111111111', 'Marker word', 'obedience', 'current', ARRAY[]::text[], NULL,
   ARRAY['11111111-1111-1111-1111-111111111114']::uuid[], '[{"title":"Charge marker","successCriteria":"10 marker-treat reps with eager orientation","sessionsRequired":2,"completedSessions":0},{"title":"Use on eye contact","successCriteria":"Marks correct behavior within one second","sessionsRequired":3,"completedSessions":0}]'::jsonb, '[{"title":"Clicker training basics","type":"article","url":"https://www.akc.org/expert-advice/training/clicker-training-your-dog-mark-and-reward/","publisher":"AKC"},{"title":"Marker training explanation","type":"video","url":"https://www.youtube.com/results?search_query=kikopup+marker+training+puppy","publisher":"Kikopup"},{"title":"Positive reinforcement training","type":"article","url":"https://www.humanesociety.org/resources/positive-reinforcement-training","publisher":"Humane Society"}]'::jsonb, 'A consistent marker lets every later skill become easier to teach and measure.'
@@ -339,15 +273,6 @@ insert into milestones (id, household_id, title, track, status, dependencies, ag
 )
 on conflict (id) do update set title = excluded.title, track = excluded.track, status = excluded.status, dependencies = excluded.dependencies, age_gate_weeks = excluded.age_gate_weeks, dog_ids = excluded.dog_ids, steps = excluded.steps, sources = excluded.sources, why = excluded.why;
 
-insert into health_events (id, household_id, dog_id, title, date, kind, notes, document_url) values ('f96413b1-4282-571c-99c6-8085edaa1ba8', '11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111114', 'Pickup day — Ruby Doodles Louisiana', '2026-08-01', 'weight', 'Mid-afternoon pickup. Confirm name, sex, birthday, microchip, and get breeder health records. First weigh-in today.', NULL)
-on conflict (id) do update set dog_id = excluded.dog_id, title = excluded.title, date = excluded.date, kind = excluded.kind, notes = excluded.notes, document_url = excluded.document_url;
-insert into health_events (id, household_id, dog_id, title, date, kind, notes, document_url) values ('983b977f-994b-5edc-849e-f50b0341d7d3', '11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111114', 'First vet appointment — Canyons Vet', '2026-08-03', 'vet', '2:00 PM. Bring breeder health records. Confirm vaccine schedule and set booster dates.', NULL)
-on conflict (id) do update set dog_id = excluded.dog_id, title = excluded.title, date = excluded.date, kind = excluded.kind, notes = excluded.notes, document_url = excluded.document_url;
-insert into health_events (id, household_id, dog_id, title, date, kind, notes, document_url) values ('123a9130-8023-5932-bd11-07a6c6fa3a18', '11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111115', 'Heartworm prevention', '2026-07-20', 'medication', 'Monthly prevention, per care sheet cadence.', NULL)
-on conflict (id) do update set dog_id = excluded.dog_id, title = excluded.title, date = excluded.date, kind = excluded.kind, notes = excluded.notes, document_url = excluded.document_url;
-insert into health_events (id, household_id, dog_id, title, date, kind, notes, document_url) values ('f2f0ca14-5a9a-59fe-a71b-515032d904b7', '11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111115', 'Grooming reset', '2026-08-07', 'grooming', 'Brush, nail check, ear check.', NULL)
-on conflict (id) do update set dog_id = excluded.dog_id, title = excluded.title, date = excluded.date, kind = excluded.kind, notes = excluded.notes, document_url = excluded.document_url;
-
 insert into journal_entries (id, household_id, dog_ids, date, title, text, tags, mood) values ('4a074585-e8f2-51fe-8af3-da8742576f34', '11111111-1111-1111-1111-111111111111', ARRAY['11111111-1111-1111-1111-111111111114']::uuid[], '2026-07-25', 'Pickup week prep checklist', 'Crate and pen set up, potty spot picked out near the door, breeder paperwork folder ready, first vet appointment (8/3, 2:00 PM, Canyons Vet) on the calendar. Plan for a parallel-walk introduction with Griz once the puppy has settled in for a few days rather than day one.', ARRAY['prep', 'pickup', 'planning']::text[], 'steady')
 on conflict (id) do update set dog_ids = excluded.dog_ids, date = excluded.date, title = excluded.title, text = excluded.text, tags = excluded.tags, mood = excluded.mood;
 
@@ -489,226 +414,1085 @@ insert into exposure_items (id, household_id, category, title, dog_ids, status, 
 on conflict (id) do update set category = excluded.category, title = excluded.title, dog_ids = excluded.dog_ids, status = excluded.status, log = excluded.log;
 
 
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '7cb8b072-b061-5166-abb3-42b641774352', '11111111-1111-1111-1111-111111111111', 'Gym — concert series', 'sports', 'recurring', '{"frequency":"weekly","interval":1,"daysOfWeek":["wednesday"],"startDate":"2026-08-01","endDate":"2026-09-07"}'::jsonb, ARRAY[]::date[], NULL,
-  '', '6:00 PM', NULL, 1.25, 'all', NULL, 'confirmed', 'Through Labor Day (9/7/26). Default: go together — a ~1-1.25 hr window is inside the crate-trained short-alone-time tier (no Rover needed). If schedules split some weeks, see the household overlap policy: stagger start times ~30-45 min so one person is always home, rather than both being out the full window.',
-  ARRAY['11111111-1111-1111-1111-111111111112', '11111111-1111-1111-1111-111111111113']::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Morning potty', 'potty', 'routine', 'recurring', '{"frequency":"daily","interval":1,"startDate":"2026-08-01"}'::jsonb, ARRAY[]::date[], NULL,
+  '', '7:15 AM', NULL, 0.08333333333333333, 'confirmed', '11111111-1111-1111-1111-111111111112',
+  ARRAY[]::uuid[], ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], true, '[{"itemName":"Peed","dataType":"counter"},{"itemName":"Pooped","dataType":"counter"},{"itemName":"Playtime occurred","dataType":"boolean"},{"itemName":"Playtime duration (min)","dataType":"duration_minutes"},{"itemName":"Treats given","dataType":"counter"},{"itemName":"Notes","dataType":"free_text"}]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'essential', ARRAY['Treat pouch', 'Leash']::text[], 'outdoor', 1,
+  'home-fenced-yard', 'together', NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Keep it boring, reward fast, log how quickly the puppy goes. Real cadence once home: potty every ~2 hours (rule of thumb — hourly frequency roughly equals age in months), always right after eating or waking. Griz''s morning-walk poop happens naturally in this same window, so this is one joint trip out rather than two separate ones — his schedule is flexible enough to slide onto the puppy''s timing (see the merged-schedule note in the knowledge doc). No playtime or extra praise during the potty trip itself — calm acknowledgment only when the behavior happens, then a short play reward after.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'ce4917b8-b3be-53e2-89c0-595fe1ad7e7d', '11111111-1111-1111-1111-111111111111', 'Gym — "Hot Dogs"', 'sports', 'recurring', '{"frequency":"weekly","interval":1,"daysOfWeek":["monday"],"startDate":"2026-08-01","endDate":"2026-09-07"}'::jsonb, ARRAY[]::date[], NULL,
-  '', '5:30 PM', NULL, 1.25, 'all', NULL, 'confirmed', 'Through Labor Day (9/7/26). Same overlap policy as the Wednesday concert-series class — go together by default; stagger if a given Monday doesn''t allow both to leave at once.',
-  ARRAY['11111111-1111-1111-1111-111111111112', '11111111-1111-1111-1111-111111111113']::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Breakfast + settle reset', 'meals', 'routine', 'recurring', '{"frequency":"daily","interval":1,"startDate":"2026-08-01"}'::jsonb, ARRAY[]::date[], NULL,
+  '', '7:45 AM', NULL, 0.25, 'confirmed', '11111111-1111-1111-1111-111111111113',
+  ARRAY[]::uuid[], ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], true, '[{"itemName":"Separate meals","dataType":"boolean"},{"itemName":"Water refreshed","dataType":"boolean"},{"itemName":"Calm release","dataType":"boolean"},{"itemName":"Two-minute settle","dataType":"boolean"}]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'essential', ARRAY['Food', 'Water', 'Crate', 'Puzzle feeder']::text[], 'indoor', 2,
+  'home-indoor', 'separate-rooms', NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Feed separately until relationship score stays above 80 for two weeks. Real cadence once home: puppy ~0.25 cup per serving, 4x/day total; water refreshed every ~2 hours (~1 oz per lb body weight/day total). Griz''s usual ~1 cup morning meal (+ Gabapentin, Carprofen, salmon oil, Dasuquin chew) is folded into this same slot instead of running on his own separate morning schedule.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'ce76a8c3-d3f7-5aaa-a14d-7db18570946b', '11111111-1111-1111-1111-111111111111', 'Andrew''s volleyball', 'sports', 'recurring', '{"frequency":"weekly","interval":1,"daysOfWeek":["tuesday"],"startDate":"2026-08-01"}'::jsonb, ARRAY[]::date[], NULL,
-  'estimated — confirm exact time', NULL, NULL, 2.5, 'no', NULL, 'placeholder', '~2-3 hr blocks. Exact schedule to be uploaded. Bree is solo with both dogs during this window — good slot for her personal downtime once the puppy settles, or a quieter training/relationship-building evening early on.',
-  ARRAY['11111111-1111-1111-1111-111111111112']::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Evening meal (both dogs)', 'meals', 'routine', 'recurring', '{"frequency":"daily","interval":1,"startDate":"2026-08-01"}'::jsonb, ARRAY[]::date[], NULL,
+  '', '6:00 PM', NULL, 0.16666666666666666, 'confirmed', '11111111-1111-1111-1111-111111111112',
+  ARRAY[]::uuid[], ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], true, '[{"itemName":"Separate meals","dataType":"boolean"},{"itemName":"Griz''s evening meds + FortiFlora given","dataType":"boolean"},{"itemName":"Water refreshed","dataType":"boolean"},{"itemName":"Calm release","dataType":"boolean"}]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'essential', ARRAY['Food', 'Water', 'Crate', 'Griz''s meds']::text[], 'indoor', 1,
+  'home-indoor', 'separate-rooms', NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Griz''s second daily meal (+ Gabapentin, Carprofen, FortiFlora probiotic) is scheduled here instead of on his own timetable, right before the 6:15 PM parallel walk — he''s a flexible, chill adult who adapts easily to the puppy''s cadence. This is one of the puppy''s 4 daily feeds; the other two (midday) are puppy-only and don''t need to move Griz''s routine at all.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'fd9f835c-737c-561c-a638-15c431a3325e', '11111111-1111-1111-1111-111111111111', 'Curling', 'sports', 'recurring', '{"frequency":"weekly","interval":1,"daysOfWeek":["thursday"],"startDate":"2026-08-01"}'::jsonb, ARRAY[]::date[], NULL,
-  'starts fall 2026, exact date TBD', '8:30 PM', '11:00 PM', 2.5, 'all', NULL, 'placeholder', 'League start date not yet set. Treated as a shared couple activity (2.5 hrs, evening) — inside the medium alone-time tier once logged readiness supports it; no Rover needed if the puppy is already hitting 3-4 hr solo by fall.',
-  ARRAY['11111111-1111-1111-1111-111111111112', '11111111-1111-1111-1111-111111111113']::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Name + recall foundation', 'training', 'training', 'recurring', '{"frequency":"daily","interval":1,"startDate":"2026-08-01"}'::jsonb, ARRAY[]::date[], NULL,
+  '', '12:15 PM', NULL, 0.1, 'confirmed', '11111111-1111-1111-1111-111111111112',
+  ARRAY[]::uuid[], ARRAY['11111111-1111-1111-1111-111111111114']::uuid[], true, '[{"itemName":"Say name once","dataType":"boolean"},{"itemName":"Mark eye contact","dataType":"boolean"},{"itemName":"Treat at leg","dataType":"boolean"},{"itemName":"Five happy recalls","dataType":"boolean"}]'::jsonb, NULL, true, '[{"fieldName":"Reps","dataType":"number"}]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY['Soft treats', 'Clicker or marker word']::text[], 'indoor', 2,
+  'home-indoor', 'solo', 'name-recognition', NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'End before attention fades. Griz can practice place for parallel rewards. Week 1 focus per the real training schedule: Name/Look at Me, Leash, Leave It, and Sit are taught in parallel starting pickup week.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '2d798fd2-cad4-507f-8041-c125342bada2', '11111111-1111-1111-1111-111111111111', 'Andrew — personal time', 'downtime', 'recurring', '{"frequency":"weekly","interval":1,"daysOfWeek":["tuesday"],"startDate":"2026-08-01"}'::jsonb, ARRAY[]::date[], NULL,
-  'estimated — confirm day/time, during Bree''s coverage of Andrew''s volleyball window', NULL, NULL, 2, 'no', NULL, 'placeholder', 'Placeholder slot for Spanish practice, vibe-coding, or other solo hobbies. Proposed default: Tuesday evenings work themselves out since Andrew is already out at volleyball — this block is really about protecting a second, at-home slot later in the week (e.g. a weekend afternoon) once the puppy''s routine settles. Adjust day/time to whatever actually sticks.',
-  ARRAY['11111111-1111-1111-1111-111111111112']::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Parallel decompression walk', 'relationship', 'routine', 'recurring', '{"frequency":"daily","interval":1,"startDate":"2026-08-01"}'::jsonb, ARRAY[]::date[], NULL,
+  '', '6:15 PM', NULL, 0.3, 'confirmed', '11111111-1111-1111-1111-111111111113',
+  ARRAY[]::uuid[], ARRAY['11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111115']::uuid[], true, '[{"itemName":"Start with distance","dataType":"boolean"},{"itemName":"Reward check-ins","dataType":"boolean"},{"itemName":"No shared toy","dataType":"boolean"},{"itemName":"Log body language","dataType":"boolean"}]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY['Two leashes', 'Treats', 'Water']::text[], 'outdoor', 3,
+  'walking-paths', 'parallel-buffered', NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Keep dogs parallel, not face-to-face — ideally a human walking each dog with a person-width gap between them (dog, human, human, dog), not dog-to-dog. Increase distance if either dog stiffens.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'bc70a7ef-d8b9-5fee-86f0-f8c2804970ce', '11111111-1111-1111-1111-111111111111', 'Bree — personal time', 'downtime', 'recurring', '{"frequency":"weekly","interval":1,"daysOfWeek":["tuesday"],"startDate":"2026-08-01"}'::jsonb, ARRAY[]::date[], NULL,
-  'estimated — confirm day/time, while Andrew is at volleyball', NULL, NULL, 2, 'no', NULL, 'placeholder', 'Placeholder slot for art, house projects, or other solo hobbies — uses the Tuesday window Andrew is already out for volleyball. A second slot (e.g. a weekend morning) is worth adding once the together-time and nighttime routine settle into a fixed pattern.',
-  ARRAY['11111111-1111-1111-1111-111111111113']::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Cooperative handling minis', 'handling', 'training', 'recurring', '{"frequency":"daily","interval":1,"startDate":"2026-08-01"}'::jsonb, ARRAY[]::date[], NULL,
+  '', '8:30 PM', NULL, 0.11666666666666667, 'confirmed', '11111111-1111-1111-1111-111111111113',
+  ARRAY[]::uuid[], ARRAY['11111111-1111-1111-1111-111111111114']::uuid[], true, '[{"itemName":"Touch paws","dataType":"boolean"},{"itemName":"Lift lips","dataType":"boolean"},{"itemName":"Brush one stroke","dataType":"boolean"},{"itemName":"End with play","dataType":"boolean"}]'::jsonb, NULL, true, '[]'::jsonb,
+  'no', NULL, false, '', 'optional', ARRAY['Brush', 'Treats', 'Toothbrush']::text[], 'indoor', 2,
+  'home-indoor', 'solo', 'grooming-desensitizing', NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Consent-based pace. If the puppy withdraws twice, stop and make tomorrow easier. Real cadence once home: brush hair daily (evenings), dental treats 2x/week (Mon, Thu), ear cleaning + teeth brushing weekly (Sunday), bath bi-weekly.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '6b8989ca-7fed-54a8-93a0-099d17e0c7d5', '11111111-1111-1111-1111-111111111111', 'September concerts', 'entertainment', 'one-off', NULL, ARRAY[]::date[], NULL,
-  'mid-to-late September 2026, evening, date TBD', NULL, NULL, 3, 'all', NULL, 'placeholder', 'Several hours away (~3 hr estimate). Puppy''s age at this point makes 1 Rover visit the right default — see Section 13 coverage tiers. Exact dates pending.',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], 1, ARRAY['Potty walk ~30 min before leaving', 'Pick up the water bowl ~1 hr before departure to cut down on mid-outing accidents', 'Stuff and freeze a Kong, crate the puppy in the hardwood-floor room (easiest cleanup)', 'Keep Griz in a separate room or gated area from the crate rather than free-roaming with a stressed puppy']::text[], ARRAY['Arrive around the halfway point of the outing (~1.5 hrs in)', 'Leash the puppy out to the usual potty spot and wait for a full elimination', 'Refresh water, 10-15 min of low-key play or sniffing, then back in the crate with a fresh chew', 'Text a quick note on accidents, barking, or anxiety']::text[], ARRAY['Full decompression walk with both dogs', 'Refresh water and clear any Kong remnants', 'Log the outing in Alone-Time Readiness']::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Pickup day — Ruby Doodles Louisiana', 'health', 'health-record', 'one-off', NULL, ARRAY[]::date[], '2026-08-01',
+  '', NULL, NULL, NULL, 'confirmed', NULL,
+  ARRAY[]::uuid[], ARRAY['11111111-1111-1111-1111-111111111114']::uuid[], false, '[]'::jsonb, NULL, true, '[{"fieldName":"Weight","dataType":"number","unit":"lbs"},{"fieldName":"Cost","dataType":"number","unit":"$"}]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Mid-afternoon pickup. Confirm name, sex, birthday, microchip, and get breeder health records. First weigh-in today.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'f5af664f-0a52-5969-abc9-0ee68ce69db5', '11111111-1111-1111-1111-111111111111', 'Comedy shows', 'entertainment', 'one-off', NULL, ARRAY[]::date[], NULL,
-  'mid-to-late September 2026 onward, evening, date TBD', NULL, NULL, 3, 'all', NULL, 'placeholder', 'Several hours away (~3 hr estimate). Optional depending on how alone-time readiness is tracking by then — if the puppy''s already comfortably past 3 hrs solo, this one can drop to no Rover. Exact dates pending.',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], 1, ARRAY['Potty walk ~30 min before leaving', 'Water bowl up ~1 hr before departure', 'Stuffed frozen Kong in the crate, hardwood-floor room', 'Griz kept separate from the crate for the first stretch']::text[], ARRAY['One visit at the halfway mark: potty, fresh water, short play, fresh chew before re-crating', 'Note any accidents or distress']::text[], ARRAY['Decompression walk on return', 'Refresh water', 'Log the outing']::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'First vet appointment — Canyons Vet', 'vet', 'appointment', 'one-off', NULL, ARRAY[]::date[], '2026-08-03',
+  '', NULL, NULL, 1, 'confirmed', NULL,
+  ARRAY[]::uuid[], ARRAY['11111111-1111-1111-1111-111111111114']::uuid[], false, '[]'::jsonb, NULL, true, '[{"fieldName":"Weight","dataType":"number","unit":"lbs"},{"fieldName":"Temperature","dataType":"number","unit":"°F"},{"fieldName":"Cost","dataType":"number","unit":"$"},{"fieldName":"Next due","dataType":"date"}]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], '2:00 PM. Bring breeder health records. Confirm vaccine schedule and set booster dates.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '41a84d56-8a53-5123-8a12-19cbb073f68e', '11111111-1111-1111-1111-111111111111', 'BYU vs. Notre Dame tailgate', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-10-17',
-  'Kickoff TBA', NULL, NULL, 4, 'all', NULL, 'confirmed', 'LaVell Edwards Stadium, Provo. This is the ~4-hour alone-time milestone target — same date as Georgia @ Auburn and Clemson vs. Charleston Southern (stacked heavy week). Section 4''s cross-reference found this date-driven target is more aggressive than typical age-based crating guidance for a puppy this age, so booking 1 Rover visit as a safety net is the realistic default rather than assuming readiness from the calendar alone.',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], 1, ARRAY['Potty walk ~30 min before leaving', 'Water bowl up ~1 hr before departure', 'Stuffed frozen Kong, puppy crated in the hardwood-floor room', 'Griz in a separate room/gated area, not free-roaming with the crate']::text[], ARRAY['Visit around the 2-hr mark', 'Potty break, fresh water, 15-20 min low-key play, fresh chew before re-crating', 'Note any accidents, barking, or anxiety']::text[], ARRAY['Full decompression walk with both dogs', 'Refresh water and food', 'Log the outing — this is the marquee readiness checkpoint']::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Heartworm prevention', 'medication', 'health-record', 'one-off', NULL, ARRAY[]::date[], '2026-07-20',
+  '', NULL, NULL, NULL, 'confirmed', NULL,
+  ARRAY[]::uuid[], ARRAY['11111111-1111-1111-1111-111111111115']::uuid[], false, '[]'::jsonb, NULL, true, '[{"fieldName":"Dose","dataType":"text"},{"fieldName":"Cost","dataType":"number","unit":"$"}]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Monthly prevention, per care sheet cadence.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'c5890a1a-9d14-5182-9188-9ce619dfe194', '11111111-1111-1111-1111-111111111111', 'Utah Mammoth hockey games', 'sports', 'one-off', NULL, ARRAY[]::date[], NULL,
-  'late October – early November 2026 onward, evening, specific games TBD', NULL, NULL, 4.5, 'all', NULL, 'placeholder', 'Partial season ticket holder — drive + game + drive realistically runs ~4.5 hrs, a full-evening alone-time target. 2 Rover visits is the realistic default until logged readiness clears this window solo. Specific games attended still TBD.',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], 2, ARRAY['Potty walk ~30 min before leaving', 'Water bowl up ~1-1.5 hrs before departure', 'Stuffed frozen Kong, puppy crated in the hardwood-floor room', 'Griz separated from the crate for the first stretch', 'If the visit overlaps a scheduled meal, portion it out and label it for the sitter']::text[], ARRAY['Visit 1 (~90 min in): potty, fresh water, short play, fresh chew', 'Visit 2 (~3 hr in): potty, feed the labeled meal if one falls in this window, another short play session', 'Note any accidents, barking, or anxiety on each visit']::text[], ARRAY['Full decompression walk', 'Refresh water', 'Log the outing in Alone-Time Readiness']::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Grooming reset', 'grooming', 'appointment', 'one-off', NULL, ARRAY[]::date[], '2026-08-07',
+  '', NULL, NULL, 1, 'confirmed', NULL,
+  ARRAY[]::uuid[], ARRAY['11111111-1111-1111-1111-111111111115']::uuid[], false, '[]'::jsonb, NULL, true, '[{"fieldName":"Weight","dataType":"number","unit":"lbs"},{"fieldName":"Cost","dataType":"number","unit":"$"}]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Brush, nail check, ear check.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'b11953da-76bb-526c-ac72-70aae6f3bbb9', '11111111-1111-1111-1111-111111111111', 'Griz decompression hike (splits with puppy''s vet visit)', 'exercise', 'one-off', NULL, ARRAY[]::date[], '2026-08-03',
-  '', '2:00 PM', NULL, NULL, 'no', NULL, 'confirmed', 'Illustrates the general split pattern: when one dog has an appointment, the other doesn''t have to sit it out. Bree takes Griz to the local hiking trail (puppy isn''t cleared for trail exposure yet) while Andrew takes the puppy to the first vet appointment at Canyons Vet — two separate activities, two separate humans, same time window, instead of the whole household being tied to the vet trip. Swap people as makes sense on the actual day; the pattern is the point.',
-  ARRAY['11111111-1111-1111-1111-111111111113']::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Gym — concert series', 'sports', 'event', 'recurring', '{"frequency":"weekly","interval":1,"daysOfWeek":["wednesday"],"startDate":"2026-08-01","endDate":"2026-09-07"}'::jsonb, ARRAY[]::date[], NULL,
+  '', '6:00 PM', NULL, 1.25, 'confirmed', NULL,
+  ARRAY['11111111-1111-1111-1111-111111111112', '11111111-1111-1111-1111-111111111113']::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'all', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Through Labor Day (9/7/26). Default: go together — a ~1-1.25 hr window is inside the crate-trained short-alone-time tier (no Rover needed). If schedules split some weeks, see the household overlap policy: stagger start times ~30-45 min so one person is always home, rather than both being out the full window.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'e83aa281-9ab1-5c93-9966-f805394128b6', '11111111-1111-1111-1111-111111111111', 'Mom visiting', 'family', 'one-off', NULL, ARRAY[]::date[], '2026-09-23',
-  'through Sept 26, multi-day visit', NULL, NULL, NULL, 'no', NULL, 'confirmed', 'Stay in Salt Lake City or day-trip distance only — no overnight travel or camping. Clemson @ Cal Fri 9/25 (8:30 PM MT) is a late TV game, no conflict with staying local.',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Gym — "Hot Dogs"', 'sports', 'event', 'recurring', '{"frequency":"weekly","interval":1,"daysOfWeek":["monday"],"startDate":"2026-08-01","endDate":"2026-09-07"}'::jsonb, ARRAY[]::date[], NULL,
+  '', '5:30 PM', NULL, 1.25, 'confirmed', NULL,
+  ARRAY['11111111-1111-1111-1111-111111111112', '11111111-1111-1111-1111-111111111113']::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'all', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Through Labor Day (9/7/26). Same overlap policy as the Wednesday concert-series class — go together by default; stagger if a given Monday doesn''t allow both to leave at once.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'a7acff74-880e-5933-aa08-50d41c7fbebb', '11111111-1111-1111-1111-111111111111', 'Ski days (as conditions allow)', 'travel', 'one-off', NULL, ARRAY[]::date[], NULL,
-  'ski season, ~November 2026 – April 2027, variable — 45 min drive each way + 3-8 hrs on the mountain', NULL, NULL, 6, 'all', NULL, 'placeholder', 'SLC household — ~45 min drive each way to the mountain, skiing for as long as conditions and plans call for (as short as 3 hrs, up to a full 8-hour day), on nights, weekends, or a good-powder weekday — not a fixed December week. Total away time really ranges ~4.5-9.5 hrs including the drive, so treat the Rover call as a per-trip decision using the tiers above rather than one fixed plan.',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY['Decide the away-time tier before leaving: total away time (drive + ski + drive) under ~4.5 hrs needs no Rover once that alone-time milestone is cleared; ~4.5-7 hrs = 1 Rover visit; ~7-9.5 hrs = 2 visits', 'Potty walk ~30 min before leaving', 'Water bowl up ~1 hr before departure', 'Stuffed frozen Kong, puppy crated in the hardwood-floor room', 'Griz kept separate from the crate for the first stretch — he''s fine solo for a full day if the trip runs long']::text[], ARRAY['Time the visit(s) around the middle of however long you''ll actually be gone — text the sitter your real ETA before leaving rather than a fixed clock time', 'Standard visit: potty, fresh water, a meal if one falls in the window, 15-20 min play, fresh chew before re-crating', 'Note accidents, appetite, and energy level']::text[], ARRAY['Decompression walk with both dogs', 'Refresh food and water', 'Log the actual away-time (drive + ski + drive) in Alone-Time Readiness so future tiering stays accurate']::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Andrew''s volleyball', 'sports', 'event', 'recurring', '{"frequency":"weekly","interval":1,"daysOfWeek":["tuesday"],"startDate":"2026-08-01"}'::jsonb, ARRAY[]::date[], NULL,
+  'estimated — confirm exact time', NULL, NULL, 2.5, 'placeholder', NULL,
+  ARRAY['11111111-1111-1111-1111-111111111112']::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], '~2-3 hr blocks. Exact schedule to be uploaded. Bree is solo with both dogs during this window — good slot for her personal downtime once the puppy settles, or a quieter training/relationship-building evening early on.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'b2555eb3-1698-5262-a79c-361aba90e8a0', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Tennessee State', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-09-05',
-  '', '1:00 PM', NULL, NULL, 'no', NULL, 'confirmed', 'Home opener',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Curling', 'sports', 'event', 'recurring', '{"frequency":"weekly","interval":1,"daysOfWeek":["thursday"],"startDate":"2026-08-01"}'::jsonb, ARRAY[]::date[], NULL,
+  'starts fall 2026, exact date TBD', '8:30 PM', '11:00 PM', 2.5, 'placeholder', NULL,
+  ARRAY['11111111-1111-1111-1111-111111111112', '11111111-1111-1111-1111-111111111113']::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'all', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'League start date not yet set. Treated as a shared couple activity (2.5 hrs, evening) — inside the medium alone-time tier once logged readiness supports it; no Rover needed if the puppy is already hitting 3-4 hr solo by fall.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'bd6ce12a-b6c7-5c74-8225-28429fafc99d', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Western Kentucky', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-09-12',
-  '', '10:45 AM', NULL, NULL, 'no', NULL, 'confirmed', 'Home',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Andrew — personal time', 'downtime', 'event', 'recurring', '{"frequency":"weekly","interval":1,"daysOfWeek":["tuesday"],"startDate":"2026-08-01"}'::jsonb, ARRAY[]::date[], NULL,
+  'estimated — confirm day/time, during Bree''s coverage of Andrew''s volleyball window', NULL, NULL, 2, 'placeholder', NULL,
+  ARRAY['11111111-1111-1111-1111-111111111112']::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Placeholder slot for Spanish practice, vibe-coding, or other solo hobbies. Proposed default: Tuesday evenings work themselves out since Andrew is already out at volleyball — this block is really about protecting a second, at-home slot later in the week (e.g. a weekend afternoon) once the puppy''s routine settles. Adjust day/time to whatever actually sticks.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '5c8b47a6-306a-543a-acb9-5ad37008f4fd', '11111111-1111-1111-1111-111111111111', 'Georgia @ Arkansas', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-09-19',
-  '', '10:00 AM', NULL, NULL, 'no', NULL, 'confirmed', 'Away',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Bree — personal time', 'downtime', 'event', 'recurring', '{"frequency":"weekly","interval":1,"daysOfWeek":["tuesday"],"startDate":"2026-08-01"}'::jsonb, ARRAY[]::date[], NULL,
+  'estimated — confirm day/time, while Andrew is at volleyball', NULL, NULL, 2, 'placeholder', NULL,
+  ARRAY['11111111-1111-1111-1111-111111111113']::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Placeholder slot for art, house projects, or other solo hobbies — uses the Tuesday window Andrew is already out for volleyball. A second slot (e.g. a weekend morning) is worth adding once the together-time and nighttime routine settle into a fixed pattern.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'be75fa7b-8490-517f-b674-6c6aba8d6a50', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Oklahoma', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-09-26',
-  '', NULL, NULL, NULL, 'no', NULL, 'placeholder', 'Flex 1:30-2:30 PM or 4-6 PM. Home, SEC',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'September concerts', 'entertainment', 'event', 'one-off', NULL, ARRAY[]::date[], NULL,
+  'mid-to-late September 2026, evening, date TBD', NULL, NULL, 3, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'all', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  1, ARRAY['Potty walk ~30 min before leaving', 'Pick up the water bowl ~1 hr before departure to cut down on mid-outing accidents', 'Stuff and freeze a Kong, crate the puppy in the hardwood-floor room (easiest cleanup)', 'Keep Griz in a separate room or gated area from the crate rather than free-roaming with a stressed puppy']::text[], ARRAY['Arrive around the halfway point of the outing (~1.5 hrs in)', 'Leash the puppy out to the usual potty spot and wait for a full elimination', 'Refresh water, 10-15 min of low-key play or sniffing, then back in the crate with a fresh chew', 'Text a quick note on accidents, barking, or anxiety']::text[], ARRAY['Full decompression walk with both dogs', 'Refresh water and clear any Kong remnants', 'Log the outing in Alone-Time Readiness']::text[], 'Several hours away (~3 hr estimate). Puppy''s age at this point makes 1 Rover visit the right default — see Section 13 coverage tiers. Exact dates pending.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'd1c1aca4-c0be-58d6-945b-694214907e7c', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Vanderbilt', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-10-03',
-  '', NULL, NULL, NULL, 'no', NULL, 'placeholder', '~10-11 AM window. Home',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Comedy shows', 'entertainment', 'event', 'one-off', NULL, ARRAY[]::date[], NULL,
+  'mid-to-late September 2026 onward, evening, date TBD', NULL, NULL, 3, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'all', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  1, ARRAY['Potty walk ~30 min before leaving', 'Water bowl up ~1 hr before departure', 'Stuffed frozen Kong in the crate, hardwood-floor room', 'Griz kept separate from the crate for the first stretch']::text[], ARRAY['One visit at the halfway mark: potty, fresh water, short play, fresh chew before re-crating', 'Note any accidents or distress']::text[], ARRAY['Decompression walk on return', 'Refresh water', 'Log the outing']::text[], 'Several hours away (~3 hr estimate). Optional depending on how alone-time readiness is tracking by then — if the puppy''s already comfortably past 3 hrs solo, this one can drop to no Rover. Exact dates pending.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '4294614d-a6a4-512b-a0ef-6c9de1b7afd7', '11111111-1111-1111-1111-111111111111', 'Georgia @ Alabama', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-10-10',
-  '', NULL, NULL, NULL, 'no', NULL, 'placeholder', 'Night, 4-6 PM window. Heavy/marquee week',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'BYU vs. Notre Dame tailgate', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-10-17',
+  'Kickoff TBA', NULL, NULL, 4, 'confirmed', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'all', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  1, ARRAY['Potty walk ~30 min before leaving', 'Water bowl up ~1 hr before departure', 'Stuffed frozen Kong, puppy crated in the hardwood-floor room', 'Griz in a separate room/gated area, not free-roaming with the crate']::text[], ARRAY['Visit around the 2-hr mark', 'Potty break, fresh water, 15-20 min low-key play, fresh chew before re-crating', 'Note any accidents, barking, or anxiety']::text[], ARRAY['Full decompression walk with both dogs', 'Refresh water and food', 'Log the outing — this is the marquee readiness checkpoint']::text[], 'LaVell Edwards Stadium, Provo. This is the ~4-hour alone-time milestone target — same date as Georgia @ Auburn and Clemson vs. Charleston Southern (stacked heavy week). Section 4''s cross-reference found this date-driven target is more aggressive than typical age-based crating guidance for a puppy this age, so booking 1 Rover visit as a safety net is the realistic default rather than assuming readiness from the calendar alone.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'ea0d66c8-5cff-59f4-aed1-53012da4534d', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Auburn', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-10-17',
-  '', NULL, NULL, NULL, 'no', NULL, 'placeholder', '~1:30-2:30 PM window. Heavy week — same date as BYU/Notre Dame tailgate',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Utah Mammoth hockey games', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], NULL,
+  'late October – early November 2026 onward, evening, specific games TBD', NULL, NULL, 4.5, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'all', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  2, ARRAY['Potty walk ~30 min before leaving', 'Water bowl up ~1-1.5 hrs before departure', 'Stuffed frozen Kong, puppy crated in the hardwood-floor room', 'Griz separated from the crate for the first stretch', 'If the visit overlaps a scheduled meal, portion it out and label it for the sitter']::text[], ARRAY['Visit 1 (~90 min in): potty, fresh water, short play, fresh chew', 'Visit 2 (~3 hr in): potty, feed the labeled meal if one falls in this window, another short play session', 'Note any accidents, barking, or anxiety on each visit']::text[], ARRAY['Full decompression walk', 'Refresh water', 'Log the outing in Alone-Time Readiness']::text[], 'Partial season ticket holder — drive + game + drive realistically runs ~4.5 hrs, a full-evening alone-time target. 2 Rover visits is the realistic default until logged readiness clears this window solo. Specific games attended still TBD.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '6e52bb94-8851-547c-849d-07f1502b55ff', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Florida (Atlanta)', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-10-31',
-  '', '1:30 PM', NULL, NULL, 'no', NULL, 'confirmed', 'Rivalry, moved to Mercedes-Benz Stadium',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Griz decompression hike (splits with puppy''s vet visit)', 'exercise', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-08-03',
+  '', '2:00 PM', NULL, NULL, 'confirmed', NULL,
+  ARRAY['11111111-1111-1111-1111-111111111113']::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Illustrates the general split pattern: when one dog has an appointment, the other doesn''t have to sit it out. Bree takes Griz to the local hiking trail (puppy isn''t cleared for trail exposure yet) while Andrew takes the puppy to the first vet appointment at Canyons Vet — two separate activities, two separate humans, same time window, instead of the whole household being tied to the vet trip. Swap people as makes sense on the actual day; the pattern is the point.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'ce5a12fc-d846-5944-bcd2-a1bcff4a4f39', '11111111-1111-1111-1111-111111111111', 'Georgia @ Ole Miss', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-11-07',
-  '', NULL, NULL, NULL, 'no', NULL, 'placeholder', 'Flex. Heavy/marquee week',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Mom visiting', 'family', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-09-23',
+  'through Sept 26, multi-day visit', NULL, NULL, NULL, 'confirmed', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Stay in Salt Lake City or day-trip distance only — no overnight travel or camping. Clemson @ Cal Fri 9/25 (8:30 PM MT) is a late TV game, no conflict with staying local.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '55df02b2-3618-584a-b1a3-277841ec1f95', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Missouri', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-11-14',
-  '', NULL, NULL, NULL, 'no', NULL, 'placeholder', 'TBA. Home',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Ski days (as conditions allow)', 'travel', 'event', 'one-off', NULL, ARRAY[]::date[], NULL,
+  'ski season, ~November 2026 – April 2027, variable — 45 min drive each way + 3-8 hrs on the mountain', NULL, NULL, 6, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'all', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY['Decide the away-time tier before leaving: total away time (drive + ski + drive) under ~4.5 hrs needs no Rover once that alone-time milestone is cleared; ~4.5-7 hrs = 1 Rover visit; ~7-9.5 hrs = 2 visits', 'Potty walk ~30 min before leaving', 'Water bowl up ~1 hr before departure', 'Stuffed frozen Kong, puppy crated in the hardwood-floor room', 'Griz kept separate from the crate for the first stretch — he''s fine solo for a full day if the trip runs long']::text[], ARRAY['Time the visit(s) around the middle of however long you''ll actually be gone — text the sitter your real ETA before leaving rather than a fixed clock time', 'Standard visit: potty, fresh water, a meal if one falls in the window, 15-20 min play, fresh chew before re-crating', 'Note accidents, appetite, and energy level']::text[], ARRAY['Decompression walk with both dogs', 'Refresh food and water', 'Log the actual away-time (drive + ski + drive) in Alone-Time Readiness so future tiering stays accurate']::text[], 'SLC household — ~45 min drive each way to the mountain, skiing for as long as conditions and plans call for (as short as 3 hrs, up to a full 8-hour day), on nights, weekends, or a good-powder weekday — not a fixed December week. Total away time really ranges ~4.5-9.5 hrs including the drive, so treat the Rover call as a per-trip decision using the tiers above rather than one fixed plan.'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '8f330fa8-826b-5cfb-bdc6-43796766e1a2', '11111111-1111-1111-1111-111111111111', 'Georgia @ South Carolina', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-11-21',
-  '', NULL, NULL, NULL, 'no', NULL, 'placeholder', 'TBA. Heavy week (Clemson @ Duke Fri 11/20 into this)',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Georgia vs. Tennessee State', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-09-05',
+  '', '1:00 PM', NULL, NULL, 'confirmed', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Home opener'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'c24408fe-8029-5337-b632-4c31b536d551', '11111111-1111-1111-1111-111111111111', 'Georgia vs. Georgia Tech', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-11-28',
-  '', NULL, NULL, NULL, 'no', NULL, 'placeholder', 'TBA. Rivalry, heavy week',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Georgia vs. Western Kentucky', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-09-12',
+  '', '10:45 AM', NULL, NULL, 'confirmed', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Home'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '9f50c89f-7346-5132-9e7c-a2b085ea42ef', '11111111-1111-1111-1111-111111111111', 'Clemson @ LSU', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-09-05',
-  '', '5:30 PM', NULL, NULL, 'no', NULL, 'confirmed', 'College GameDay, Lane Kiffin''s LSU debut',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Georgia @ Arkansas', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-09-19',
+  '', '10:00 AM', NULL, NULL, 'confirmed', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Away'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'a188d570-6ea5-5640-ae9a-e544636ef995', '11111111-1111-1111-1111-111111111111', 'Clemson vs. Georgia Southern', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-09-12',
-  '', '5:30 PM', NULL, NULL, 'no', NULL, 'confirmed', 'Home opener',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Georgia vs. Oklahoma', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-09-26',
+  '', NULL, NULL, NULL, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Flex 1:30-2:30 PM or 4-6 PM. Home, SEC'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'bb6975f7-b225-5489-98f5-7da8beac73c9', '11111111-1111-1111-1111-111111111111', 'Clemson vs. North Carolina', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-09-19',
-  '', '10:00 AM', NULL, NULL, 'no', NULL, 'confirmed', 'Home',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Georgia vs. Vanderbilt', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-10-03',
+  '', NULL, NULL, NULL, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], '~10-11 AM window. Home'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '20c1541a-b030-5da1-b837-b07affae3e4e', '11111111-1111-1111-1111-111111111111', 'Clemson @ Cal', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-09-25',
-  '', '8:30 PM (Fri)', NULL, NULL, 'no', NULL, 'confirmed', 'During mom''s visit — late TV game, no conflict',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Georgia @ Alabama', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-10-10',
+  '', NULL, NULL, NULL, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Night, 4-6 PM window. Heavy/marquee week'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '8aa4db71-818a-58c0-86b7-2cb5687295e8', '11111111-1111-1111-1111-111111111111', 'Clemson vs. Miami', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-10-03',
-  '', NULL, NULL, NULL, 'no', NULL, 'placeholder', 'TBA. Home',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Georgia vs. Auburn', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-10-17',
+  '', NULL, NULL, NULL, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], '~1:30-2:30 PM window. Heavy week — same date as BYU/Notre Dame tailgate'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '36d28175-6b6b-5866-ac33-9921335eaa4a', '11111111-1111-1111-1111-111111111111', 'Clemson vs. Charleston Southern', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-10-17',
-  '', NULL, NULL, NULL, 'no', NULL, 'placeholder', 'TBA. Heavy week — stacked with Georgia/Auburn + BYU/Notre Dame',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Georgia vs. Florida (Atlanta)', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-10-31',
+  '', '1:30 PM', NULL, NULL, 'confirmed', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Rivalry, moved to Mercedes-Benz Stadium'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '595a419a-7eb3-5c1c-ba3f-dce5c81a244f', '11111111-1111-1111-1111-111111111111', 'Clemson vs. Virginia Tech', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-10-24',
-  '', NULL, NULL, NULL, 'no', NULL, 'placeholder', 'TBA. Home — light week for Georgia (bye), but Clemson still plays',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Georgia @ Ole Miss', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-11-07',
+  '', NULL, NULL, NULL, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Flex. Heavy/marquee week'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'dde6de9c-9234-56ff-b567-d8c1e0802004', '11111111-1111-1111-1111-111111111111', 'Clemson @ Florida State', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-10-31',
-  '', NULL, NULL, NULL, 'no', NULL, 'placeholder', 'TBA. Away',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Georgia vs. Missouri', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-11-14',
+  '', NULL, NULL, NULL, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'TBA. Home'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '8df63f03-afb2-534e-83ba-7eef855e414a', '11111111-1111-1111-1111-111111111111', 'Clemson @ Syracuse', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-11-07',
-  '', NULL, NULL, NULL, 'no', NULL, 'placeholder', 'TBA. Away',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Georgia @ South Carolina', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-11-21',
+  '', NULL, NULL, NULL, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'TBA. Heavy week (Clemson @ Duke Fri 11/20 into this)'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  'c5899b5a-a2d2-58f0-8a56-0a0f9be90dc5', '11111111-1111-1111-1111-111111111111', 'Clemson vs. Georgia Tech', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-11-14',
-  '', NULL, NULL, NULL, 'no', NULL, 'placeholder', 'TBA. Home',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Georgia vs. Georgia Tech', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-11-28',
+  '', NULL, NULL, NULL, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'TBA. Rivalry, heavy week'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '4158287a-b4af-54a2-9eb1-195d936f3496', '11111111-1111-1111-1111-111111111111', 'Clemson @ Duke', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-11-20',
-  '', '5:30 PM (Fri)', NULL, NULL, 'no', NULL, 'confirmed', 'ACC title implications, heavy week into 11/21 Georgia @ South Carolina',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Clemson @ LSU', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-09-05',
+  '', '5:30 PM', NULL, NULL, 'confirmed', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'College GameDay, Lane Kiffin''s LSU debut'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
-insert into calendar_events (id, household_id, title, category, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, alone_time_required, alone_time_required_amount, status, notes, attendees, dog_ids, rover_visits, prep_steps, rover_instructions, post_steps, coverage_confirmed, coverage_notes) values (
-  '0fffe717-d14e-5650-8cd6-e4ccf8107336', '11111111-1111-1111-1111-111111111111', 'Clemson vs. South Carolina', 'sports', 'one-off', NULL, ARRAY[]::date[], '2026-11-28',
-  '', NULL, NULL, NULL, 'no', NULL, 'placeholder', 'TBA. Palmetto Bowl rivalry, heavy week',
-  ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], false, ''
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Clemson vs. Georgia Southern', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-09-12',
+  '', '5:30 PM', NULL, NULL, 'confirmed', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Home opener'
 )
-on conflict (id) do update set title = excluded.title, category = excluded.category, kind = excluded.kind, recurrence = excluded.recurrence, excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label, start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours, alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount, status = excluded.status, notes = excluded.notes, attendees = excluded.attendees, dog_ids = excluded.dog_ids, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps, rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes;
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Clemson vs. North Carolina', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-09-19',
+  '', '10:00 AM', NULL, NULL, 'confirmed', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'Home'
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Clemson @ Cal', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-09-25',
+  '', '8:30 PM (Fri)', NULL, NULL, 'confirmed', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'During mom''s visit — late TV game, no conflict'
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Clemson vs. Miami', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-10-03',
+  '', NULL, NULL, NULL, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'TBA. Home'
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Clemson vs. Charleston Southern', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-10-17',
+  '', NULL, NULL, NULL, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'TBA. Heavy week — stacked with Georgia/Auburn + BYU/Notre Dame'
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Clemson vs. Virginia Tech', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-10-24',
+  '', NULL, NULL, NULL, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'TBA. Home — light week for Georgia (bye), but Clemson still plays'
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Clemson @ Florida State', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-10-31',
+  '', NULL, NULL, NULL, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'TBA. Away'
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Clemson @ Syracuse', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-11-07',
+  '', NULL, NULL, NULL, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'TBA. Away'
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Clemson vs. Georgia Tech', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-11-14',
+  '', NULL, NULL, NULL, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'TBA. Home'
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Clemson @ Duke', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-11-20',
+  '', '5:30 PM (Fri)', NULL, NULL, 'confirmed', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'ACC title implications, heavy week into 11/21 Georgia @ South Carolina'
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
+insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (
+  '11111111-1111-1111-1111-111111111111', 'Clemson vs. South Carolina', 'sports', 'event', 'one-off', NULL, ARRAY[]::date[], '2026-11-28',
+  '', NULL, NULL, NULL, 'placeholder', NULL,
+  ARRAY[]::uuid[], ARRAY[]::uuid[], false, '[]'::jsonb, NULL, false, '[]'::jsonb,
+  'no', NULL, false, '', 'important', ARRAY[]::text[], 'either', 1,
+  NULL, NULL, NULL, NULL,
+  NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[], 'TBA. Palmetto Bowl rivalry, heavy week'
+)
+on conflict (household_id, title) do update set
+  category = excluded.category, intent = excluded.intent, kind = excluded.kind, recurrence = excluded.recurrence,
+  excluded_dates = excluded.excluded_dates, date = excluded.date, window_label = excluded.window_label,
+  start_time = excluded.start_time, end_time = excluded.end_time, duration_hours = excluded.duration_hours,
+  status = excluded.status, assigned_to = excluded.assigned_to, attendees = excluded.attendees, dog_ids = excluded.dog_ids,
+  requires_completion = excluded.requires_completion, checklist = excluded.checklist,
+  checklist_source_milestone_id = excluded.checklist_source_milestone_id,
+  requires_log = excluded.requires_log, log_fields = excluded.log_fields,
+  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,
+  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,
+  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,
+  location = excluded.location, formation = excluded.formation, related_milestone_id = excluded.related_milestone_id,
+  document_url = excluded.document_url, rover_visits = excluded.rover_visits, prep_steps = excluded.prep_steps,
+  rover_instructions = excluded.rover_instructions, post_steps = excluded.post_steps, notes = excluded.notes;
+
 

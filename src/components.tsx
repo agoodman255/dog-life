@@ -3,9 +3,32 @@ import { FormEvent, ReactNode, useState } from "react";
 import { useSession } from "./auth";
 import { useNavigation } from "./navigation";
 import { makeId, useStore } from "./store";
-import { ChecklistItemValue, DailyFeedback, Dog, DogFormation, FeedbackType, Milestone, Person, Task, TaskDeletionScope } from "./types";
+import {
+  ChecklistItemValue,
+  DailyFeedback,
+  Dog,
+  DogFormation,
+  FeedbackType,
+  Item,
+  ItemDeletionScope,
+  LogFieldValue,
+  Milestone,
+  Person,
+} from "./types";
 import { formatInZone, isoToZonedParts, searchTimezones, zonedTimeToUtcIso, zoneLabel } from "./timezones";
-import { buildDefaultChecklist, computeMilestoneStatus, formatMinutes, milestoneProgress, resolveDependencies, taskStateLabels, to12Hour } from "./utils";
+import {
+  buildDefaultChecklist,
+  computeMilestoneStatus,
+  emptyLogValues,
+  formatMinutes,
+  itemDurationMinutes,
+  itemStateLabels,
+  milestoneProgress,
+  resolveChecklistDefs,
+  isHealthItem,
+  resolveDependencies,
+  to12Hour,
+} from "./utils";
 
 export function TimezonePicker({ value, onChange }: { value: string; onChange: (zoneId: string) => void }) {
   const [query, setQuery] = useState("");
@@ -213,12 +236,12 @@ export function TaskCard({
   onDelete,
   onOpenDetail,
 }: {
-  task: Task;
+  task: Item;
   feedback?: DailyFeedback;
   dogs: Dog[];
-  onComplete: (task: Task, rating: number) => Promise<boolean> | boolean | void;
-  onDelete?: (task: Task) => void;
-  onOpenDetail?: (task: Task) => void;
+  onComplete: (task: Item, rating: number) => Promise<boolean> | boolean | void;
+  onDelete?: (task: Item) => void;
+  onOpenDetail?: (task: Item) => void;
 }) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [failed, setFailed] = useState(false);
@@ -235,7 +258,7 @@ export function TaskCard({
 
   return (
     <article className={`task-card ${feedback?.completed ? "is-done" : ""}`}>
-      <div className="task-time">{task.time}</div>
+      <div className="task-time">{task.startTime ?? "—"}</div>
       <div className="task-main">
         <div className="row between">
           <div>
@@ -258,18 +281,20 @@ export function TaskCard({
         </div>
         <p>{task.notes}</p>
         <div className="task-meta">
-          <span>{task.duration} min</span>
+          <span>{itemDurationMinutes(task)} min</span>
           <span>{task.setting}</span>
-          <span>Dogs: {dogsInvolvedLabel(task.dogIds, dogs)}</span>
-          <span>
-            <PersonName id={task.assignedTo} />
-          </span>
+          <span>Dogs: {dogsInvolvedLabel(task.dogIds ?? [], dogs)}</span>
+          {task.assignedTo && (
+            <span>
+              <PersonName id={task.assignedTo} />
+            </span>
+          )}
         </div>
         <div className="checklist">
           {task.checklist.map((item) => (
-            <label key={item} className={checked[item] ? "checked" : ""}>
-              <input type="checkbox" checked={!!checked[item]} onChange={() => toggleItem(item)} />
-              {item}
+            <label key={item.itemName} className={checked[item.itemName] ? "checked" : ""}>
+              <input type="checkbox" checked={!!checked[item.itemName]} onChange={() => toggleItem(item.itemName)} />
+              {item.itemName}
             </label>
           ))}
         </div>
@@ -300,6 +325,10 @@ export function TaskCard({
   );
 }
 
+/** One checklist row at completion time: its value, its own notes, and its own 1-5
+ * score. Per-row scoring is Andrew's call (2026-07-25) — a session can go fine
+ * overall while one specific step went badly, and only per-row scores make that
+ * visible to the weekly ingest pass. The item still gets an overall score too. */
 function ChecklistItemEditor({ item, onChange }: { item: ChecklistItemValue; onChange: (next: ChecklistItemValue) => void }) {
   return (
     <div className="checklist-item-editor">
@@ -333,14 +362,131 @@ function ChecklistItemEditor({ item, onChange }: { item: ChecklistItemValue; onC
           onChange={(event) => onChange({ ...item, notes: event.target.value })}
         />
       )}
+      <div className="rating-row compact" aria-label={`How did "${item.itemName}" go?`}>
+        <span className="small">How did it go?</span>
+        {[1, 2, 3, 4, 5].map((rating) => (
+          <button
+            key={rating}
+            type="button"
+            className={item.rating === rating ? "selected" : ""}
+            onClick={() => onChange({ ...item, rating: item.rating === rating ? undefined : rating })}
+          >
+            {rating}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
 
-export function TaskDetailModal({ task, date, onClose }: { task: Task; date: string; onClose: () => void }) {
-  const { dogs, milestones, locations, people, getInstance, startTask, endTask, rescheduleTask, skipTask, delegateTask, deleteTask } = useStore();
+/** Free-text plus whatever structured fields the item declares. Both are optional —
+ * a log entry with only text is still useful to the ingest pass, and forcing every
+ * numeric field would just train people to type zeros. */
+function LogEntryPanel({
+  item,
+  occurrenceDate,
+  onClose,
+}: {
+  item: Item;
+  occurrenceDate?: string;
+  onClose: () => void;
+}) {
+  const { addItemLog, logsForItem, people } = useStore();
+  const [text, setText] = useState("");
+  const [values, setValues] = useState<LogFieldValue[]>(() => emptyLogValues(item.logFields));
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(false);
+  const existing = logsForItem(item.id, occurrenceDate);
+
+  async function save() {
+    if (submitting) return;
+    if (!text.trim() && values.every((value) => value.value === null || value.value === "")) {
+      setError(true);
+      return;
+    }
+    setSubmitting(true);
+    setError(false);
+    const ok = await addItemLog({
+      itemId: item.id,
+      occurrenceDate,
+      loggedBy: people.items[0]?.id ?? "",
+      text: text.trim(),
+      values: values.filter((value) => value.value !== null && value.value !== ""),
+      dogIds: item.dogIds ?? [],
+    });
+    if (!ok) setError(true);
+    else {
+      setText("");
+      setValues(emptyLogValues(item.logFields));
+      onClose();
+    }
+    setSubmitting(false);
+  }
+
+  return (
+    <div className="log-panel">
+      <p className="eyebrow">Log an entry</p>
+      {item.logFields.length > 0 && (
+        <div className="form-grid">
+          {item.logFields.map((field, index) => (
+            <label key={field.fieldName}>
+              {field.fieldName}
+              {field.unit ? ` (${field.unit})` : ""}
+              <input
+                type={field.dataType === "number" ? "number" : field.dataType === "date" ? "date" : "text"}
+                step="any"
+                value={values[index]?.value ?? ""}
+                onChange={(event) =>
+                  setValues((prev) =>
+                    prev.map((entry, i) =>
+                      i === index
+                        ? { ...entry, value: field.dataType === "number" ? Number(event.target.value) : event.target.value }
+                        : entry,
+                    ),
+                  )
+                }
+              />
+            </label>
+          ))}
+        </div>
+      )}
+      <label>
+        Notes
+        <textarea rows={3} value={text} onChange={(event) => setText(event.target.value)} placeholder="What happened?" />
+      </label>
+      {error && <p className="form-error">Add a note or at least one value before saving.</p>}
+      <div className="form-actions">
+        <button className="text-button" type="button" onClick={onClose} disabled={submitting}>
+          Cancel
+        </button>
+        <button className="primary-button" type="button" onClick={save} disabled={submitting}>
+          {submitting ? "Saving…" : "Save log"}
+        </button>
+      </div>
+      {existing.length > 0 && (
+        <div className="log-history">
+          <p className="eyebrow">Previous entries</p>
+          {existing.map((log) => (
+            <article key={log.id} className="log-entry">
+              <p className="small">{new Date(log.loggedAt).toLocaleString()}</p>
+              {log.values.length > 0 && (
+                <p className="small">
+                  {log.values.map((value) => `${value.fieldName}: ${value.value}${value.unit ? ` ${value.unit}` : ""}`).join(" · ")}
+                </p>
+              )}
+              {log.text && <p>{log.text}</p>}
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ItemDetailModal({ task, date, onClose }: { task: Item; date: string; onClose: () => void }) {
+  const { dogs, milestones, locations, people, getInstance, startTask, endTask, rescheduleTask, skipTask, delegateTask, deleteItem } = useStore();
   const { navigate, timezone } = useNavigation();
-  const [activePanel, setActivePanel] = useState<null | "start" | "end" | "reschedule" | "skip" | "delegate">(null);
+  const [activePanel, setActivePanel] = useState<null | "start" | "end" | "reschedule" | "skip" | "delegate" | "log">(null);
   const [error, setError] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
@@ -350,7 +496,7 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
   // an impatient re-tap creating a duplicate task_instance for the same slot.
   const [submitting, setSubmitting] = useState(false);
 
-  const involvedDogs = dogs.items.filter((dog) => task.dogIds.includes(dog.id));
+  const involvedDogs = dogs.items.filter((dog) => (task.dogIds ?? []).includes(dog.id));
   const location = locations.find((loc) => loc.id === task.location);
   const relatedMilestone = task.relatedMilestoneId ? milestones.items.find((item) => item.id === task.relatedMilestoneId) : undefined;
 
@@ -395,6 +541,7 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
   const [endZone, setEndZone] = useState(timezone);
   const [checklistDraft, setChecklistDraft] = useState<ChecklistItemValue[]>([]);
   const [ratingDraft, setRatingDraft] = useState<number | undefined>(undefined);
+  const [ratingNotesDraft, setRatingNotesDraft] = useState("");
 
   function openEnd() {
     setError(false);
@@ -403,15 +550,18 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
     setEndDate(date);
     setEndClock(new Date().toTimeString().slice(0, 5));
     setEndZone(instance?.startTimeZone ?? timezone);
-    setChecklistDraft(instance?.checklist ?? buildDefaultChecklist(task));
+    setChecklistDraft(
+      instance?.checklist && instance.checklist.length > 0 ? instance.checklist : buildDefaultChecklist(task, milestones.items),
+    );
     setRatingDraft(instance?.rating);
+    setRatingNotesDraft(instance?.ratingNotes ?? "");
   }
 
   async function finishEnd(endIso: string, endTz: string) {
     if (submitting || !instance) return;
     setSubmitting(true);
     setError(false);
-    const ok = await endTask(instance.id, endIso, endTz, checklistDraft, ratingDraft);
+    const ok = await endTask(instance.id, endIso, endTz, checklistDraft, ratingDraft, ratingNotesDraft.trim());
     if (!ok) setError(true);
     else setActivePanel(null);
     setSubmitting(false);
@@ -434,7 +584,7 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
       setSubmitting(false);
       return;
     }
-    const ok = await endTask(fresh.id, nowIso, timezone, buildDefaultChecklist(task), rating);
+    const ok = await endTask(fresh.id, nowIso, timezone, buildDefaultChecklist(task, milestones.items), rating);
     if (!ok) setError(true);
     setSubmitting(false);
   }
@@ -524,11 +674,13 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
       <DeleteTaskModal
         task={task}
         onCancel={() => setDeleteModalOpen(false)}
-        onConfirm={(scope, note) => deleteTask(task, scope, date, note)}
+        onConfirm={(scope, note) => deleteItem(task, scope, date, note)}
         onDone={onClose}
       />
     );
   }
+
+  const durationMinutes = itemDurationMinutes(task);
 
   return (
     <Modal title={task.title} onClose={onClose}>
@@ -537,13 +689,16 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
           <span className={`priority ${task.priority}`}>{task.priority}</span>
           <span>{task.category}</span>
           <span>
-            {instance?.scheduledTime ?? task.time} · {task.duration} min
+            {instance?.scheduledTime || task.startTime || "No set time"}
+            {durationMinutes > 0 ? ` · ${durationMinutes} min` : ""}
           </span>
-          <span>{task.setting}</span>
-          <span>
-            <PersonName id={instance?.assignedTo ?? task.assignedTo} />
-          </span>
-          <span className={`state-tag ${state}`}>{taskStateLabels[state]}</span>
+          {task.assignedTo && (
+            <span>
+              <PersonName id={instance?.assignedTo ?? task.assignedTo} />
+            </span>
+          )}
+          {task.requiresCompletion && <span className={`state-tag ${state}`}>{itemStateLabels[state]}</span>}
+          {task.requiresLog && <span className="capability-tag">Logs data</span>}
         </div>
 
         <div className="task-detail-dogs">
@@ -609,10 +764,22 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
 
         {error && <p className="form-error">That didn't save — check any required fields (and the browser console) and try again.</p>}
 
-        {activePanel === null && (state === "not_started" || state === "reassigned" || state === "rescheduled") && (
+        {/* Logging is available regardless of completion state — a vet visit gets
+            logged after the fact, and a routine can accumulate several entries. */}
+        {activePanel === null && task.requiresLog && (
+          <div className="task-lifecycle-actions">
+            <button className="primary-button" type="button" onClick={() => setActivePanel("log")}>
+              Log an entry
+            </button>
+          </div>
+        )}
+
+        {activePanel === "log" && <LogEntryPanel item={task} occurrenceDate={date} onClose={() => setActivePanel(null)} />}
+
+        {activePanel === null && task.requiresCompletion && (state === "not_started" || state === "reassigned" || state === "rescheduled") && (
           <div className="task-lifecycle-actions">
             <button className="primary-button" type="button" onClick={openStart}>
-              Start Task
+              Start
             </button>
             <button className="text-button" type="button" onClick={openDelegate}>
               Ask someone else to complete this
@@ -626,14 +793,14 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
           </div>
         )}
 
-        {activePanel === null && state === "in_progress" && (
+        {activePanel === null && task.requiresCompletion && state === "in_progress" && (
           <div className="task-lifecycle-actions">
             <p className="small">
               Started{" "}
               {instance?.startTime && instance.startTimeZone ? formatInZone(instance.startTime, instance.startTimeZone) : "—"}
             </p>
             <button className="primary-button" type="button" onClick={openEnd}>
-              End Task
+              Finish
             </button>
             <button className="text-button" type="button" onClick={openReschedule}>
               Reschedule
@@ -658,14 +825,19 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
               {instance.endTime && instance.endTimeZone ? formatInZone(instance.endTime, instance.endTimeZone) : "—"}
               {instance.rating ? ` · Rated ${instance.rating}/5` : ""}
             </p>
+            {instance.ratingNotes && <p className="small">{instance.ratingNotes}</p>}
             <div className="checklist">
               {instance.checklist.map((item) => (
                 <div key={item.itemName} className="checklist-summary-item">
                   <strong>{item.itemName}:</strong> {item.dataType === "boolean" ? (item.value ? "Yes" : "No") : String(item.value)}
+                  {item.rating ? ` · ${item.rating}/5` : ""}
                   {item.notes ? ` — ${item.notes}` : ""}
                 </div>
               ))}
             </div>
+            <button className="text-button" type="button" onClick={openEnd}>
+              Edit this completion
+            </button>
           </div>
         )}
 
@@ -781,7 +953,7 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
             </div>
 
             <p className="eyebrow" style={{ marginTop: 12 }}>
-              How did it go?
+              Overall — how did the whole thing go?
             </p>
             <div className="rating-row">
               {[1, 2, 3, 4, 5].map((rating) => (
@@ -795,6 +967,15 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
                 </button>
               ))}
             </div>
+            <label>
+              Overall notes
+              <textarea
+                rows={2}
+                value={ratingNotesDraft}
+                onChange={(event) => setRatingNotesDraft(event.target.value)}
+                placeholder="Anything worth remembering about the session as a whole"
+              />
+            </label>
           </div>
         )}
 
@@ -868,18 +1049,24 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
           </div>
         )}
 
-        {activePanel === null && (state === "not_started" || state === "in_progress") && (
-          <div className="rating-row" aria-label={`Quick-complete ${task.title}`} style={{ marginTop: 12 }}>
-            <span className="small" style={{ marginRight: 8 }}>
-              Quick complete:
-            </span>
-            {[1, 2, 3, 4, 5].map((rating) => (
-              <button key={rating} type="button" onClick={() => quickComplete(rating)} disabled={submitting}>
-                {rating}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Quick-complete only survives for items with nothing to work through.
+            Once an item has a checklist, skipping straight to a score would bypass
+            the per-row scores and notes that are now the point (backlog item 11). */}
+        {activePanel === null &&
+          task.requiresCompletion &&
+          resolveChecklistDefs(task, milestones.items).length === 0 &&
+          (state === "not_started" || state === "in_progress") && (
+            <div className="rating-row" aria-label={`Quick-complete ${task.title}`} style={{ marginTop: 12 }}>
+              <span className="small" style={{ marginRight: 8 }}>
+                Quick complete:
+              </span>
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <button key={rating} type="button" onClick={() => quickComplete(rating)} disabled={submitting}>
+                  {rating}
+                </button>
+              ))}
+            </div>
+          )}
 
         {activePanel === null && (
           <button
@@ -888,7 +1075,7 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
             onClick={() => setDeleteModalOpen(true)}
             style={{ marginTop: 12 }}
           >
-            Delete task
+            Delete
           </button>
         )}
 
@@ -919,12 +1106,12 @@ function DeleteTaskModal({
   onConfirm,
   onDone,
 }: {
-  task: Task;
+  task: Item;
   onCancel: () => void;
-  onConfirm: (scope: TaskDeletionScope, note: string) => Promise<boolean>;
+  onConfirm: (scope: ItemDeletionScope, note: string) => Promise<boolean>;
   onDone: () => void;
 }) {
-  const [scope, setScope] = useState<TaskDeletionScope>("instance");
+  const [scope, setScope] = useState<ItemDeletionScope>("instance");
   const [note, setNote] = useState("");
   const [noteError, setNoteError] = useState(false);
   const [saveError, setSaveError] = useState(false);
@@ -1070,8 +1257,8 @@ export function MilestoneCard({ milestone }: { milestone: Milestone }) {
 }
 
 export function DogProfile({ dog, onEdit, onDelete }: { dog: Dog; onEdit?: (dog: Dog) => void; onDelete?: (dog: Dog) => void }) {
-  const { healthEvents } = useStore();
-  const upcomingHealth = healthEvents.items.filter((event) => event.dogId === dog.id);
+  const { items } = useStore();
+  const upcomingHealth = items.items.filter((entry) => isHealthItem(entry) && (entry.dogIds ?? []).includes(dog.id));
   const mastered = dog.masteredCommands.length ? dog.masteredCommands.join(", ") : "None yet";
   return (
     <article className="dog-card">
@@ -1166,19 +1353,19 @@ export function DogProfile({ dog, onEdit, onDelete }: { dog: Dog; onEdit?: (dog:
 }
 
 export function HumanProfile({ person }: { person: Person }) {
-  const { tasks } = useStore();
-  const assignedTasks = tasks.items.filter((task) => task.assignedTo === person.id);
+  const { items } = useStore();
+  const assignedTasks = items.items.filter((entry) => entry.requiresCompletion && entry.assignedTo === person.id);
   return (
     <article className="human-card">
       <span style={{ background: person.color }} />
       <div>
         <p className="eyebrow">Human</p>
         <h3>{person.name}</h3>
-        <p>{assignedTasks.length} tasks assigned today</p>
+        <p>{assignedTasks.length} items assigned</p>
         <div className="assigned-list">
-          {assignedTasks.map((task) => (
-            <small key={task.id}>
-              {task.time} · {task.title}
+          {assignedTasks.map((entry) => (
+            <small key={entry.id}>
+              {entry.startTime ?? "—"} · {entry.title}
             </small>
           ))}
         </div>

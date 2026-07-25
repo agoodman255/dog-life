@@ -1703,15 +1703,13 @@ textarea:focus-visible,
   color: var(--muted);
 }
 
-.day-block.task {
+/* Colour by what the item asks of you, not by which table it came from — that
+   distinction no longer exists, and "do I owe this?" is the useful one at a glance. */
+.day-block.completable {
   border-left: 4px solid var(--teal);
 }
 
-.day-block.health {
-  border-left: 4px solid var(--coral);
-}
-
-.day-block.calendar {
+.day-block.informational {
   border-left: 4px solid var(--blue);
 }
 
@@ -2467,5 +2465,218 @@ textarea:focus-visible,
   .dashboard-toolbar,
   .calendar-heading.is-frozen {
     top: 134px;
+  }
+}
+
+/* --- Unified item: capability toggles, presets, checklists, logs ------------ */
+
+/* The Add menu's presets carry a label, a plain-language consequence, and tags for
+   what will be asked of you later — so the choice is legible before you commit. */
+.add-item-menu-panel.wide {
+  width: min(320px, 88vw);
+  padding: 6px;
+}
+
+.add-item-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  min-height: 0;
+}
+
+.add-item-preset:hover,
+.add-item-preset:focus-visible {
+  background: var(--soft);
+  border-color: var(--line);
+}
+
+.add-item-preset strong {
+  font-size: 0.92rem;
+}
+
+.add-item-preset small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.add-item-preset-tags {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.capability-tag {
+  font-style: normal;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--teal);
+  color: #f9f4e9;
+}
+
+.capability-tag.muted {
+  background: var(--soft);
+  color: var(--muted);
+}
+
+.capability-group,
+.capability-detail {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.capability-group legend,
+.capability-detail legend {
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal);
+  padding: 0 6px;
+}
+
+.capability-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.capability-toggle input {
+  margin-top: 3px;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+
+.capability-toggle span {
+  display: grid;
+  gap: 2px;
+}
+
+.capability-toggle small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.capability-hint {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.checklist-def-row,
+.log-field-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.checklist-def-row input,
+.log-field-row input,
+.checklist-def-row select,
+.log-field-row select {
+  flex: 1 1 120px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.log-field-row input:last-of-type {
+  flex: 0 1 80px;
+}
+
+.milestone-pull ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Per-checklist-row scoring sits inline under each row, deliberately smaller than
+   the overall score so the two don't read as the same control. */
+.rating-row.compact {
+  gap: 4px;
+  margin-top: 6px;
+  align-items: center;
+}
+
+.rating-row.compact button {
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  font-size: 0.78rem;
+}
+
+.rating-row.compact .small {
+  margin-right: 4px;
+}
+
+.log-panel {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.log-history {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.log-entry {
+  background: var(--soft);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.log-entry p {
+  margin: 2px 0 0;
+}
+
+.health-log-line {
+  display: block;
+  color: var(--muted);
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+  margin-top: 4px;
+}
+
+@media (max-width: 760px) {
+  .checklist-def-row,
+  .log-field-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .log-field-row input:last-of-type {
+    flex: 1 1 auto;
   }
 }
