@@ -1,4 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Info } from "lucide-react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import {
@@ -22,26 +24,133 @@ import {
 import { makeId } from "./store";
 import { computeEventTimes, to12Hour, to24Hour } from "./utils";
 
+// Alphabetical by label — CategoryPicker and every plain <select> that maps over
+// this array inherit the order, so there's one place that controls it.
 export const CATEGORY_OPTIONS: Category[] = [
-  "potty",
-  "meals",
-  "training",
-  "health",
-  "handling",
-  "socialization",
-  "exercise",
-  "relationship",
   "alone-time",
   "chores",
-  "family",
-  "social",
-  "entertainment",
-  "sports",
-  "travel",
   "downtime",
+  "entertainment",
+  "exercise",
+  "family",
+  "handling",
+  "health",
   "journal",
+  "meals",
   "other",
+  "potty",
+  "relationship",
+  "social",
+  "socialization",
+  "sports",
+  "training",
+  "travel",
 ];
+
+export const CATEGORY_LABELS: Record<Category, string> = {
+  "alone-time": "Alone time",
+  chores: "Chores",
+  downtime: "Downtime",
+  entertainment: "Entertainment",
+  exercise: "Exercise",
+  family: "Family",
+  handling: "Handling",
+  health: "Health",
+  journal: "Journal",
+  meals: "Meals",
+  other: "Other",
+  potty: "Potty",
+  relationship: "Relationship",
+  social: "Social",
+  socialization: "Socialization",
+  sports: "Sports",
+  training: "Training",
+  travel: "Travel",
+};
+
+// Written to disambiguate the pairs that read as near-synonyms at a glance
+// (socialization vs. social, relationship vs. family) — that ambiguity is exactly
+// what prompted adding these descriptions in the first place.
+export const CATEGORY_DESCRIPTIONS: Record<Category, string> = {
+  "alone-time": "Practicing or logging time with the dogs left home alone.",
+  chores: "Household errands and pet-care logistics — supply runs, cleaning, admin.",
+  downtime: "Deliberate rest or unstructured relaxation, for the humans or the dogs.",
+  entertainment: "Shows, concerts, movies — things attended for fun.",
+  exercise: "Physical activity for the dogs — walks, runs, play, fetch.",
+  family: "Time with family — visits, gatherings, family events.",
+  handling: "Cooperative-care practice — touch, paws, ears, restraint tolerance.",
+  health: "Vet visits, medication, grooming, and other physical care.",
+  journal: "A reflection or log entry, not a scheduled activity.",
+  meals: "Feeding times and mealtime routines.",
+  other: "Anything that doesn't fit the categories above.",
+  potty: "Bathroom breaks and house-training check-ins.",
+  relationship: "Building the bond between the two dogs — parallel walks, structured together-time.",
+  social: "Get-togethers with friends or other people — not dog-focused.",
+  socialization: "Planned exposure to new dogs, people, places, or sounds to build the dogs' confidence.",
+  sports: "Games, leagues, or sporting events — playing or watching.",
+  training: "Structured skill-building — obedience, commands, tricks.",
+  travel: "Trips, camping, and time away from home.",
+};
+
+function CategoryPicker({ value, onChange }: { value: Category; onChange: (category: Category) => void }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [infoFor, setInfoFor] = useState<Category | null>(null);
+  const matches = CATEGORY_OPTIONS.filter((option) => CATEGORY_LABELS[option].toLowerCase().includes(query.toLowerCase()));
+
+  return (
+    <div className="category-picker">
+      <button type="button" className="text-button" onClick={() => setOpen((prev) => !prev)}>
+        {CATEGORY_LABELS[value]}
+      </button>
+      {open && (
+        <div className="category-picker-panel">
+          <input
+            autoFocus
+            placeholder="Search categories…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <div className="category-picker-list">
+            {matches.map((option) => (
+              <div key={option} className="category-picker-row">
+                <button
+                  type="button"
+                  className={option === value ? "active" : ""}
+                  onClick={() => {
+                    onChange(option);
+                    setOpen(false);
+                    setQuery("");
+                    setInfoFor(null);
+                  }}
+                >
+                  {CATEGORY_LABELS[option]}
+                </button>
+                <button
+                  type="button"
+                  className="icon-button category-picker-info"
+                  aria-label={`What belongs in ${CATEGORY_LABELS[option]}?`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setInfoFor((prev) => (prev === option ? null : option));
+                  }}
+                >
+                  <Info size={14} aria-hidden />
+                </button>
+              </div>
+            ))}
+            {matches.length === 0 && <p className="small">No categories match "{query}".</p>}
+          </div>
+          {infoFor && (
+            <p className="category-picker-description">
+              <strong>{CATEGORY_LABELS[infoFor]}:</strong> {CATEGORY_DESCRIPTIONS[infoFor]}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const medicationKinds: MedicationKind[] = ["medication", "supplement", "injection", "preventive"];
 
@@ -822,12 +931,11 @@ const calendarEventSchema = z
     startTime: z.string(),
     endTime: z.string(),
     durationHours: z.number().min(0),
-    attendeeMode: z.enum(["everyone", "specific"]),
     attendees: z.array(z.string()),
+    dogIds: z.array(z.string()),
     aloneTimeRequired: z.enum(["all", "partial", "no"]),
     aloneTimeRequiredAmount: z.number().min(0).optional(),
     status: z.enum(["confirmed", "placeholder"]),
-    importance: z.enum(["marquee", "normal", ""]),
     notes: z.string(),
   })
   .superRefine((values, ctx) => {
@@ -873,11 +981,11 @@ export function calendarEventFormValuesToEvent(
     startTime: values.startTime ? to12Hour(values.startTime) : undefined,
     endTime: values.endTime ? to12Hour(values.endTime) : undefined,
     durationHours: values.durationHours || undefined,
-    attendees: values.attendeeMode === "everyone" ? undefined : values.attendees,
+    attendees: values.attendees.length > 0 ? values.attendees : undefined,
+    dogIds: values.dogIds.length > 0 ? values.dogIds : undefined,
     aloneTimeRequired: values.aloneTimeRequired,
     aloneTimeRequiredAmount: values.aloneTimeRequired === "partial" ? values.aloneTimeRequiredAmount : undefined,
     status: values.status,
-    importance: values.importance || undefined,
     notes: values.notes,
     ...extra,
   };
@@ -886,14 +994,19 @@ export function calendarEventFormValuesToEvent(
 export function CalendarEventForm({
   initial,
   peopleOptions,
+  dogOptions,
   onSubmit,
   onCancel,
+  onDelete,
 }: {
   initial?: CalendarEvent;
   peopleOptions: { id: string; name: string }[];
-  onSubmit: (values: CalendarEventFormValues) => void;
+  dogOptions: { id: string; name: string }[];
+  onSubmit: (values: CalendarEventFormValues) => Promise<boolean>;
   onCancel: () => void;
+  onDelete?: () => void;
 }) {
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const rec = initial?.recurrence;
   const { register, handleSubmit, watch, setValue, getValues, formState: { errors } } = useForm<CalendarEventFormValues>({
     resolver: zodResolver(calendarEventSchema),
@@ -914,22 +1027,22 @@ export function CalendarEventForm({
       startTime: initial?.startTime ? to24Hour(initial.startTime) : "",
       endTime: initial?.endTime ? to24Hour(initial.endTime) : "",
       durationHours: initial?.durationHours ?? 0,
-      attendeeMode: initial?.attendees && initial.attendees.length > 0 ? "specific" : "everyone",
       attendees: initial?.attendees ?? [],
+      dogIds: initial?.dogIds ?? [],
       aloneTimeRequired: initial?.aloneTimeRequired ?? "no",
       aloneTimeRequiredAmount: initial?.aloneTimeRequiredAmount,
       status: initial?.status ?? "placeholder",
-      importance: initial?.importance ?? "",
       notes: initial?.notes ?? "",
     },
   });
   const kind = watch("kind");
   const frequency = watch("frequency");
   const endMode = watch("endMode");
-  const attendeeMode = watch("attendeeMode");
+  const category = watch("category");
   const aloneTimeRequired = watch("aloneTimeRequired");
   const daysOfWeek = watch("daysOfWeek");
   const attendees = watch("attendees");
+  const dogIds = watch("dogIds");
 
   function toggleDayOfWeek(day: DayOfWeek) {
     const current = getValues("daysOfWeek");
@@ -939,6 +1052,17 @@ export function CalendarEventForm({
   function toggleAttendee(id: string) {
     const current = getValues("attendees");
     setValue("attendees", current.includes(id) ? current.filter((a) => a !== id) : [...current, id]);
+  }
+
+  function toggleDogId(id: string) {
+    const current = getValues("dogIds");
+    setValue("dogIds", current.includes(id) ? current.filter((d) => d !== id) : [...current, id]);
+  }
+
+  async function submitForm(values: CalendarEventFormValues) {
+    setSaveState("saving");
+    const ok = await onSubmit(values);
+    setSaveState(ok ? "saved" : "error");
   }
 
   function handleTimeBlur() {
@@ -957,8 +1081,21 @@ export function CalendarEventForm({
   const endTimeReg = register("endTime");
   const durationReg = register("durationHours", { valueAsNumber: true });
 
+  if (saveState === "saved") {
+    return (
+      <>
+        <p className="form-success">"{getValues("title")}" was saved.</p>
+        <div className="form-actions">
+          <button className="primary-button" type="button" onClick={onCancel}>
+            Done
+          </button>
+        </div>
+      </>
+    );
+  }
+
   return (
-    <form className="entity-form" onSubmit={handleSubmit(onSubmit)}>
+    <form className="entity-form" onSubmit={handleSubmit(submitForm)}>
       <div className="form-grid">
         <label>
           Title
@@ -967,13 +1104,7 @@ export function CalendarEventForm({
         </label>
         <label>
           Category
-          <select {...register("category")}>
-            {CATEGORY_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          <CategoryPicker value={category} onChange={(next) => setValue("category", next)} />
         </label>
         <label>
           Recurring or one-off
@@ -1065,29 +1196,31 @@ export function CalendarEventForm({
         </label>
         <label>
           Duration (hours)
-          <input type="number" min={0} step="0.25" {...durationReg} onBlur={(e) => { durationReg.onBlur(e); handleTimeBlur(); }} />
+          <input type="number" min={0} step="any" {...durationReg} onBlur={(e) => { durationReg.onBlur(e); handleTimeBlur(); }} />
         </label>
         {errors.startTime && <small className="form-error">{errors.startTime.message}</small>}
 
         <label>
-          Assigned to
-          <select {...register("attendeeMode")}>
-            <option value="everyone">Everyone</option>
-            <option value="specific">Specific people</option>
-          </select>
+          Assigned to (optional — leave blank for everyone)
+          <div className="subtabs" role="group" aria-label="Assigned people">
+            {peopleOptions.map((person) => (
+              <button key={person.id} type="button" className={attendees.includes(person.id) ? "active" : ""} onClick={() => toggleAttendee(person.id)}>
+                {person.name}
+              </button>
+            ))}
+          </div>
         </label>
-        {attendeeMode === "specific" && (
-          <label>
-            Who
-            <div className="subtabs" role="group" aria-label="Assigned people">
-              {peopleOptions.map((person) => (
-                <button key={person.id} type="button" className={attendees.includes(person.id) ? "active" : ""} onClick={() => toggleAttendee(person.id)}>
-                  {person.name}
-                </button>
-              ))}
-            </div>
-          </label>
-        )}
+
+        <label>
+          Dogs involved (optional — leave blank if this doesn't specifically involve the dogs)
+          <div className="subtabs" role="group" aria-label="Dogs involved">
+            {dogOptions.map((dog) => (
+              <button key={dog.id} type="button" className={dogIds.includes(dog.id) ? "active" : ""} onClick={() => toggleDogId(dog.id)}>
+                {dog.name}
+              </button>
+            ))}
+          </div>
+        </label>
 
         <label>
           Dog alone time required
@@ -1100,7 +1233,7 @@ export function CalendarEventForm({
         {aloneTimeRequired === "partial" && (
           <label>
             How much (hours)
-            <input type="number" min={0} step="0.5" {...register("aloneTimeRequiredAmount", { valueAsNumber: true })} />
+            <input type="number" min={0} step="any" {...register("aloneTimeRequiredAmount", { valueAsNumber: true })} />
             {errors.aloneTimeRequiredAmount && <small className="form-error">{errors.aloneTimeRequiredAmount.message}</small>}
           </label>
         )}
@@ -1112,25 +1245,27 @@ export function CalendarEventForm({
             <option value="placeholder">Placeholder</option>
           </select>
         </label>
-        <label>
-          Importance
-          <select {...register("importance")}>
-            <option value="">—</option>
-            <option value="normal">Normal</option>
-            <option value="marquee">Marquee / heavy week</option>
-          </select>
-        </label>
       </div>
+      <p className="small">
+        Busy weeks are flagged automatically from how much dog-alone-time coverage is needed nearby — no need to mark
+        this one manually.
+      </p>
       <label>
         Notes
         <textarea rows={2} {...register("notes")} />
       </label>
+      {saveState === "error" && <p className="form-error">That didn't save — check the browser console and try again.</p>}
       <div className="form-actions">
-        <button className="text-button" type="button" onClick={onCancel}>
+        {onDelete && (
+          <button className="text-button danger" type="button" onClick={onDelete} style={{ marginRight: "auto" }} disabled={saveState === "saving"}>
+            Delete event
+          </button>
+        )}
+        <button className="text-button" type="button" onClick={onCancel} disabled={saveState === "saving"}>
           Cancel
         </button>
-        <button className="primary-button" type="submit">
-          Save event
+        <button className="primary-button" type="submit" disabled={saveState === "saving"}>
+          {saveState === "saving" ? "Saving…" : "Save event"}
         </button>
       </div>
     </form>

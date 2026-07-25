@@ -43,6 +43,8 @@ import {
   PersonForm,
   RelationshipLogForm,
   TaskForm,
+  CATEGORY_LABELS,
+  CATEGORY_OPTIONS,
   aloneTimeLogFormValuesToLog,
   calendarEventFormValuesToEvent,
   dogFormValuesToDog,
@@ -58,6 +60,7 @@ import { isBackendConfigured } from "./supabaseClient";
 import {
   CalendarEvent,
   CalendarEventDeletionScope,
+  Category,
   Dog,
   ExposureCategory,
   ExposureItem,
@@ -99,6 +102,7 @@ import {
   toDateKey,
   useAdaptivePlan,
   weekDays,
+  weekStart as weekStartKey,
   weekStartDate,
 } from "./utils";
 
@@ -463,7 +467,7 @@ function buildAgendaForDate(
       category: event.category,
       startMinutes: event.startTime ? parseTimeLabel(event.startTime) : null,
       durationMinutes: (event.durationHours ?? 1) * 60,
-      dogNames: "",
+      dogNames: (event.dogIds ?? []).map(dogName).join(" & "),
       date: dateKey,
       placeholder: event.status === "placeholder",
       source: "calendar",
@@ -474,19 +478,21 @@ function buildAgendaForDate(
   return items;
 }
 
-function monthDaySummary(day: Date, healthEvents: HealthEvent[], calendarEvents: CalendarEvent[]): { count: number; heavy: boolean } {
+function monthDaySummary(
+  day: Date,
+  healthEvents: HealthEvent[],
+  calendarEvents: CalendarEvent[],
+  heavyWeekSet: Set<string>,
+): { count: number; heavy: boolean } {
   const key = toDateKey(day);
   let count = 0;
-  let heavy = false;
   healthEvents.forEach((event) => {
     if (event.date === key) count++;
   });
   calendarEvents.forEach((event) => {
-    if (generateOccurrences(event, day, day).length === 0) return;
-    count++;
-    if (event.importance === "marquee") heavy = true;
+    if (generateOccurrences(event, day, day).length > 0) count++;
   });
-  return { count, heavy };
+  return { count, heavy: heavyWeekSet.has(weekStartKey(key)) };
 }
 
 // Assigns each item a track (column) and a trackCount scoped to its own cluster
@@ -551,12 +557,14 @@ function CalendarMonthGrid({
   today,
   healthEvents,
   calendarEvents,
+  heavyWeekSet,
   onSelectDay,
 }: {
   cursor: Date;
   today: Date;
   healthEvents: HealthEvent[];
   calendarEvents: CalendarEvent[];
+  heavyWeekSet: Set<string>;
   onSelectDay: (date: Date) => void;
 }) {
   const days = monthGridDays(cursor);
@@ -568,7 +576,7 @@ function CalendarMonthGrid({
         </div>
       ))}
       {days.map((day, index) => {
-        const info = monthDaySummary(day, healthEvents, calendarEvents);
+        const info = monthDaySummary(day, healthEvents, calendarEvents, heavyWeekSet);
         const inMonth = day.getMonth() === cursor.getMonth();
         return (
           <button
@@ -597,33 +605,56 @@ function CalendarWeekStrip({
   today,
   agendaByDay,
   onSelectDay,
+  onOpenTask,
+  onOpenEvent,
+  onOpenDog,
 }: {
   cursor: Date;
   today: Date;
   agendaByDay: { day: Date; items: AgendaItem[] }[];
   onSelectDay: (date: Date) => void;
+  onOpenTask: (task: Task, date: string) => void;
+  onOpenEvent: (event: CalendarEvent, occurrenceDate?: string) => void;
+  onOpenDog: (dogId: string) => void;
 }) {
+  function openItem(item: AgendaItem) {
+    if (item.task) onOpenTask(item.task, item.date ?? toDateKey(new Date()));
+    else if (item.calendarEvent) onOpenEvent(item.calendarEvent, item.date);
+    else if (item.healthEvent) onOpenDog(item.healthEvent.dogId);
+  }
+
   return (
     <div className="week-strip">
       {agendaByDay.map(({ day, items }) => {
         const scheduled = items.filter((item) => item.startMinutes !== null).sort((a, b) => a.startMinutes! - b.startMinutes!);
         return (
-          <button
-            key={toDateKey(day)}
-            type="button"
-            className={`week-day ${isSameDay(day, today) ? "is-today" : ""}`}
-            onClick={() => onSelectDay(day)}
-          >
-            <span className="week-day-label">{day.toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}</span>
+          <div key={toDateKey(day)} className={`week-day ${isSameDay(day, today) ? "is-today" : ""}`}>
+            <button
+              type="button"
+              className="week-day-label-button"
+              onClick={() => onSelectDay(day)}
+              aria-label={`Open ${day.toLocaleDateString(undefined, { weekday: "long", day: "numeric" })}`}
+            >
+              <span className="week-day-label">{day.toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}</span>
+            </button>
             <div className="week-day-items">
               {scheduled.slice(0, 4).map((item) => (
-                <small key={item.id} className={item.placeholder ? "placeholder" : ""}>
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`week-day-item ${item.placeholder ? "placeholder" : ""}`}
+                  onClick={() => openItem(item)}
+                >
                   {formatMinutes(item.startMinutes!)} · {item.title}
-                </small>
+                </button>
               ))}
-              {items.length > 4 && <small className="week-day-more">+{items.length - 4} more</small>}
+              {items.length > 4 && (
+                <button type="button" className="week-day-more" onClick={() => onSelectDay(day)}>
+                  +{items.length - 4} more
+                </button>
+              )}
             </div>
-          </button>
+          </div>
         );
       })}
     </div>
@@ -709,22 +740,47 @@ function DeleteEventModal({
   occurrenceDate,
   onCancel,
   onConfirm,
+  onDone,
 }: {
   event: CalendarEvent;
   occurrenceDate?: string;
   onCancel: () => void;
-  onConfirm: (scope: CalendarEventDeletionScope, note: string) => void;
+  onConfirm: (scope: CalendarEventDeletionScope, note: string) => Promise<boolean>;
+  onDone: () => void;
 }) {
   const [scope, setScope] = useState<CalendarEventDeletionScope>(occurrenceDate ? "instance" : "series");
   const [note, setNote] = useState("");
-  const [error, setError] = useState(false);
+  const [noteError, setNoteError] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [deleted, setDeleted] = useState(false);
 
-  function confirm() {
+  async function confirm() {
     if (!note.trim()) {
-      setError(true);
+      setNoteError(true);
       return;
     }
-    onConfirm(scope, note.trim());
+    setSubmitting(true);
+    setSaveError(false);
+    const ok = await onConfirm(scope, note.trim());
+    setSubmitting(false);
+    if (ok) setDeleted(true);
+    else setSaveError(true);
+  }
+
+  if (deleted) {
+    return (
+      <Modal title="Event deleted" onClose={onDone}>
+        <p className="form-success">
+          {scope === "instance" ? `That occurrence of "${event.title}" was removed.` : `"${event.title}" was deleted.`}
+        </p>
+        <div className="form-actions">
+          <button className="primary-button" type="button" onClick={onDone}>
+            Done
+          </button>
+        </div>
+      </Modal>
+    );
   }
 
   return (
@@ -748,20 +804,61 @@ function DeleteEventModal({
           value={note}
           onChange={(event) => {
             setNote(event.target.value);
-            setError(false);
+            setNoteError(false);
           }}
         />
-        {error && <small className="form-error">A note is required to delete an event.</small>}
+        {noteError && <small className="form-error">A note is required to delete an event.</small>}
       </label>
+      {saveError && <p className="form-error">That didn't save — check the browser console and try again.</p>}
       <div className="form-actions">
-        <button className="text-button" type="button" onClick={onCancel}>
+        <button className="text-button" type="button" onClick={onCancel} disabled={submitting}>
           Cancel
         </button>
-        <button className="primary-button" type="button" onClick={confirm}>
-          Delete
+        <button className="primary-button" type="button" onClick={confirm} disabled={submitting}>
+          {submitting ? "Deleting…" : "Delete"}
         </button>
       </div>
     </Modal>
+  );
+}
+
+function CategoryFilterPicker({ selected, onChange }: { selected: Set<Category>; onChange: (next: Set<Category>) => void }) {
+  const [open, setOpen] = useState(false);
+
+  function toggle(category: Category) {
+    const next = new Set(selected);
+    next.has(category) ? next.delete(category) : next.add(category);
+    onChange(next);
+  }
+
+  const label = selected.size === 0 ? "All categories" : `${selected.size} categor${selected.size === 1 ? "y" : "ies"}`;
+
+  return (
+    <div className="category-filter">
+      <button type="button" className="text-button" onClick={() => setOpen((prev) => !prev)}>
+        {label}
+      </button>
+      {open && (
+        <div className="category-filter-panel">
+          <div className="category-filter-list">
+            {CATEGORY_OPTIONS.map((option) => (
+              <label key={option} className="category-filter-row">
+                <input type="checkbox" checked={selected.has(option)} onChange={() => toggle(option)} />
+                {CATEGORY_LABELS[option]}
+              </label>
+            ))}
+          </div>
+          <div className="form-actions">
+            <button type="button" className="text-button" onClick={() => onChange(new Set())} disabled={selected.size === 0}>
+              Clear
+            </button>
+            <button type="button" className="primary-button small" onClick={() => setOpen(false)}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -786,6 +883,7 @@ export function CalendarView() {
   const [cursorDate, setCursorDate] = useState<Date>(() => new Date());
   const [viewerId, setViewerId] = useState<string>(() => loadViewerId(people.items[0]?.id ?? ""));
   const [filterMode, setFilterMode] = useState<"all" | "mine" | "other">("all");
+  const [categoryFilter, setCategoryFilter] = useState<Set<Category>>(new Set());
   const [detailTask, setDetailTask] = useState<{ task: Task; date: string } | null>(null);
   const touchStartX = useRef<number | null>(null);
   const today = new Date();
@@ -838,10 +936,16 @@ export function CalendarView() {
     navigate("profile", { dogId });
   }
 
-  const dayAgenda = buildAgendaForDate(cursorDate, tasks.items, healthEvents.items, calendarEvents.items, dogs.items, taskInstances.items);
+  // Health events aren't part of the shared Category taxonomy (they use HealthEvent's
+  // own "kind"), so they're left out of category filtering and always show through.
+  const categoryFilteredTasks = categoryFilter.size === 0 ? tasks.items : tasks.items.filter((task) => categoryFilter.has(task.category));
+  const categoryFilteredEvents =
+    categoryFilter.size === 0 ? calendarEvents.items : calendarEvents.items.filter((event) => categoryFilter.has(event.category));
+
+  const dayAgenda = buildAgendaForDate(cursorDate, categoryFilteredTasks, healthEvents.items, categoryFilteredEvents, dogs.items, taskInstances.items);
   const weekAgenda = weekDays(cursorDate).map((day) => ({
     day,
-    items: buildAgendaForDate(day, tasks.items, healthEvents.items, calendarEvents.items, dogs.items, taskInstances.items),
+    items: buildAgendaForDate(day, categoryFilteredTasks, healthEvents.items, categoryFilteredEvents, dogs.items, taskInstances.items),
   }));
 
   const isGridMode = viewMode === "day" || viewMode === "week" || viewMode === "month";
@@ -857,12 +961,12 @@ export function CalendarView() {
             ? "Upcoming events"
             : "Milestones";
 
-  const recurring = calendarEvents.items.filter((event) => event.kind === "recurring");
-  const upcoming = calendarEvents.items
+  const recurring = categoryFilteredEvents.filter((event) => event.kind === "recurring");
+  const upcoming = categoryFilteredEvents
     .filter((event) => event.kind === "one-off")
     .slice()
     .sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999"));
-  const weeks = heavyWeeks(calendarEvents.items);
+  const weeks = heavyWeeks(calendarEvents.items, aloneTimeLogs.items, addDays(today, -7), addDays(today, 365));
   const aloneReadiness = computeAloneTimeReadiness(aloneTimeLogs.items, calendarEvents.items);
 
   return (
@@ -897,22 +1001,28 @@ export function CalendarView() {
             </div>
           </div>
         )}
+        {isGridMode && (
+          <div className="calendar-add-event-row">
+            <button className="primary-button small" type="button" onClick={() => setEventModal("new")}>
+              <Plus size={14} aria-hidden /> Event
+            </button>
+          </div>
+        )}
         {!isGridMode && <h2>{headingLabel}</h2>}
         <div className="calendar-controls">
-          <div className="subtabs calendar-view-tabs" role="tablist">
-            {(["day", "week", "month"] as const).map((mode) => (
-              <button key={mode} role="tab" aria-selected={viewMode === mode} className={viewMode === mode ? "active" : ""} type="button" onClick={() => setViewMode(mode)}>
-                {mode[0].toUpperCase() + mode.slice(1)}
-              </button>
-            ))}
-          </div>
-          <div className="subtabs calendar-view-tabs" role="tablist">
-            {(["upcoming", "milestones"] as const).map((mode) => (
-              <button key={mode} role="tab" aria-selected={viewMode === mode} className={viewMode === mode ? "active" : ""} type="button" onClick={() => setViewMode(mode)}>
-                {mode[0].toUpperCase() + mode.slice(1)}
-              </button>
-            ))}
-          </div>
+          <select
+            className="calendar-view-select"
+            aria-label="Calendar view"
+            value={viewMode}
+            onChange={(event) => setViewMode(event.target.value as typeof viewMode)}
+          >
+            <option value="day">Day</option>
+            <option value="week">Week</option>
+            <option value="month">Month</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="milestones">Milestones</option>
+          </select>
+          {viewMode !== "milestones" && <CategoryFilterPicker selected={categoryFilter} onChange={setCategoryFilter} />}
         </div>
       </div>
 
@@ -953,13 +1063,24 @@ export function CalendarView() {
               onOpenDog={openDog}
             />
           )}
-          {viewMode === "week" && <CalendarWeekStrip cursor={cursorDate} today={today} agendaByDay={weekAgenda} onSelectDay={selectDay} />}
+          {viewMode === "week" && (
+            <CalendarWeekStrip
+              cursor={cursorDate}
+              today={today}
+              agendaByDay={weekAgenda}
+              onSelectDay={selectDay}
+              onOpenTask={(task, date) => setDetailTask({ task, date })}
+              onOpenEvent={(event, occurrenceDate) => setEventModal({ event, occurrenceDate })}
+              onOpenDog={openDog}
+            />
+          )}
           {viewMode === "month" && (
             <CalendarMonthGrid
               cursor={cursorDate}
               today={today}
               healthEvents={healthEvents.items}
-              calendarEvents={calendarEvents.items}
+              calendarEvents={categoryFilteredEvents}
+              heavyWeekSet={weeks}
               onSelectDay={selectDay}
             />
           )}
@@ -1079,37 +1200,31 @@ export function CalendarView() {
           <CalendarEventForm
             initial={eventModal === "new" ? undefined : eventModal.event}
             peopleOptions={people.items.map((person) => ({ id: person.id, name: person.name }))}
+            dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
             onCancel={() => setEventModal(null)}
-            onSubmit={(values) => {
-              if (eventModal === "new") {
-                calendarEvents.add(calendarEventFormValuesToEvent(values, makeId("event")));
-              } else {
-                calendarEvents.update(
-                  eventModal.event.id,
-                  calendarEventFormValuesToEvent(values, eventModal.event.id, {
-                    excludedDates: eventModal.event.excludedDates,
-                    roverVisits: eventModal.event.roverVisits,
-                    prepSteps: eventModal.event.prepSteps,
-                    roverInstructions: eventModal.event.roverInstructions,
-                    postSteps: eventModal.event.postSteps,
-                  }),
-                );
-              }
-              setEventModal(null);
-            }}
+            onSubmit={(values) =>
+              eventModal === "new"
+                ? calendarEvents.add(calendarEventFormValuesToEvent(values, makeId("event")))
+                : calendarEvents.update(
+                    eventModal.event.id,
+                    calendarEventFormValuesToEvent(values, eventModal.event.id, {
+                      excludedDates: eventModal.event.excludedDates,
+                      roverVisits: eventModal.event.roverVisits,
+                      prepSteps: eventModal.event.prepSteps,
+                      roverInstructions: eventModal.event.roverInstructions,
+                      postSteps: eventModal.event.postSteps,
+                    }),
+                  )
+            }
+            onDelete={
+              eventModal !== "new"
+                ? () => {
+                    setDeleteTarget(eventModal);
+                    setEventModal(null);
+                  }
+                : undefined
+            }
           />
-          {eventModal !== "new" && (
-            <button
-              className="text-button"
-              type="button"
-              onClick={() => {
-                setDeleteTarget(eventModal);
-                setEventModal(null);
-              }}
-            >
-              Delete event
-            </button>
-          )}
         </Modal>
       )}
 
@@ -1118,10 +1233,8 @@ export function CalendarView() {
           event={deleteTarget.event}
           occurrenceDate={deleteTarget.occurrenceDate}
           onCancel={() => setDeleteTarget(null)}
-          onConfirm={async (scope, note) => {
-            await deleteCalendarEvent(deleteTarget.event, scope, deleteTarget.occurrenceDate, note);
-            setDeleteTarget(null);
-          }}
+          onConfirm={(scope, note) => deleteCalendarEvent(deleteTarget.event, scope, deleteTarget.occurrenceDate, note)}
+          onDone={() => setDeleteTarget(null)}
         />
       )}
     </section>

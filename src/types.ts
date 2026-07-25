@@ -168,6 +168,20 @@ export type TaskInstance = {
   history: TaskHistoryEntry[];
 };
 
+export type TaskDeletionScope = "instance" | "series";
+
+/** Audit trail for deleted tasks/occurrences — required note captured at delete time. */
+export type TaskDeletion = {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  scope: TaskDeletionScope;
+  /** YYYY-MM-DD — set only when scope is "instance". */
+  occurrenceDate?: string;
+  note: string;
+  deletedAt: string;
+};
+
 export type InboxRequestStatus = "pending" | "accepted" | "declined";
 
 export type InboxRequest = {
@@ -338,10 +352,11 @@ export type CalendarEvent = {
   aloneTimeRequired: "all" | "partial" | "no";
   aloneTimeRequiredAmount?: number;
   status: "confirmed" | "placeholder";
-  importance?: "marquee" | "normal";
   notes: string;
   /** Person id(s) this block belongs to / is expected to attend. Omit for whole-household ("everyone") events. */
   attendees?: string[];
+  /** Dog id(s) this event specifically involves. Omit when the event isn't dog-specific. */
+  dogIds?: string[];
   /** Number of Rover sitter visits recommended while away (0/undefined = no rover needed). */
   roverVisits?: number;
   /** Checklist to run through before leaving the house. */

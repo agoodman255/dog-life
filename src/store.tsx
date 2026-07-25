@@ -43,6 +43,8 @@ import {
   RecipeIngredient,
   RelationshipLog,
   Task,
+  TaskDeletion,
+  TaskDeletionScope,
   TaskHistoryEntry,
   TaskInstance,
 } from "./types";
@@ -256,6 +258,7 @@ function useDataStore() {
     mapping.calendarEventDeletion,
     "client",
   );
+  const taskDeletions = useCollection<TaskDeletion>("task-deletions", [], "task_deletions", mapping.taskDeletion, "client");
   const aloneTimeLogs = useCollection<AloneTimeLog>("alone-time-logs", seedAloneTimeLogs, "alone_time_logs", mapping.aloneTimeLog);
   const taskInstances = useCollection<TaskInstance>("task-instances", [], "task_instances", mapping.taskInstance, "client");
   const inboxRequests = useCollection<InboxRequest>("inbox-requests", [], "inbox_requests", mapping.inboxRequest, "client");
@@ -486,6 +489,24 @@ function useDataStore() {
     });
   }
 
+  // Deleting "just today" reuses skipTask (already requires + logs a reason on the
+  // instance) so there's one code path for "not doing this occurrence." Deleting
+  // "the whole routine" removes the task template outright. Either way a required
+  // note also gets logged to task_deletions for the record, mirroring deleteCalendarEvent.
+  async function deleteTask(task: Task, scope: TaskDeletionScope, date: string, note: string) {
+    const ok = scope === "instance" ? await skipTask(task, date, note) : await tasks.remove(task.id);
+    if (!ok) return false;
+    return taskDeletions.add({
+      id: makeId("taskdel"),
+      taskId: task.id,
+      taskTitle: task.title,
+      scope,
+      occurrenceDate: scope === "instance" ? date : undefined,
+      note,
+      deletedAt: new Date().toISOString(),
+    });
+  }
+
   async function delegateTask(template: Task, date: string, fromPersonId: string, toPersonId: string) {
     const instance = ensureInstance(template, date);
     const updated: TaskInstance = {
@@ -592,6 +613,8 @@ function useDataStore() {
     calendarEvents,
     calendarEventDeletions,
     deleteCalendarEvent,
+    taskDeletions,
+    deleteTask,
     aloneTimeLogs,
     taskInstances,
     inboxRequests,

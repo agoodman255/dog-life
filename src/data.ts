@@ -47,7 +47,7 @@ export const dogs: Dog[] = [
   {
     id: "puppy",
     householdId: "andrew-bree",
-    name: "New Puppy",
+    name: "Mara",
     breed: "Goldendoodle",
     birthday: "",
     sex: "Unknown (confirmed at pickup)",
@@ -1239,7 +1239,6 @@ function footballGame(
   date: string,
   timeLabel: string,
   status: CalendarEvent["status"],
-  importance: CalendarEvent["importance"],
   notes: string,
 ): CalendarEvent {
   const clean = CLEAN_TIME.test(timeLabel);
@@ -1253,7 +1252,6 @@ function footballGame(
     startTime: clean ? timeLabel.replace(/^~/, "") : undefined,
     aloneTimeRequired: "no",
     status,
-    importance,
     notes: clean ? notes : `${timeLabel}. ${notes}`,
   };
 }
@@ -1406,7 +1404,6 @@ export const calendarEvents: CalendarEvent[] = [
     durationHours: 4,
     aloneTimeRequired: "all",
     status: "confirmed",
-    importance: "marquee",
     roverVisits: 1,
     prepSteps: [
       "Potty walk ~30 min before leaving",
@@ -1505,32 +1502,32 @@ export const calendarEvents: CalendarEvent[] = [
   },
 
   // Georgia Bulldogs 2026
-  footballGame("uga-1", "Georgia", "vs. Tennessee State", "2026-09-05", "1:00 PM", "confirmed", "normal", "Home opener"),
-  footballGame("uga-2", "Georgia", "vs. Western Kentucky", "2026-09-12", "10:45 AM", "confirmed", "normal", "Home"),
-  footballGame("uga-3", "Georgia", "@ Arkansas", "2026-09-19", "10:00 AM", "confirmed", "normal", "Away"),
-  footballGame("uga-4", "Georgia", "vs. Oklahoma", "2026-09-26", "Flex 1:30-2:30 PM or 4-6 PM", "placeholder", "normal", "Home, SEC"),
-  footballGame("uga-5", "Georgia", "vs. Vanderbilt", "2026-10-03", "~10-11 AM window", "placeholder", "normal", "Home"),
-  footballGame("uga-6", "Georgia", "@ Alabama", "2026-10-10", "Night, 4-6 PM window", "placeholder", "marquee", "Heavy/marquee week"),
-  footballGame("uga-7", "Georgia", "vs. Auburn", "2026-10-17", "~1:30-2:30 PM window", "placeholder", "marquee", "Heavy week — same date as BYU/Notre Dame tailgate"),
-  footballGame("uga-8", "Georgia", "vs. Florida (Atlanta)", "2026-10-31", "1:30 PM", "confirmed", "normal", "Rivalry, moved to Mercedes-Benz Stadium"),
-  footballGame("uga-9", "Georgia", "@ Ole Miss", "2026-11-07", "Flex", "placeholder", "marquee", "Heavy/marquee week"),
-  footballGame("uga-10", "Georgia", "vs. Missouri", "2026-11-14", "TBA", "placeholder", "normal", "Home"),
-  footballGame("uga-11", "Georgia", "@ South Carolina", "2026-11-21", "TBA", "placeholder", "marquee", "Heavy week (Clemson @ Duke Fri 11/20 into this)"),
-  footballGame("uga-12", "Georgia", "vs. Georgia Tech", "2026-11-28", "TBA", "placeholder", "marquee", "Rivalry, heavy week"),
+  footballGame("uga-1", "Georgia", "vs. Tennessee State", "2026-09-05", "1:00 PM", "confirmed", "Home opener"),
+  footballGame("uga-2", "Georgia", "vs. Western Kentucky", "2026-09-12", "10:45 AM", "confirmed", "Home"),
+  footballGame("uga-3", "Georgia", "@ Arkansas", "2026-09-19", "10:00 AM", "confirmed", "Away"),
+  footballGame("uga-4", "Georgia", "vs. Oklahoma", "2026-09-26", "Flex 1:30-2:30 PM or 4-6 PM", "placeholder", "Home, SEC"),
+  footballGame("uga-5", "Georgia", "vs. Vanderbilt", "2026-10-03", "~10-11 AM window", "placeholder", "Home"),
+  footballGame("uga-6", "Georgia", "@ Alabama", "2026-10-10", "Night, 4-6 PM window", "placeholder", "Heavy/marquee week"),
+  footballGame("uga-7", "Georgia", "vs. Auburn", "2026-10-17", "~1:30-2:30 PM window", "placeholder", "Heavy week — same date as BYU/Notre Dame tailgate"),
+  footballGame("uga-8", "Georgia", "vs. Florida (Atlanta)", "2026-10-31", "1:30 PM", "confirmed", "Rivalry, moved to Mercedes-Benz Stadium"),
+  footballGame("uga-9", "Georgia", "@ Ole Miss", "2026-11-07", "Flex", "placeholder", "Heavy/marquee week"),
+  footballGame("uga-10", "Georgia", "vs. Missouri", "2026-11-14", "TBA", "placeholder", "Home"),
+  footballGame("uga-11", "Georgia", "@ South Carolina", "2026-11-21", "TBA", "placeholder", "Heavy week (Clemson @ Duke Fri 11/20 into this)"),
+  footballGame("uga-12", "Georgia", "vs. Georgia Tech", "2026-11-28", "TBA", "placeholder", "Rivalry, heavy week"),
 
   // Clemson Tigers 2026
-  footballGame("clem-1", "Clemson", "@ LSU", "2026-09-05", "5:30 PM", "confirmed", "marquee", "College GameDay, Lane Kiffin's LSU debut"),
-  footballGame("clem-2", "Clemson", "vs. Georgia Southern", "2026-09-12", "5:30 PM", "confirmed", "normal", "Home opener"),
-  footballGame("clem-3", "Clemson", "vs. North Carolina", "2026-09-19", "10:00 AM", "confirmed", "normal", "Home"),
-  footballGame("clem-4", "Clemson", "@ Cal", "2026-09-25", "8:30 PM (Fri)", "confirmed", "normal", "During mom's visit — late TV game, no conflict"),
-  footballGame("clem-5", "Clemson", "vs. Miami", "2026-10-03", "TBA", "placeholder", "normal", "Home"),
-  footballGame("clem-6", "Clemson", "vs. Charleston Southern", "2026-10-17", "TBA", "placeholder", "marquee", "Heavy week — stacked with Georgia/Auburn + BYU/Notre Dame"),
-  footballGame("clem-7", "Clemson", "vs. Virginia Tech", "2026-10-24", "TBA", "placeholder", "normal", "Home — light week for Georgia (bye), but Clemson still plays"),
-  footballGame("clem-8", "Clemson", "@ Florida State", "2026-10-31", "TBA", "placeholder", "normal", "Away"),
-  footballGame("clem-9", "Clemson", "@ Syracuse", "2026-11-07", "TBA", "placeholder", "normal", "Away"),
-  footballGame("clem-10", "Clemson", "vs. Georgia Tech", "2026-11-14", "TBA", "placeholder", "normal", "Home"),
-  footballGame("clem-11", "Clemson", "@ Duke", "2026-11-20", "5:30 PM (Fri)", "confirmed", "marquee", "ACC title implications, heavy week into 11/21 Georgia @ South Carolina"),
-  footballGame("clem-12", "Clemson", "vs. South Carolina", "2026-11-28", "TBA", "placeholder", "marquee", "Palmetto Bowl rivalry, heavy week"),
+  footballGame("clem-1", "Clemson", "@ LSU", "2026-09-05", "5:30 PM", "confirmed", "College GameDay, Lane Kiffin's LSU debut"),
+  footballGame("clem-2", "Clemson", "vs. Georgia Southern", "2026-09-12", "5:30 PM", "confirmed", "Home opener"),
+  footballGame("clem-3", "Clemson", "vs. North Carolina", "2026-09-19", "10:00 AM", "confirmed", "Home"),
+  footballGame("clem-4", "Clemson", "@ Cal", "2026-09-25", "8:30 PM (Fri)", "confirmed", "During mom's visit — late TV game, no conflict"),
+  footballGame("clem-5", "Clemson", "vs. Miami", "2026-10-03", "TBA", "placeholder", "Home"),
+  footballGame("clem-6", "Clemson", "vs. Charleston Southern", "2026-10-17", "TBA", "placeholder", "Heavy week — stacked with Georgia/Auburn + BYU/Notre Dame"),
+  footballGame("clem-7", "Clemson", "vs. Virginia Tech", "2026-10-24", "TBA", "placeholder", "Home — light week for Georgia (bye), but Clemson still plays"),
+  footballGame("clem-8", "Clemson", "@ Florida State", "2026-10-31", "TBA", "placeholder", "Away"),
+  footballGame("clem-9", "Clemson", "@ Syracuse", "2026-11-07", "TBA", "placeholder", "Away"),
+  footballGame("clem-10", "Clemson", "vs. Georgia Tech", "2026-11-14", "TBA", "placeholder", "Home"),
+  footballGame("clem-11", "Clemson", "@ Duke", "2026-11-20", "5:30 PM (Fri)", "confirmed", "ACC title implications, heavy week into 11/21 Georgia @ South Carolina"),
+  footballGame("clem-12", "Clemson", "vs. South Carolina", "2026-11-28", "TBA", "placeholder", "Palmetto Bowl rivalry, heavy week"),
 ];
 
 // Empty — no alone-time practice has happened yet since the puppy isn't

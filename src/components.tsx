@@ -3,7 +3,7 @@ import { FormEvent, ReactNode, useState } from "react";
 import { useSession } from "./auth";
 import { useNavigation } from "./navigation";
 import { makeId, useStore } from "./store";
-import { ChecklistItemValue, DailyFeedback, Dog, DogFormation, FeedbackType, Milestone, Person, Task } from "./types";
+import { ChecklistItemValue, DailyFeedback, Dog, DogFormation, FeedbackType, Milestone, Person, Task, TaskDeletionScope } from "./types";
 import { formatInZone, isoToZonedParts, searchTimezones, zonedTimeToUtcIso, zoneLabel } from "./timezones";
 import { buildDefaultChecklist, computeMilestoneStatus, formatMinutes, milestoneProgress, resolveDependencies, taskStateLabels, to12Hour } from "./utils";
 
@@ -338,10 +338,11 @@ function ChecklistItemEditor({ item, onChange }: { item: ChecklistItemValue; onC
 }
 
 export function TaskDetailModal({ task, date, onClose }: { task: Task; date: string; onClose: () => void }) {
-  const { dogs, milestones, locations, people, getInstance, startTask, endTask, rescheduleTask, skipTask, delegateTask } = useStore();
+  const { dogs, milestones, locations, people, getInstance, startTask, endTask, rescheduleTask, skipTask, delegateTask, deleteTask } = useStore();
   const { navigate, timezone } = useNavigation();
   const [activePanel, setActivePanel] = useState<null | "start" | "end" | "reschedule" | "skip" | "delegate">(null);
   const [error, setError] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   const instance = getInstance(task.id, date);
   const state = instance?.state ?? "not_started";
@@ -516,6 +517,17 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
       onClose();
     }
     setSubmitting(false);
+  }
+
+  if (deleteModalOpen) {
+    return (
+      <DeleteTaskModal
+        task={task}
+        onCancel={() => setDeleteModalOpen(false)}
+        onConfirm={(scope, note) => deleteTask(task, scope, date, note)}
+        onDone={onClose}
+      />
+    );
   }
 
   return (
@@ -869,6 +881,17 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
           </div>
         )}
 
+        {activePanel === null && (
+          <button
+            className="text-button danger"
+            type="button"
+            onClick={() => setDeleteModalOpen(true)}
+            style={{ marginTop: 12 }}
+          >
+            Delete task
+          </button>
+        )}
+
         {instance && instance.history.length > 0 && (
           <div className="task-history">
             <p className="eyebrow">History</p>
@@ -885,6 +908,87 @@ export function TaskDetailModal({ task, date, onClose }: { task: Task; date: str
             </ul>
           </div>
         )}
+      </div>
+    </Modal>
+  );
+}
+
+function DeleteTaskModal({
+  task,
+  onCancel,
+  onConfirm,
+  onDone,
+}: {
+  task: Task;
+  onCancel: () => void;
+  onConfirm: (scope: TaskDeletionScope, note: string) => Promise<boolean>;
+  onDone: () => void;
+}) {
+  const [scope, setScope] = useState<TaskDeletionScope>("instance");
+  const [note, setNote] = useState("");
+  const [noteError, setNoteError] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [deleted, setDeleted] = useState(false);
+
+  async function confirm() {
+    if (!note.trim()) {
+      setNoteError(true);
+      return;
+    }
+    setSubmitting(true);
+    setSaveError(false);
+    const ok = await onConfirm(scope, note.trim());
+    setSubmitting(false);
+    if (ok) setDeleted(true);
+    else setSaveError(true);
+  }
+
+  if (deleted) {
+    return (
+      <Modal title="Task deleted" onClose={onDone}>
+        <p className="form-success">
+          {scope === "instance" ? `Today's "${task.title}" was skipped.` : `"${task.title}" was removed from the routine.`}
+        </p>
+        <div className="form-actions">
+          <button className="primary-button" type="button" onClick={onDone}>
+            Done
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal title={`Delete "${task.title}"`} onClose={onCancel}>
+      <div className="subtabs" role="radiogroup" aria-label="What to delete" style={{ marginBottom: 12 }}>
+        <button type="button" className={scope === "instance" ? "active" : ""} onClick={() => setScope("instance")}>
+          Just today
+        </button>
+        <button type="button" className={scope === "series" ? "active" : ""} onClick={() => setScope("series")}>
+          Remove from the routine entirely
+        </button>
+      </div>
+      <label>
+        Why is this being deleted? (required)
+        <textarea
+          rows={2}
+          value={note}
+          onChange={(event) => {
+            setNote(event.target.value);
+            setNoteError(false);
+          }}
+        />
+        {noteError && <small className="form-error">A note is required to delete a task.</small>}
+      </label>
+      {saveError && <p className="form-error">That didn't save — check the browser console and try again.</p>}
+      <div className="form-actions">
+        <button className="text-button" type="button" onClick={onCancel} disabled={submitting}>
+          Cancel
+        </button>
+        <button className="primary-button" type="button" onClick={confirm} disabled={submitting}>
+          {submitting ? "Deleting…" : "Delete"}
+        </button>
       </div>
     </Modal>
   );

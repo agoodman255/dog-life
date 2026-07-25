@@ -164,18 +164,48 @@ export function useAdaptivePlan(tasks: Task[], feedback: DailyFeedback[]) {
   }, [tasks, feedback]);
 }
 
-function weekStart(dateStr: string): string {
+export function weekStart(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`);
   d.setDate(d.getDate() - d.getDay());
   return d.toISOString().slice(0, 10);
 }
 
-export function heavyWeeks(events: CalendarEvent[]): Set<string> {
-  const weeks = new Set<string>();
+/** Weekly (Sun-Sat) total minutes of dog-alone-time coverage required by events with
+ * an occurrence that week, keyed by the week's Sunday (YYYY-MM-DD). Only counts events
+ * with aloneTimeRequired !== "no" — "all" uses the event's own duration, "partial" uses
+ * the user-entered aloneTimeRequiredAmount, mirroring computeEventCoverageNeeded. */
+export function weeklyAloneTimeLoadMinutes(events: CalendarEvent[], rangeStart: Date, rangeEnd: Date): Map<string, number> {
+  const byWeek = new Map<string, number>();
   events.forEach((event) => {
-    if (event.importance === "marquee" && event.date) weeks.add(weekStart(event.date));
+    if (event.aloneTimeRequired === "no") return;
+    const requiredMinutes =
+      (event.aloneTimeRequired === "all" ? (event.durationHours ?? 0) : (event.aloneTimeRequiredAmount ?? 0)) * 60;
+    if (requiredMinutes <= 0) return;
+    generateOccurrences(event, rangeStart, rangeEnd).forEach((dateKey) => {
+      const week = weekStart(dateKey);
+      byWeek.set(week, (byWeek.get(week) ?? 0) + requiredMinutes);
+    });
   });
-  return weeks;
+  return byWeek;
+}
+
+// A week is "busy" when the dog-alone-time coverage it needs exceeds what the dogs
+// have actually proven they can sustain across 7 days — i.e. the household would need
+// to arrange more coverage (Rover, split trips, shorter outings) than a normal week.
+// "Normal" is calibrated to the dogs' own logged alone-time record (their single best
+// proven stretch × 7) rather than a guessed constant, so the bar rises automatically
+// as the dogs get more comfortable being left alone. Replaces the old manual
+// "importance: marquee" checkbox — this one formula now drives every heavy/busy-week
+// indicator in the app (Month view highlighting, Upcoming list tags).
+export function heavyWeeks(events: CalendarEvent[], logs: AloneTimeLog[], rangeStart: Date, rangeEnd: Date): Set<string> {
+  const maxAchievedMinutes = logs.reduce((max, log) => Math.max(max, log.durationMinutes), 0);
+  const weeklyBudgetMinutes = maxAchievedMinutes * 7;
+  const byWeek = weeklyAloneTimeLoadMinutes(events, rangeStart, rangeEnd);
+  const heavy = new Set<string>();
+  byWeek.forEach((minutes, week) => {
+    if (minutes > weeklyBudgetMinutes) heavy.add(week);
+  });
+  return heavy;
 }
 
 export function isHeavyWeek(event: CalendarEvent, weeks: Set<string>): boolean {

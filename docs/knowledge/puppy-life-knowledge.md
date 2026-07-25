@@ -10,21 +10,21 @@ and `supabase/seed.sql` to sync the live app.
 
 ---
 
-## 1. New Puppy Profile (known facts)
+## 1. Mara's Profile (known facts)
 
 | Field | Value |
 |---|---|
 | Breeder | Ruby Doodles Louisiana |
 | Breed | Goldendoodle |
 | Sex | Unknown — TBD at pickup |
-| Name | TBD |
+| Name | Mara |
 | Estimated adult weight | 30–40 lbs (max) |
 | Pickup date | **Saturday, August 1, 2026** (mid-afternoon) |
 | Health records | Breeder-provided, to be uploaded after pickup |
 | Vet | Canyons Vet (same clinic as Griz) |
 | First vet appointment | **August 3, 2026, 2:00 PM** |
 
-Name, sex, birth date, color/coat, and microchip ID stay unset in the app until pickup.
+Sex, birth date, color/coat, and microchip ID stay unset in the app until pickup.
 
 ## 2. Existing Dog — Griz (from Care Sheet, dated 2024-05-08)
 

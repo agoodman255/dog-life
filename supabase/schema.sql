@@ -298,6 +298,7 @@ create table if not exists calendar_events (
   importance text,
   notes text not null default '',
   attendees uuid[] not null default '{}',
+  dog_ids uuid[] not null default '{}',
   rover_visits int,
   prep_steps text[] not null default '{}',
   rover_instructions text[] not null default '{}',
@@ -311,6 +312,7 @@ create table if not exists calendar_events (
 -- columns) should run supabase/migrate-calendar-events-2026-07-23.sql instead, which
 -- backfills these new columns from the old ones before they'd otherwise be dropped.
 alter table calendar_events add column if not exists attendees uuid[] not null default '{}';
+alter table calendar_events add column if not exists dog_ids uuid[] not null default '{}';
 alter table calendar_events add column if not exists rover_visits int;
 alter table calendar_events add column if not exists prep_steps text[] not null default '{}';
 alter table calendar_events add column if not exists rover_instructions text[] not null default '{}';
@@ -330,6 +332,21 @@ create table if not exists calendar_event_deletions (
   household_id uuid not null references households (id) on delete cascade,
   event_id text not null,
   event_title text not null,
+  scope text not null,
+  occurrence_date date,
+  note text not null,
+  deleted_at timestamptz not null default now()
+);
+
+-- Audit trail for deleted tasks/occurrences, mirroring calendar_event_deletions.
+-- scope "instance" means just that day was skipped (see task_instances.history
+-- for the matching skip entry); scope "series" means the task template itself
+-- was removed from the daily routine, which is why task_title is snapshotted.
+create table if not exists task_deletions (
+  id text primary key,
+  household_id uuid not null references households (id) on delete cascade,
+  task_id text not null,
+  task_title text not null,
   scope text not null,
   occurrence_date date,
   note text not null,
@@ -384,6 +401,7 @@ alter table feedback enable row level security;
 alter table product_feedback enable row level security;
 alter table calendar_events enable row level security;
 alter table calendar_event_deletions enable row level security;
+alter table task_deletions enable row level security;
 alter table alone_time_logs enable row level security;
 alter table task_instances enable row level security;
 alter table inbox_requests enable row level security;
@@ -400,7 +418,7 @@ begin
     'households', 'people', 'dogs', 'tasks', 'milestones',
     'health_events', 'journal_entries', 'exposure_items',
     'relationship_logs', 'feedback', 'product_feedback',
-    'calendar_events', 'calendar_event_deletions', 'alone_time_logs', 'task_instances', 'inbox_requests',
+    'calendar_events', 'calendar_event_deletions', 'task_deletions', 'alone_time_logs', 'task_instances', 'inbox_requests',
     'meals', 'recipe_ingredients', 'inventory', 'grocery_list'
   ])
   loop
@@ -427,7 +445,7 @@ begin
     'households', 'people', 'dogs', 'tasks', 'milestones',
     'health_events', 'journal_entries', 'exposure_items',
     'relationship_logs', 'feedback', 'product_feedback',
-    'calendar_events', 'calendar_event_deletions', 'alone_time_logs', 'task_instances', 'inbox_requests',
+    'calendar_events', 'calendar_event_deletions', 'task_deletions', 'alone_time_logs', 'task_instances', 'inbox_requests',
     'meals', 'recipe_ingredients', 'inventory', 'grocery_list'
   ])
   loop

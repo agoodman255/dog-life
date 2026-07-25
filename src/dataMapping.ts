@@ -18,6 +18,7 @@ import {
   RecipeIngredient,
   RelationshipLog,
   Task,
+  TaskDeletion,
   TaskInstance,
 } from "./types";
 
@@ -365,9 +366,9 @@ export const calendarEvent = {
       aloneTimeRequired: row.alone_time_required ?? "no",
       aloneTimeRequiredAmount: row.alone_time_required_amount ?? undefined,
       status: row.status,
-      importance: row.importance ?? undefined,
       notes: row.notes,
       attendees: row.attendees && row.attendees.length > 0 ? row.attendees : undefined,
+      dogIds: row.dog_ids && row.dog_ids.length > 0 ? row.dog_ids : undefined,
       roverVisits: row.rover_visits ?? undefined,
       prepSteps: row.prep_steps ?? undefined,
       roverInstructions: row.rover_instructions ?? undefined,
@@ -391,9 +392,9 @@ export const calendarEvent = {
       alone_time_required: item.aloneTimeRequired ?? "no",
       alone_time_required_amount: item.aloneTimeRequiredAmount ?? null,
       status: item.status,
-      importance: item.importance ?? null,
       notes: item.notes,
       attendees: item.attendees ?? [],
+      dog_ids: item.dogIds ?? [],
       rover_visits: item.roverVisits ?? null,
       prep_steps: item.prepSteps ?? [],
       rover_instructions: item.roverInstructions ?? [],
@@ -420,6 +421,32 @@ export const calendarEventDeletion = {
       household_id: householdId,
       event_id: item.eventId,
       event_title: item.eventTitle,
+      scope: item.scope,
+      occurrence_date: item.occurrenceDate || null,
+      note: item.note,
+      deleted_at: item.deletedAt,
+    };
+  },
+};
+
+export const taskDeletion = {
+  fromRow(row: any): TaskDeletion {
+    return {
+      id: row.id,
+      taskId: row.task_id,
+      taskTitle: row.task_title,
+      scope: row.scope,
+      occurrenceDate: row.occurrence_date ?? undefined,
+      note: row.note,
+      deletedAt: row.deleted_at,
+    };
+  },
+  toRow(item: TaskDeletion, householdId: string) {
+    return {
+      id: item.id,
+      household_id: householdId,
+      task_id: item.taskId,
+      task_title: item.taskTitle,
       scope: item.scope,
       occurrence_date: item.occurrenceDate || null,
       note: item.note,
