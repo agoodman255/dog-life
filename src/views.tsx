@@ -870,28 +870,12 @@ export function CalendarView() {
       <div className={`section-heading calendar-heading ${viewMode === "day" ? "is-frozen" : ""}`}>
         <div className="calendar-title-row">
           <p className="eyebrow">Calendar</p>
-          {isGridMode && (
-            <div className="calendar-quick-actions">
-              <button className="today-button" type="button" onClick={goToday}>
-                Today
-              </button>
-              <div className="calendar-date-picker">
-                <span className="icon-button" aria-hidden>
-                  <CalendarIcon size={18} aria-hidden />
-                </span>
-                <input
-                  className="calendar-date-input"
-                  type="date"
-                  value={toDateKey(cursorDate)}
-                  onChange={(event) => handlePickDate(event.target.value)}
-                  aria-label="Choose date"
-                />
-              </div>
-            </div>
-          )}
         </div>
         {isGridMode && (
           <div className="calendar-date-row">
+            <button className="today-button" type="button" onClick={goToday}>
+              Today
+            </button>
             <button className="icon-button" type="button" onClick={goPrev} aria-label="Previous">
               <ChevronLeft size={18} aria-hidden />
             </button>
@@ -899,12 +883,31 @@ export function CalendarView() {
             <button className="icon-button" type="button" onClick={goNext} aria-label="Next">
               <ChevronRight size={18} aria-hidden />
             </button>
+            <div className="calendar-date-picker">
+              <span className="icon-button" aria-hidden>
+                <CalendarIcon size={18} aria-hidden />
+              </span>
+              <input
+                className="calendar-date-input"
+                type="date"
+                value={toDateKey(cursorDate)}
+                onChange={(event) => handlePickDate(event.target.value)}
+                aria-label="Choose date"
+              />
+            </div>
           </div>
         )}
         {!isGridMode && <h2>{headingLabel}</h2>}
         <div className="calendar-controls">
-          <div className="subtabs" role="tablist">
-            {(["day", "week", "month", "upcoming", "milestones"] as const).map((mode) => (
+          <div className="subtabs calendar-view-tabs" role="tablist">
+            {(["day", "week", "month"] as const).map((mode) => (
+              <button key={mode} role="tab" aria-selected={viewMode === mode} className={viewMode === mode ? "active" : ""} type="button" onClick={() => setViewMode(mode)}>
+                {mode[0].toUpperCase() + mode.slice(1)}
+              </button>
+            ))}
+          </div>
+          <div className="subtabs calendar-view-tabs" role="tablist">
+            {(["upcoming", "milestones"] as const).map((mode) => (
               <button key={mode} role="tab" aria-selected={viewMode === mode} className={viewMode === mode ? "active" : ""} type="button" onClick={() => setViewMode(mode)}>
                 {mode[0].toUpperCase() + mode.slice(1)}
               </button>
