@@ -19,6 +19,7 @@ import {
   Type as TypeIcon,
 } from "lucide-react";
 import { FormEvent, TouchEvent as ReactTouchEvent, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AppMetric,
   DogProfile,
@@ -111,6 +112,8 @@ import {
 export function NotificationBell() {
   const { tasks, feedback, healthEvents, milestones, calendarEvents, aloneTimeLogs, dogs } = useStore();
   const [open, setOpen] = useState(false);
+  const [panelPos, setPanelPos] = useState<{ top: number; right: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const notifications = computeNotifications(
     tasks.items,
     feedback,
@@ -120,24 +123,36 @@ export function NotificationBell() {
     dogs.items,
     aloneTimeLogs.items,
   );
+
+  function toggleOpen() {
+    if (!open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setPanelPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+    }
+    setOpen((prev) => !prev);
+  }
+
   return (
     <div className="notification-wrap">
-      <button className="icon-button" type="button" onClick={() => setOpen((prev) => !prev)} aria-label="Notifications">
+      <button ref={buttonRef} className="icon-button" type="button" onClick={toggleOpen} aria-label="Notifications">
         <Bell size={18} aria-hidden />
         {notifications.length > 0 && <span className="badge">{notifications.length}</span>}
       </button>
-      {open && (
-        <div className="notification-panel">
-          <p className="eyebrow">Notifications</p>
-          {notifications.length === 0 && <p className="small">Nothing needs attention right now.</p>}
-          {notifications.map((item: NotificationItem) => (
-            <article key={item.id} className={`notification ${item.severity}`}>
-              <strong>{item.title}</strong>
-              <p>{item.detail}</p>
-            </article>
-          ))}
-        </div>
-      )}
+      {open &&
+        panelPos &&
+        createPortal(
+          <div className="notification-panel" style={{ top: panelPos.top, right: panelPos.right }}>
+            <p className="eyebrow">Notifications</p>
+            {notifications.length === 0 && <p className="small">Nothing needs attention right now.</p>}
+            {notifications.map((item: NotificationItem) => (
+              <article key={item.id} className={`notification ${item.severity}`}>
+                <strong>{item.title}</strong>
+                <p>{item.detail}</p>
+              </article>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
