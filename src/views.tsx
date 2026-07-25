@@ -898,6 +898,54 @@ function DeleteEventModal({
   );
 }
 
+/** "+ Add" entry point shared by Calendar's grid views and Upcoming list — asks which
+ * kind of item first (Task / Event / Health), then hands off to that type's own
+ * existing form via the matching callback. Keeps one consistent creation entry point
+ * even though each type edits in its own modal. */
+function AddItemMenu({
+  onAddTask,
+  onAddEvent,
+  onAddHealth,
+  buttonClassName = "primary-button small",
+  iconSize = 14,
+  label = "Add",
+}: {
+  onAddTask: () => void;
+  onAddEvent: () => void;
+  onAddHealth: () => void;
+  buttonClassName?: string;
+  iconSize?: number;
+  label?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  function choose(action: () => void) {
+    setOpen(false);
+    action();
+  }
+
+  return (
+    <div className="add-item-menu">
+      <button className={buttonClassName} type="button" onClick={() => setOpen((prev) => !prev)}>
+        <Plus size={iconSize} aria-hidden /> {label}
+      </button>
+      {open && (
+        <div className="add-item-menu-panel">
+          <button type="button" onClick={() => choose(onAddTask)}>
+            Task
+          </button>
+          <button type="button" onClick={() => choose(onAddEvent)}>
+            Event
+          </button>
+          <button type="button" onClick={() => choose(onAddHealth)}>
+            Health
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CategoryFilterPicker({ selected, onChange }: { selected: Set<Category>; onChange: (next: Set<Category>) => void }) {
   const [open, setOpen] = useState(false);
 
@@ -961,7 +1009,8 @@ export function CalendarView() {
   const [filterMode, setFilterMode] = useState<"all" | "mine" | "other">("all");
   const [categoryFilter, setCategoryFilter] = useState<Set<Category>>(new Set());
   const [detailTask, setDetailTask] = useState<{ task: Task; date: string } | null>(null);
-  const [healthEventModal, setHealthEventModal] = useState<HealthEvent | null>(null);
+  const [healthEventModal, setHealthEventModal] = useState<"new" | HealthEvent | null>(null);
+  const [taskModal, setTaskModal] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const today = new Date();
 
@@ -1092,9 +1141,11 @@ export function CalendarView() {
         )}
         {isGridMode && (
           <div className="calendar-add-event-row">
-            <button className="primary-button small" type="button" onClick={() => setEventModal("new")}>
-              <Plus size={14} aria-hidden /> Event
-            </button>
+            <AddItemMenu
+              onAddTask={() => setTaskModal(true)}
+              onAddEvent={() => setEventModal("new")}
+              onAddHealth={() => setHealthEventModal("new")}
+            />
           </div>
         )}
         {!isGridMode && <h2>{headingLabel}</h2>}
@@ -1193,9 +1244,13 @@ export function CalendarView() {
               <p className="eyebrow">Recurring commitments</p>
               <h3 style={{ margin: 0 }}>Weekly household schedule</h3>
             </div>
-            <button className="primary-button" type="button" onClick={() => setEventModal("new")}>
-              <Plus size={16} aria-hidden /> Add calendar event
-            </button>
+            <AddItemMenu
+              buttonClassName="primary-button"
+              iconSize={16}
+              onAddTask={() => setTaskModal(true)}
+              onAddEvent={() => setEventModal("new")}
+              onAddHealth={() => setHealthEventModal("new")}
+            />
           </div>
           <div className="calendar-grid">
             {recurring.map((event) => (
@@ -1334,14 +1389,32 @@ export function CalendarView() {
       )}
 
       {healthEventModal && (
-        <Modal title="Edit health event" onClose={() => setHealthEventModal(null)}>
+        <Modal title={healthEventModal === "new" ? "Add health event" : "Edit health event"} onClose={() => setHealthEventModal(null)}>
           <HealthEventForm
-            initial={healthEventModal}
+            initial={healthEventModal === "new" ? undefined : healthEventModal}
             dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
             onCancel={() => setHealthEventModal(null)}
             onSubmit={(values) => {
-              healthEvents.update(healthEventModal.id, healthEventFormValuesToEvent(values, healthEventModal.id));
+              if (healthEventModal === "new") {
+                healthEvents.add(healthEventFormValuesToEvent(values, makeId("health")));
+              } else {
+                healthEvents.update(healthEventModal.id, healthEventFormValuesToEvent(values, healthEventModal.id));
+              }
               setHealthEventModal(null);
+            }}
+          />
+        </Modal>
+      )}
+
+      {taskModal && (
+        <Modal title="Add task" onClose={() => setTaskModal(false)}>
+          <TaskForm
+            peopleOptions={people.items.map((person) => ({ id: person.id, name: person.name }))}
+            dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
+            onCancel={() => setTaskModal(false)}
+            onSubmit={(values) => {
+              tasks.add(taskFormValuesToTask(values, makeId("task")));
+              setTaskModal(false);
             }}
           />
         </Modal>
