@@ -22,7 +22,6 @@ import { getSupabaseClient, isBackendConfigured } from "./supabaseClient";
 import {
   AloneTimeLog,
   ChecklistItemValue,
-  DailyFeedback,
   Dog,
   ExposureItem,
   GroceryListItem,
@@ -255,43 +254,6 @@ function useDataStore() {
   const groceryList = useCollection<GroceryListItem>("grocery-list", seedGroceryList, "grocery_list", mapping.groceryListItem);
 
   const backend = isBackendConfigured();
-  const local = usePersistedCollection<DailyFeedback & { id: string }>(
-    "feedback",
-    ([] as DailyFeedback[]).map((item) => ({ ...item, id: item.taskId })),
-  );
-  const [remoteFeedback, setRemoteFeedback] = useState<DailyFeedback[]>([]);
-
-  useEffect(() => {
-    const supabase = getSupabaseClient();
-    if (!supabase || !backend) return;
-    let active = true;
-    supabase
-      .from("feedback")
-      .select("*")
-      .then(({ data, error }) => {
-        if (!active || error) return;
-        setRemoteFeedback((data ?? []).map(mapping.feedback.fromRow));
-      });
-    const channel = supabase
-      .channel("public:feedback")
-      .on("postgres_changes", { event: "*", schema: "public", table: "feedback" }, (payload) => {
-        setRemoteFeedback((prev) => {
-          if (payload.eventType === "DELETE") {
-            const oldTaskId = (payload.old as { task_id: string }).task_id;
-            return prev.filter((item) => item.taskId !== oldTaskId);
-          }
-          const incoming = mapping.feedback.fromRow(payload.new);
-          return [...prev.filter((item) => item.taskId !== incoming.taskId), incoming];
-        });
-      })
-      .subscribe();
-    return () => {
-      active = false;
-      supabase.removeChannel(channel);
-    };
-  }, [backend]);
-
-  const feedback = backend ? remoteFeedback : local.items.map(({ id: _id, ...rest }) => rest);
 
   useEffect(() => {
     const stale = milestones.items.filter((milestone) => {
@@ -307,37 +269,33 @@ function useDataStore() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [milestones.items]);
 
-  async function completeTask(task: Item, rating: number) {
-    const entry: DailyFeedback = {
-      taskId: task.id,
-      completed: true,
+  /** Quick-complete from a card: materializes the occurrence for `date` and closes it
+   * with just an overall rating. Previously this wrote a `DailyFeedback` row keyed on
+   * task id alone with no date, which meant completing a daily routine once marked it
+   * done forever — and it also fabricated mood/notes/accident/fear/guarding from the
+   * rating rather than observing anything. Both are gone; completion state now lives
+   * in exactly one place, per date. */
+  async function completeTask(item: Item, rating: number, date: string) {
+    const instance = ensureInstance(item, date);
+    const nowIso = new Date().toISOString();
+    const started = instance.startTime ? instance : { ...instance, startTime: nowIso };
+    return persistInstance({
+      ...started,
+      state: "completed",
+      endTime: nowIso,
       rating,
-      mood: rating >= 4 ? "calm" : rating === 3 ? "tired" : "frustrated",
-      successScore: rating * 20,
-      notes: rating >= 4 ? "Went well." : "Needs an easier setup tomorrow.",
-      accident: task.category === "potty" && rating <= 2,
-      barking: false,
-      fear: rating <= 2 && task.category === "socialization",
-      guarding: rating <= 2 && task.category === "relationship",
-      completedAt: new Date().toISOString(),
-    };
-    if (!backend) {
-      const next = [...local.items.filter((item) => item.taskId !== task.id), { ...entry, id: task.id }];
-      local.setItems(next);
-      return true;
-    }
-    const supabase = getSupabaseClient();
-    if (!supabase) return false;
-    const householdId = await getHouseholdId();
-    const { error } = await supabase
-      .from("feedback")
-      .upsert(mapping.feedback.toRow(entry, householdId), { onConflict: "household_id,task_id" });
-    if (error) {
-      console.error("Failed to log feedback:", error.message);
-      return false;
-    }
-    setRemoteFeedback((prev) => [...prev.filter((item) => item.taskId !== task.id), entry]);
-    return true;
+      checklist: instance.checklist.length > 0 ? instance.checklist : buildDefaultChecklist(item, milestones.items),
+      history: withHistory(instance, { type: "end", oldValue: instance.state, newValue: "completed", reason: "" }),
+    });
+  }
+
+  /** The occurrence for an item on a given date, if it has been touched at all. */
+  function occurrenceFor(itemId: string, date: string): ItemOccurrence | undefined {
+    return itemOccurrences.items.find((entry) => entry.itemId === itemId && entry.originalDate === date);
+  }
+
+  function isCompletedOn(itemId: string, date: string): boolean {
+    return occurrenceFor(itemId, date)?.state === "completed";
   }
 
   function logMilestoneSession(milestoneId: string, stepTitle: string) {
@@ -578,7 +536,7 @@ function useDataStore() {
       journalEntries: journalEntries.items,
       exposureItems: exposureItems.items,
       relationshipLogs: relationshipLogs.items,
-      feedback,
+      itemOccurrences: itemOccurrences.items,
     };
   }
 
@@ -592,28 +550,9 @@ function useDataStore() {
     if (Array.isArray(payload.journalEntries)) journalEntries.setItems(payload.journalEntries);
     if (Array.isArray(payload.exposureItems)) exposureItems.setItems(payload.exposureItems);
     if (Array.isArray(payload.relationshipLogs)) relationshipLogs.setItems(payload.relationshipLogs);
-    if (Array.isArray(payload.feedback)) {
-      if (backend) {
-        importFeedback(payload.feedback);
-      } else {
-        local.setItems(payload.feedback.map((item) => ({ ...item, id: item.taskId })));
-      }
-    }
+    if (Array.isArray(payload.itemOccurrences)) itemOccurrences.setItems(payload.itemOccurrences);
   }
 
-  async function importFeedback(items: DailyFeedback[]) {
-    const supabase = getSupabaseClient();
-    if (!supabase || items.length === 0) return;
-    const householdId = await getHouseholdId();
-    const { error } = await supabase
-      .from("feedback")
-      .upsert(items.map((item) => mapping.feedback.toRow(item, householdId)), { onConflict: "household_id,task_id" });
-    if (error) {
-      console.error("Failed to import feedback:", error.message);
-      return;
-    }
-    setRemoteFeedback(items);
-  }
 
   return {
     households,
@@ -638,11 +577,12 @@ function useDataStore() {
     recipeIngredients,
     inventory,
     groceryList,
-    feedback,
     feedbackLoopRules,
     locations,
     shelfLifeDefaultsDays,
     completeTask,
+    occurrenceFor,
+    isCompletedOn,
     logMilestoneSession,
     logExposure,
     getInstance,

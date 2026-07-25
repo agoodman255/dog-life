@@ -5,12 +5,12 @@ import { useNavigation } from "./navigation";
 import { makeId, useStore } from "./store";
 import {
   ChecklistItemValue,
-  DailyFeedback,
   Dog,
   DogFormation,
   FeedbackType,
   Item,
   ItemDeletionScope,
+  ItemOccurrence,
   LogFieldValue,
   Milestone,
   Person,
@@ -21,6 +21,7 @@ import {
   computeMilestoneStatus,
   emptyLogValues,
   formatMinutes,
+  groupChecklistByDog,
   itemDurationMinutes,
   itemStateLabels,
   milestoneProgress,
@@ -230,14 +231,16 @@ function dogsInvolvedLabel(dogIds: string[], allDogs: Dog[]): string {
 
 export function TaskCard({
   task,
-  feedback,
+  occurrence,
   dogs,
   onComplete,
   onDelete,
   onOpenDetail,
 }: {
   task: Item;
-  feedback?: DailyFeedback;
+  /** This item's state for the day being shown. Replaces the old `feedback` prop,
+   * which carried no date and so reported an item as done forever after one tap. */
+  occurrence?: ItemOccurrence;
   dogs: Dog[];
   onComplete: (task: Item, rating: number) => Promise<boolean> | boolean | void;
   onDelete?: (task: Item) => void;
@@ -245,6 +248,7 @@ export function TaskCard({
 }) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [failed, setFailed] = useState(false);
+  const isDone = occurrence?.state === "completed";
 
   function toggleItem(item: string) {
     setChecked((prev) => ({ ...prev, [item]: !prev[item] }));
@@ -257,7 +261,7 @@ export function TaskCard({
   }
 
   return (
-    <article className={`task-card ${feedback?.completed ? "is-done" : ""}`}>
+    <article className={`task-card ${isDone ? "is-done" : ""}`}>
       <div className="task-time">{task.startTime ?? "—"}</div>
       <div className="task-main">
         <div className="row between">
@@ -299,10 +303,10 @@ export function TaskCard({
           ))}
         </div>
         <div className="rating-label">
-          <span>{feedback?.completed ? "Logged — how did it go?" : "How did it go?"}</span>
-          {feedback?.completed && (
+          <span>{isDone ? "Logged — how did it go?" : "How did it go?"}</span>
+          {isDone && occurrence?.rating && (
             <strong>
-              <Check size={14} aria-hidden /> Rated {feedback.rating}/5
+              <Check size={14} aria-hidden /> Rated {occurrence.rating}/5
             </strong>
           )}
         </div>
@@ -312,8 +316,8 @@ export function TaskCard({
             <button
               key={rating}
               type="button"
-              className={feedback?.rating === rating ? "selected" : ""}
-              aria-pressed={feedback?.rating === rating}
+              className={occurrence?.rating === rating ? "selected" : ""}
+              aria-pressed={occurrence?.rating === rating}
               onClick={() => handleRate(rating)}
             >
               {rating}
@@ -483,7 +487,19 @@ function LogEntryPanel({
   );
 }
 
-export function ItemDetailModal({ task, date, onClose }: { task: Item; date: string; onClose: () => void }) {
+export function ItemDetailModal({
+  task,
+  date,
+  onClose,
+  onEdit,
+}: {
+  task: Item;
+  date: string;
+  onClose: () => void;
+  /** Opens the item's edit form. Without this the detail modal is a dead end — you
+   * can run the item but never change what it is. */
+  onEdit?: (item: Item) => void;
+}) {
   const { dogs, milestones, locations, people, getInstance, startTask, endTask, rescheduleTask, skipTask, delegateTask, deleteItem } = useStore();
   const { navigate, timezone } = useNavigation();
   const [activePanel, setActivePanel] = useState<null | "start" | "end" | "reschedule" | "skip" | "delegate" | "log">(null);
@@ -497,6 +513,7 @@ export function ItemDetailModal({ task, date, onClose }: { task: Item; date: str
   const [submitting, setSubmitting] = useState(false);
 
   const involvedDogs = dogs.items.filter((dog) => (task.dogIds ?? []).includes(dog.id));
+  const dogName = (id: string) => dogs.items.find((dog) => dog.id === id)?.name ?? id;
   const location = locations.find((loc) => loc.id === task.location);
   const relatedMilestone = task.relatedMilestoneId ? milestones.items.find((item) => item.id === task.relatedMilestoneId) : undefined;
 
@@ -828,7 +845,8 @@ export function ItemDetailModal({ task, date, onClose }: { task: Item; date: str
             {instance.ratingNotes && <p className="small">{instance.ratingNotes}</p>}
             <div className="checklist">
               {instance.checklist.map((item) => (
-                <div key={item.itemName} className="checklist-summary-item">
+                <div key={`${item.dogId ?? "all"}-${item.itemName}`} className="checklist-summary-item">
+                  {item.dogId && <em className="checklist-dog-tag">{dogName(item.dogId)}</em>}
                   <strong>{item.itemName}:</strong> {item.dataType === "boolean" ? (item.value ? "Yes" : "No") : String(item.value)}
                   {item.rating ? ` · ${item.rating}/5` : ""}
                   {item.notes ? ` — ${item.notes}` : ""}
@@ -942,15 +960,24 @@ export function ItemDetailModal({ task, date, onClose }: { task: Item; date: str
             <p className="eyebrow" style={{ marginTop: 12 }}>
               Checklist review
             </p>
-            <div className="checklist-editor-list">
-              {checklistDraft.map((item, index) => (
-                <ChecklistItemEditor
-                  key={item.itemName}
-                  item={item}
-                  onChange={(next) => setChecklistDraft((prev) => prev.map((existing, i) => (i === index ? next : existing)))}
-                />
-              ))}
-            </div>
+            {/* Grouped by dog when any step is dog-specific, so a session running
+                different work for each dog reads as two short lists rather than one
+                interleaved one. Falls back to a single unlabelled list otherwise. */}
+            {groupChecklistByDog(checklistDraft).map((group) => (
+              <div className="checklist-editor-list" key={group.dogId ?? "all"}>
+                {group.dogId && <p className="checklist-dog-heading">{dogName(group.dogId)}</p>}
+                {group.rows.map((row) => {
+                  const index = checklistDraft.indexOf(row);
+                  return (
+                    <ChecklistItemEditor
+                      key={`${row.dogId ?? "all"}-${row.itemName}`}
+                      item={row}
+                      onChange={(next) => setChecklistDraft((prev) => prev.map((existing, i) => (i === index ? next : existing)))}
+                    />
+                  );
+                })}
+              </div>
+            ))}
 
             <p className="eyebrow" style={{ marginTop: 12 }}>
               Overall — how did the whole thing go?
@@ -1069,14 +1096,16 @@ export function ItemDetailModal({ task, date, onClose }: { task: Item; date: str
           )}
 
         {activePanel === null && (
-          <button
-            className="text-button danger"
-            type="button"
-            onClick={() => setDeleteModalOpen(true)}
-            style={{ marginTop: 12 }}
-          >
-            Delete
-          </button>
+          <div className="row" style={{ marginTop: 12, gap: 12 }}>
+            {onEdit && (
+              <button className="text-button" type="button" onClick={() => onEdit(task)}>
+                Edit item
+              </button>
+            )}
+            <button className="text-button danger" type="button" onClick={() => setDeleteModalOpen(true)}>
+              Delete
+            </button>
+          </div>
         )}
 
         {instance && instance.history.length > 0 && (

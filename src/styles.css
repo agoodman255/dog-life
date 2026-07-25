@@ -2680,3 +2680,25 @@ textarea:focus-visible,
     flex: 1 1 auto;
   }
 }
+
+/* Per-dog checklist grouping — a session running different work for each dog reads
+   as two short labelled lists instead of one interleaved one. */
+.checklist-dog-heading {
+  margin: 8px 0 4px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--teal);
+}
+
+.checklist-dog-tag {
+  font-style: normal;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--tag-ink);
+}

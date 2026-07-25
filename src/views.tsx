@@ -108,11 +108,11 @@ import {
 } from "./utils";
 
 export function NotificationBell() {
-  const { items, feedback, milestones, aloneTimeLogs, dogs } = useStore();
+  const { items, itemOccurrences, milestones, aloneTimeLogs, dogs } = useStore();
   const [open, setOpen] = useState(false);
   const [panelPos, setPanelPos] = useState<{ top: number; right: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const notifications = computeNotifications(items.items, feedback, milestones.items, dogs.items, aloneTimeLogs.items);
+  const notifications = computeNotifications(items.items, itemOccurrences.items, milestones.items, dogs.items, aloneTimeLogs.items);
 
   function toggleOpen() {
     if (!open && buttonRef.current) {
@@ -209,13 +209,12 @@ function AloneTimeReadinessPanel({
 }
 
 export function DashboardView() {
-  const { items, feedback, milestones, dogs, completeTask, aloneTimeLogs, journalEntries } = useStore();
-  const adaptive = useAdaptivePlan(items.items, feedback);
-  const feedbackByTask = new Map(feedback.map((item) => [item.taskId, item]));
+  const { items, itemOccurrences, milestones, dogs, completeTask, occurrenceFor, aloneTimeLogs, journalEntries } = useStore();
+  const todayKey = toDateKey(new Date());
+  const adaptive = useAdaptivePlan(items.items, itemOccurrences.items, todayKey);
   const [detailTask, setDetailTask] = useState<Item | null>(null);
   const [aloneTimeModal, setAloneTimeModal] = useState(false);
   const [quickLogModal, setQuickLogModal] = useState(false);
-  const todayKey = toDateKey(new Date());
   const puppy = dogs.items.find((dog) => dog.status === "puppy") ?? dogs.items[0];
   const currentMilestone =
     milestones.items.find((item) => item.status !== "completed" && item.dependencies.length > 0) ?? milestones.items[0];
@@ -261,13 +260,16 @@ export function DashboardView() {
             </div>
           </div>
           <div className="task-list">
+            {adaptive.visibleTasks.length === 0 && (
+              <p className="small">Nothing scheduled to complete today. Anything you add for today shows up here.</p>
+            )}
             {adaptive.visibleTasks.map((task) => (
               <TaskCard
                 key={task.id}
                 task={task}
-                feedback={feedbackByTask.get(task.id)}
+                occurrence={occurrenceFor(task.id, todayKey)}
                 dogs={dogs.items}
-                onComplete={completeTask}
+                onComplete={(target, rating) => completeTask(target, rating, todayKey)}
                 onOpenDetail={setDetailTask}
               />
             ))}
@@ -1157,6 +1159,10 @@ export function CalendarView() {
           task={detailTask.task}
           date={detailTask.date}
           onClose={() => setDetailTask(null)}
+          onEdit={(item) => {
+            setDetailTask(null);
+            setEventModal({ event: item, occurrenceDate: detailTask.date });
+          }}
         />
       )}
 
@@ -1747,10 +1753,9 @@ export function HealthView() {
 // it was created. Items that only log data, or only sit on the calendar, don't
 // belong here — that filter is the whole definition of the view now.
 export function TasksView() {
-  const { items, feedback, people, dogs, milestones, aloneTimeLogs, completeTask } = useStore();
-  const [open, setOpen] = useState(false);
+  const { items, people, dogs, milestones, aloneTimeLogs, completeTask, occurrenceFor } = useStore();
+  const [formTarget, setFormTarget] = useState<"new" | Item | null>(null);
   const [detailTask, setDetailTask] = useState<Item | null>(null);
-  const feedbackByTask = new Map(feedback.map((item) => [item.taskId, item]));
   const todayKey = toDateKey(new Date());
   const completable = items.items.filter((item) => item.requiresCompletion);
   return (
@@ -1760,7 +1765,7 @@ export function TasksView() {
           <p className="eyebrow">Needs completing</p>
           <h2>Everything you have to check off</h2>
         </div>
-        <button className="primary-button" type="button" onClick={() => setOpen(true)}>
+        <button className="primary-button" type="button" onClick={() => setFormTarget("new")}>
           <Plus size={16} aria-hidden /> Add
         </button>
       </div>
@@ -1770,28 +1775,52 @@ export function TasksView() {
           <TaskCard
             key={task.id}
             task={task}
-            feedback={feedbackByTask.get(task.id)}
+            occurrence={occurrenceFor(task.id, todayKey)}
             dogs={dogs.items}
-            onComplete={completeTask}
+            onComplete={(target, rating) => completeTask(target, rating, todayKey)}
             onDelete={(target) => items.remove(target.id)}
             onOpenDetail={setDetailTask}
           />
         ))}
       </div>
-      {open && (
-        <Modal title="Add — Routine or to-do" onClose={() => setOpen(false)}>
+      {formTarget && (
+        <Modal title={formTarget === "new" ? "Add — Routine or to-do" : "Edit item"} onClose={() => setFormTarget(null)}>
           <ItemForm
-            presetIntent="routine"
+            initial={formTarget === "new" ? undefined : formTarget}
+            presetIntent={formTarget === "new" ? "routine" : undefined}
             peopleOptions={people.items.map((person) => ({ id: person.id, name: person.name }))}
             dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
             milestoneOptions={milestones.items}
             aloneTimeLogs={aloneTimeLogs.items}
-            onCancel={() => setOpen(false)}
-            onSubmit={(values) => items.add(itemFormValuesToItem(values, makeId("item")))}
+            onCancel={() => setFormTarget(null)}
+            onSubmit={(values) =>
+              formTarget === "new"
+                ? items.add(itemFormValuesToItem(values, makeId("item")))
+                : items.update(
+                    formTarget.id,
+                    itemFormValuesToItem(values, formTarget.id, {
+                      excludedDates: formTarget.excludedDates,
+                      roverVisits: formTarget.roverVisits,
+                      prepSteps: formTarget.prepSteps,
+                      roverInstructions: formTarget.roverInstructions,
+                      postSteps: formTarget.postSteps,
+                    }),
+                  )
+            }
           />
         </Modal>
       )}
-      {detailTask && <ItemDetailModal task={detailTask} date={todayKey} onClose={() => setDetailTask(null)} />}
+      {detailTask && (
+        <ItemDetailModal
+          task={detailTask}
+          date={todayKey}
+          onClose={() => setDetailTask(null)}
+          onEdit={(item) => {
+            setDetailTask(null);
+            setFormTarget(item);
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -1947,11 +1976,21 @@ export function RelationshipTracker() {
 }
 
 export function AnalyticsView() {
-  const { feedback, journalEntries, dogs } = useStore();
-  const completed = feedback.filter((item) => item.completed).length;
-  const accidents = feedback.filter((item) => item.accident).length;
-  const avgRating = feedback.length ? (feedback.reduce((sum, item) => sum + item.rating, 0) / feedback.length).toFixed(1) : "0.0";
-  const ratingTrend = feedback.map((item) => item.rating);
+  const { itemOccurrences, journalEntries, dogs } = useStore();
+  // Sourced from real completions now. The old version read DailyFeedback, whose
+  // `accident` flag was never observed — it was derived as
+  // `category === "potty" && rating <= 2`, i.e. a low score on a potty break got
+  // charted as an accident. Actual accidents are the ones logged through Quick log,
+  // which writes a journal entry tagged "accident".
+  const completedOccurrences = itemOccurrences.items.filter((entry) => entry.state === "completed");
+  const rated = completedOccurrences.filter((entry) => entry.rating !== undefined);
+  const completed = completedOccurrences.length;
+  const accidents = journalEntries.items.filter((entry) => entry.tags.includes("accident")).length;
+  const avgRating = rated.length ? (rated.reduce((sum, entry) => sum + (entry.rating ?? 0), 0) / rated.length).toFixed(1) : "0.0";
+  const ratingTrend = rated
+    .slice()
+    .sort((a, b) => (a.endTime ?? "").localeCompare(b.endTime ?? ""))
+    .map((entry) => entry.rating ?? 0);
   const puppy = dogs.items.find((dog) => dog.status === "puppy") ?? dogs.items[0];
   const moodScore = { great: 90, steady: 60, hard: 30 };
   const journalTrend = [...journalEntries.items].sort((a, b) => (a.date < b.date ? -1 : 1)).map((entry) => moodScore[entry.mood]);

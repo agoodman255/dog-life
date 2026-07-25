@@ -4,13 +4,13 @@ import {
   Category,
   ChecklistItemDef,
   ChecklistItemValue,
-  DailyFeedback,
   DayOfWeek,
   Dog,
   GroceryListItem,
   InventoryItem,
   Item,
   ItemIntent,
+  ItemOccurrence,
   ItemState,
   LogFieldDef,
   LogFieldValue,
@@ -137,7 +137,13 @@ export function emptyLogValues(fields: LogFieldDef[]): LogFieldValue[] {
 export function resolveChecklistDefs(item: Item, milestones: Milestone[]): ChecklistItemDef[] {
   if (item.checklistSourceMilestoneId) {
     const milestone = milestones.find((entry) => entry.id === item.checklistSourceMilestoneId);
-    if (milestone) return milestone.steps.map((step) => ({ itemName: step.title, dataType: "boolean" as const }));
+    if (milestone) {
+      // A milestone aimed at exactly one dog stamps that dog onto its steps, so a
+      // pulled-through checklist lands pre-assigned instead of ambiguous. Milestones
+      // covering both dogs leave it undefined — the step genuinely applies to both.
+      const dogId = milestone.dogIds.length === 1 ? milestone.dogIds[0] : undefined;
+      return milestone.steps.map((step) => ({ itemName: step.title, dataType: "boolean" as const, dogId }));
+    }
   }
   return item.checklist;
 }
@@ -151,7 +157,22 @@ export function buildDefaultChecklist(item: Item, milestones: Milestone[] = []):
     dataType: def.dataType,
     value: def.dataType === "boolean" ? false : def.dataType === "free_text" ? "" : 0,
     notes: "",
+    dogId: def.dogId,
   }));
+}
+
+/** Groups checklist rows by the dog they're assigned to, preserving order, with
+ * unassigned ("everyone") rows first. Returns a single unlabelled group when no row
+ * is dog-specific, so the common case renders exactly as it did before. */
+export function groupChecklistByDog<T extends { dogId?: string }>(rows: T[]): { dogId?: string; rows: T[] }[] {
+  if (!rows.some((row) => row.dogId)) return [{ dogId: undefined, rows }];
+  const groups: { dogId?: string; rows: T[] }[] = [];
+  rows.forEach((row) => {
+    const existing = groups.find((group) => group.dogId === row.dogId);
+    if (existing) existing.rows.push(row);
+    else groups.push({ dogId: row.dogId, rows: [row] });
+  });
+  return groups.sort((a, b) => (a.dogId ? 1 : 0) - (b.dogId ? 1 : 0));
 }
 
 // `new Date("2026-08-01")` parses as UTC midnight per spec, which renders as
@@ -244,13 +265,38 @@ export function readinessScore(
   return Math.max(5, Math.min(98, Math.round(base + skillBonus + vaccineBonus - dampener)));
 }
 
-export function useAdaptivePlan(items: Item[], feedback: DailyFeedback[]) {
+/** Occurrences completed on a specific day. The old version read `DailyFeedback`,
+ * which was keyed on item id alone with no date — so completing a daily routine once
+ * marked it done permanently. Everything here is date-scoped now. */
+export function completedIdsOn(occurrences: ItemOccurrence[], dateKey: string): Set<string> {
+  return new Set(
+    occurrences.filter((entry) => entry.date === dateKey && entry.state === "completed").map((entry) => entry.itemId),
+  );
+}
+
+export function useAdaptivePlan(items: Item[], occurrences: ItemOccurrence[], dateKey: string) {
   return useMemo(() => {
-    const hardDays = feedback.slice(-6).filter((item) => item.rating <= 2 || item.fear || item.guarding).length;
+    // "Hard days" now reads real scores off the last handful of completed
+    // occurrences, including per-checklist-row scores — a session that closed at 4/5
+    // overall but had a step scored 1 still counts as hard, which the old
+    // rating-only check missed entirely.
+    const recent = occurrences
+      .filter((entry) => entry.state === "completed" && entry.rating !== undefined)
+      .slice()
+      .sort((a, b) => (b.endTime ?? "").localeCompare(a.endTime ?? ""))
+      .slice(0, 6);
+    const hardDays = recent.filter(
+      (entry) => (entry.rating ?? 5) <= 2 || entry.checklist.some((row) => (row.rating ?? 5) <= 2),
+    ).length;
     const optionalLimit = hardDays >= 3 ? 1 : 3;
-    const completed = new Set(feedback.filter((item) => item.completed).map((item) => item.taskId));
+    const completed = completedIdsOn(occurrences, dateKey);
+    const day = parseLocalDate(dateKey);
     const visibleTasks = items
       .filter((item) => item.requiresCompletion)
+      // Only what actually lands on this date. Tasks used to have no recurrence and
+      // rendered on every day unconditionally, so "Today" listed things that weren't
+      // today's — now that items carry real recurrence, honour it.
+      .filter((item) => generateOccurrences(item, day, day).length > 0)
       .filter((item) => item.priority !== "optional" || optionalLimit > 1 || completed.has(item.id))
       .slice()
       .sort((a, b) => {
@@ -266,6 +312,7 @@ export function useAdaptivePlan(items: Item[], feedback: DailyFeedback[]) {
       hardDays,
       optionalLimit,
       visibleTasks,
+      completedIds: completed,
       trainingMinutes,
       targetTrainingMinutes: [20, 30] as [number, number],
       targetExerciseMinutes: [30, 60] as [number, number],
@@ -275,7 +322,7 @@ export function useAdaptivePlan(items: Item[], feedback: DailyFeedback[]) {
           ? "Several difficult logs were detected, so tomorrow should protect essentials and reduce optional training."
           : "Today is balanced: short structured sessions, relationship care, and essential health routines stay visible.",
     };
-  }, [items, feedback]);
+  }, [items, occurrences, dateKey]);
 }
 
 /** Minutes an item occupies. Items store hours (the calendar's unit) but tasks were
@@ -588,17 +635,22 @@ export function isHealthItem(item: Pick<Item, "category">): boolean {
 
 export function computeNotifications(
   items: Item[],
-  feedback: DailyFeedback[],
+  occurrences: ItemOccurrence[],
   milestones: Milestone[],
   dogs: Pick<Dog, "id" | "name">[],
   aloneTimeLogs: AloneTimeLog[],
 ): NotificationItem[] {
   const notifications: NotificationItem[] = [];
   const now = new Date();
-  const completedItemIds = new Set(feedback.filter((item) => item.completed).map((item) => item.taskId));
+  // Scoped to today, so finishing a daily routine clears its nag for today and it
+  // returns tomorrow. The old check was item-wide and never came back once completed.
+  const todayKey = toDateKey(now);
+  const completedItemIds = completedIdsOn(occurrences, todayKey);
 
   items.forEach((item) => {
     if (!item.requiresCompletion) return;
+    // Only nag about items that actually land on today.
+    if (generateOccurrences(item, now, now).length === 0) return;
     if (item.priority === "essential" && !completedItemIds.has(item.id)) {
       notifications.push({
         id: `overdue-${item.id}`,

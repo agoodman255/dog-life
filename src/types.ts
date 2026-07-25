@@ -95,6 +95,12 @@ export type ChecklistDataType = "boolean" | "counter" | "duration_minutes" | "fr
 export type ChecklistItemDef = {
   itemName: string;
   dataType: ChecklistDataType;
+  /** Which dog this specific step is for. Undefined = the whole item / every dog
+   * involved. Lets one training session carry different work for each dog — Griz
+   * proofing a known cue while Mara learns it from scratch — instead of forcing two
+   * separate calendar items. Generalizes what the old `grizParticipation` enum was
+   * reaching for, without hardcoding a dog. */
+  dogId?: string;
 };
 
 export type ChecklistItemValue = {
@@ -106,6 +112,8 @@ export type ChecklistItemValue = {
    * own AND the item gets an overall score, so a bad step is visible even when the
    * session as a whole went fine. */
   rating?: number;
+  /** Copied from the matching ChecklistItemDef at completion time. */
+  dogId?: string;
 };
 
 // --- Logging ----------------------------------------------------------------
@@ -354,20 +362,6 @@ export type JournalEntry = {
   text: string;
   tags: string[];
   mood: "great" | "steady" | "hard";
-};
-
-export type DailyFeedback = {
-  taskId: string;
-  completed: boolean;
-  rating: number;
-  mood: "calm" | "excited" | "fearful" | "frustrated" | "tired";
-  successScore: number;
-  notes: string;
-  accident: boolean;
-  barking: boolean;
-  fear: boolean;
-  guarding: boolean;
-  completedAt: string;
 };
 
 export type ExposureCategory = "socialization" | "confidence" | "handling";

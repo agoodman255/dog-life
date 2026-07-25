@@ -1,6 +1,5 @@
 import {
   AloneTimeLog,
-  DailyFeedback,
   Dog,
   ExposureItem,
   GroceryListItem,
@@ -357,40 +356,6 @@ export const relationshipLog = {
 
 // Feedback is keyed by (household_id, task_id) rather than its own app-level
 // id — the app treats it as "current completion state per task," not a log.
-export const feedback = {
-  fromRow(row: any): DailyFeedback {
-    return {
-      taskId: row.task_id,
-      completed: row.completed,
-      rating: row.rating,
-      mood: row.mood,
-      successScore: row.success_score,
-      notes: row.notes,
-      accident: row.accident,
-      barking: row.barking,
-      fear: row.fear,
-      guarding: row.guarding,
-      completedAt: row.completed_at,
-    };
-  },
-  toRow(item: DailyFeedback, householdId: string) {
-    return {
-      household_id: householdId,
-      task_id: item.taskId,
-      completed: item.completed,
-      rating: item.rating,
-      mood: item.mood,
-      success_score: item.successScore,
-      notes: item.notes,
-      accident: item.accident,
-      barking: item.barking,
-      fear: item.fear,
-      guarding: item.guarding,
-      completed_at: item.completedAt,
-    };
-  },
-};
-
 export const itemDeletion = {
   fromRow(row: any): ItemDeletion {
     return {

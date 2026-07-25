@@ -8,6 +8,7 @@ import {
   Category,
   DayOfWeek,
   Dog,
+  DogFormation,
   DogStatus,
   ExposureItem,
   Item,
@@ -23,6 +24,7 @@ import {
   RecurrenceFrequency,
   RelationshipLog,
 } from "./types";
+import { locations } from "./data";
 import { makeId } from "./store";
 import {
   computeEventCoverageNeeded,
@@ -779,6 +781,8 @@ export function AloneTimeLogForm({
 const checklistDefSchema = z.object({
   itemName: z.string().min(1, "Name the step"),
   dataType: z.enum(["boolean", "counter", "duration_minutes", "free_text"]),
+  /** "" means the step applies to every dog involved; otherwise a dog id. */
+  dogId: z.string(),
 });
 
 const logFieldSchema = z.object({
@@ -819,6 +823,12 @@ const itemSchema = z
     coverageConfirmed: z.boolean(),
     coverageNotes: z.string(),
     priority: z.enum(["essential", "important", "optional"]),
+    supplies: z.string(),
+    setting: z.enum(["indoor", "outdoor", "either"]),
+    difficulty: z.number().min(1).max(5),
+    location: z.string(),
+    formation: z.string(),
+    relatedMilestoneId: z.string(),
     documentUrl: z.string(),
     status: z.enum(["confirmed", "placeholder"]),
     notes: z.string(),
@@ -890,18 +900,23 @@ export function itemFormValuesToItem(
     attendees: values.attendees.length > 0 ? values.attendees : undefined,
     dogIds: values.dogIds.length > 0 ? values.dogIds : undefined,
     requiresCompletion: values.requiresCompletion,
-    checklist: values.requiresCompletion ? values.checklist : [],
+    checklist: values.requiresCompletion
+      ? values.checklist.map((row) => ({ itemName: row.itemName, dataType: row.dataType, dogId: row.dogId || undefined }))
+      : [],
     checklistSourceMilestoneId: values.checklistSourceMilestoneId || undefined,
     requiresLog: values.requiresLog,
-    logFields: values.requiresLog ? values.logFields : [],
+    logFields: values.requiresLog ? values.logFields.map((row) => ({ ...row, unit: row.unit || undefined })) : [],
     aloneTimeRequired: values.aloneTimeRequired,
     aloneTimeRequiredAmount: values.aloneTimeRequired === "partial" ? values.aloneTimeRequiredAmount : undefined,
     coverageConfirmed: values.aloneTimeRequired !== "no" ? values.coverageConfirmed : undefined,
     coverageNotes: values.aloneTimeRequired !== "no" && values.coverageNotes ? values.coverageNotes : undefined,
     priority: values.priority,
-    supplies: [],
-    setting: "either",
-    difficulty: 1,
+    supplies: csvToArray(values.supplies),
+    setting: values.setting,
+    difficulty: values.difficulty as Item["difficulty"],
+    location: values.location || undefined,
+    formation: (values.formation || undefined) as Item["formation"],
+    relatedMilestoneId: values.relatedMilestoneId || undefined,
     documentUrl: values.documentUrl || undefined,
     notes: values.notes,
     ...extra,
@@ -916,6 +931,17 @@ const CHECKLIST_TYPE_LABELS: Record<string, string> = {
 };
 
 const LOG_TYPE_LABELS: Record<LogFieldDataType, string> = { number: "Number", text: "Text", date: "Date" };
+
+/** Duplicated from components.tsx's formationLabels rather than imported — forms.tsx
+ * importing from components.tsx would close an import cycle (components imports forms
+ * indirectly through the store). Keep the two in sync if either changes. */
+const FORMATION_LABELS: Record<DogFormation, string> = {
+  together: "Together",
+  "parallel-buffered": "Parallel — dog, human, human, dog",
+  "separate-rooms": "Separate rooms",
+  "separate-locations": "Separate locations",
+  solo: "Solo (other dog managed elsewhere)",
+};
 
 /** `LogFieldDef.unit` is optional on the stored type (most fields have no unit) but
  * the form needs a controlled string for the input, so it gets normalized on entry
@@ -974,7 +1000,7 @@ export function ItemForm({
       attendees: initial?.attendees ?? [],
       dogIds: initial?.dogIds ?? [],
       requiresCompletion: initial?.requiresCompletion ?? preset?.requiresCompletion ?? false,
-      checklist: initial?.checklist ?? [],
+      checklist: (initial?.checklist ?? []).map((row) => ({ ...row, dogId: row.dogId ?? "" })),
       checklistSourceMilestoneId: initial?.checklistSourceMilestoneId ?? "",
       requiresLog: initial?.requiresLog ?? preset?.requiresLog ?? false,
       logFields: withUnits(initial?.logFields ?? (preset?.requiresLog ? defaultLogFieldsFor(preset.defaultCategory) : [])),
@@ -983,6 +1009,12 @@ export function ItemForm({
       coverageConfirmed: initial?.coverageConfirmed ?? false,
       coverageNotes: initial?.coverageNotes ?? "",
       priority: initial?.priority ?? "important",
+      supplies: arrayToCsv(initial?.supplies ?? []),
+      setting: initial?.setting ?? "either",
+      difficulty: initial?.difficulty ?? 1,
+      location: initial?.location ?? "",
+      formation: initial?.formation ?? "",
+      relatedMilestoneId: initial?.relatedMilestoneId ?? "",
       documentUrl: initial?.documentUrl ?? "",
       status: initial?.status ?? "confirmed",
       notes: initial?.notes ?? "",
@@ -1015,6 +1047,7 @@ export function ItemForm({
     .map((id) => dogOptions.find((dog) => dog.id === id)?.name ?? id)
     .join(" & ");
   const sourceMilestone = milestoneOptions.find((entry) => entry.id === checklistSourceMilestoneId);
+  const selectedDogs = dogOptions.filter((dog) => dogIds.includes(dog.id));
 
   function toggleDayOfWeek(day: DayOfWeek) {
     const current = getValues("daysOfWeek");
@@ -1050,7 +1083,7 @@ export function ItemForm({
   }
 
   function addChecklistRow() {
-    setValue("checklist", [...getValues("checklist"), { itemName: "", dataType: "boolean" as const }]);
+    setValue("checklist", [...getValues("checklist"), { itemName: "", dataType: "boolean" as const, dogId: "" }]);
   }
   function updateChecklistRow(index: number, patch: Partial<ItemFormValues["checklist"][number]>) {
     setValue(
@@ -1207,6 +1240,22 @@ export function ItemForm({
                       </option>
                     ))}
                   </select>
+                  {/* Only worth showing once more than one dog is actually involved —
+                      with a single dog every step is obviously that dog's. */}
+                  {selectedDogs.length > 1 && (
+                    <select
+                      aria-label={`Which dog is "${row.itemName || "this step"}" for?`}
+                      value={row.dogId}
+                      onChange={(event) => updateChecklistRow(index, { dogId: event.target.value })}
+                    >
+                      <option value="">Both dogs</option>
+                      {selectedDogs.map((dog) => (
+                        <option key={dog.id} value={dog.id}>
+                          {dog.name} only
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <button type="button" className="text-button danger" onClick={() => removeChecklistRow(index)}>
                     Remove
                   </button>
@@ -1215,7 +1264,12 @@ export function ItemForm({
               <button type="button" className="text-button" onClick={addChecklistRow}>
                 + Add step
               </button>
-              <p className="small">Every step gets its own notes box and 1-5 score when you complete the item.</p>
+              <p className="small">
+                Every step gets its own notes box and 1-5 score when you complete the item.
+                {selectedDogs.length > 1
+                  ? " Assign steps to one dog to run different work for each in the same session."
+                  : ""}
+              </p>
             </>
           )}
           {errors.checklist && <small className="form-error">{errors.checklist.message}</small>}
@@ -1447,6 +1501,55 @@ export function ItemForm({
               <option value="confirmed">Confirmed</option>
               <option value="placeholder">Placeholder (date TBD)</option>
             </select>
+          </label>
+          <label>
+            Setting
+            <select {...register("setting")}>
+              <option value="indoor">Indoor</option>
+              <option value="outdoor">Outdoor</option>
+              <option value="either">Either</option>
+            </select>
+          </label>
+          <label>
+            Difficulty (1-5)
+            <input type="number" min={1} max={5} {...register("difficulty", { valueAsNumber: true })} />
+          </label>
+          <label>
+            Location
+            <select {...register("location")}>
+              <option value="">Not specified</option>
+              {locations.map((place) => (
+                <option key={place.id} value={place.id}>
+                  {place.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Dog formation
+            <select {...register("formation")}>
+              <option value="">Not specified</option>
+              {(Object.keys(FORMATION_LABELS) as DogFormation[]).map((value) => (
+                <option key={value} value={value}>
+                  {FORMATION_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Linked milestone (reference only)
+            <select {...register("relatedMilestoneId")}>
+              <option value="">None</option>
+              {milestoneOptions.map((milestone) => (
+                <option key={milestone.id} value={milestone.id}>
+                  {milestone.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Supplies (comma separated)
+            <input {...register("supplies")} placeholder="Treat pouch, Leash" />
           </label>
           <label>
             Record / receipt link
