@@ -21,7 +21,7 @@ Vision shift noted here: Dog Life OS is expanding from a dog-training app into a
 | 13 | Readiness/milestones as their own section (out of Dashboard, subcategories, click-through from tasks) | Medium | Medium-High | ~4-5h | Subcategory taxonomy decision; sequence after #4-equivalent Dashboard task-list cleanup lands |
 | 14 | Condensed top navigation (hamburger menu replacing page nav bar) | Medium | Medium | ~3-4h | **Needs Andrew's confirmation before removing the existing nav bar** — build alongside the calendar view-switcher dropdown (Feedback backlog) since both restyle the same header |
 | 15 | Calendar event editing overhaul (delete + recurring exceptions, real recurrence engine, structured time fields, formulaic alone-time coverage) | High | High | Built | 🟡 **Built 2026-07-24 — all 3 open questions answered by Andrew, built same session.** Browser-verified end-to-end (see item 15 notes). |
-| 16 | Unify Task/Event/Health into one item type with capability toggles | High | Very High | Built | 🟡 **Built 2026-07-25.** Supersedes the three-type split. Migration SQL written but NOT yet run against production — see item 16 notes. |
+| 16 | Unify Task/Event/Health into one item type with capability toggles | High | Very High | Built | 🟡 **Built and migrated to production 2026-07-25.** Supersedes the three-type split. Old source tables (`tasks`, `calendar_events`, `health_events`, `task_instances`) still exist, unused, pending an explicit go-ahead to drop — see item 16 notes. |
 
 ## Details
 
@@ -94,8 +94,21 @@ Came up 2026-07-25. Andrew: "the item types of task, event, and health don't mak
 - **"Edit item" added to the detail modal.** Unifying the calendar's open handler had accidentally made the detail modal a dead end — you could start, skip or delete an item but never change what it is. Wired in Calendar and Tasks.
 - **Dashboard "Today" now means today.** `useAdaptivePlan` filters to items that actually have an occurrence on the current date. Tasks never had recurrence before, so the old agenda listed every routine regardless of date.
 
-**Not done / open:**
-- **The migration has NOT been run against production.** `supabase/migrate-items-2026-07-25.sql` copies `tasks` + `calendar_events` + `health_events` into `items` and is additive — it drops nothing. Run `schema.sql` first, then it, then verify the counts it prints before touching the old tables. Drop statements are at the bottom, commented out on purpose.
+**Migration run against production, 2026-07-25.** `schema.sql` then `migrate-items-2026-07-25.sql` then `tune-items-2026-07-25.sql` (blocks 0a/0b reconciliation, then block 3 twice — "Cooperative handling minis" and "Name + recall foundation" checklist steps assigned to Mara) all ran clean, in that order. "Parallel decompression walk" was checked and needs no per-dog split — its steps are shared/both-dogs by design, which is what an unset `dogId` already means. Two real bugs were found and fixed live against production data: a table-ordering bug in `schema.sql` (the unified-items block ran before `create table items`) and a column-type mismatch in the migration (`item_deletions.item_id` was `uuid`, needed to be `text` to match the audit-trail pattern of the tables it replaces). Both fixes are in the files now.
+
+**Still open — dropping the old tables.** `tasks`, `calendar_events`, `health_events`, and `task_instances` are migration source tables — fully superseded by `items`/`item_occurrences`, but still physically present and unused since the migration copies rather than moves. Deliberately deferred: dropping is irreversible, and the plan was to wait until the new item-based flows had proven themselves in real day-to-day use first, not to rush it same-day. Do this only once Andrew confirms he's comfortable — do not do it unprompted.
+
+Script (already written, sitting commented-out at the bottom of `supabase/migrate-items-2026-07-25.sql`, lines ~192-198):
+```sql
+-- drop table if exists inbox_requests cascade;  -- recreate from schema.sql afterwards
+-- drop table if exists task_instances cascade;
+-- drop table if exists task_deletions;
+-- drop table if exists calendar_event_deletions;
+-- drop table if exists tasks cascade;
+-- drop table if exists calendar_events cascade;
+-- drop table if exists health_events cascade;
+```
+Uncomment and run when ready — check the file directly in case it's been extended since this note was written.
 - `grizParticipation` was dropped. Its `managed` vs. `not yet` distinction (both mean "this dog isn't in it", differing only in *why*) is not recoverable from `dogIds` + `formation` — but `not yet` was never used in the seed data, the field was never rendered anywhere, and the column survives untouched in the `tasks` table. Superseded by per-dog checklist steps above.
 - The `review-logs` skill (`.claude/skills/review-logs/SKILL.md`) reads unprocessed logs and proposes updates. It has never been run against real data — there are only two test logs so far.
 
