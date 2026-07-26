@@ -261,7 +261,7 @@ export type ItemState =
   | "assigned_pending"
   | "reassigned";
 
-export type ItemHistoryEntryType = "start" | "end" | "reschedule" | "skip" | "delegate" | "accept" | "decline";
+export type ItemHistoryEntryType = "start" | "end" | "reopen" | "reschedule" | "skip" | "delegate" | "accept" | "decline";
 
 export type ItemHistoryEntry = {
   id: string;
@@ -298,6 +298,11 @@ export type ItemOccurrence = {
   rating?: number;
   ratingNotes?: string;
   checklist: ChecklistItemValue[];
+  /** True once this occurrence has counted toward its linked milestone's progress.
+   * Guards against double-counting: re-saving a completion (via "Edit this
+   * completion") or reopening and finishing again would otherwise advance the
+   * milestone every time. Cleared on reopen, which also rolls the advance back. */
+  milestoneAdvanced?: boolean;
   history: ItemHistoryEntry[];
 };
 

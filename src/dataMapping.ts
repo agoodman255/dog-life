@@ -416,6 +416,7 @@ export const itemOccurrence = {
       rating: row.rating ?? undefined,
       ratingNotes: row.rating_notes ?? undefined,
       checklist: row.checklist ?? [],
+      milestoneAdvanced: row.milestone_advanced ?? undefined,
       history: row.history ?? [],
     };
   },
@@ -437,6 +438,7 @@ export const itemOccurrence = {
       rating: entry.rating ?? null,
       rating_notes: entry.ratingNotes ?? null,
       checklist: entry.checklist,
+      milestone_advanced: entry.milestoneAdvanced ?? false,
       history: entry.history,
     };
   },

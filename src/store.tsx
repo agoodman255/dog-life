@@ -395,19 +395,27 @@ function useDataStore() {
   // rather than making Andrew log the same session twice in two places. Only rows
   // that are actually checked count, and only for items linked via
   // checklistSourceMilestoneId (a plain relatedMilestoneId link is display-only).
-  async function advanceLinkedMilestone(item: Item, checklist: ChecklistItemValue[]) {
-    if (!item.checklistSourceMilestoneId) return;
+  // `direction` is +1 on completion and -1 when a completion is undone, so
+  // reopening rolls the progress back rather than stranding a session that never
+  // happened. Returns whether anything actually moved, which is what sets the
+  // occurrence's milestoneAdvanced guard.
+  async function advanceLinkedMilestone(item: Item, checklist: ChecklistItemValue[], direction: 1 | -1) {
+    if (!item.checklistSourceMilestoneId) return false;
     const milestone = milestones.items.find((entry) => entry.id === item.checklistSourceMilestoneId);
-    if (!milestone) return;
+    if (!milestone) return false;
     const completedNames = new Set(checklist.filter((row) => row.value === true).map((row) => row.itemName));
-    if (completedNames.size === 0) return;
-    await milestones.update(milestone.id, {
+    if (completedNames.size === 0) return false;
+    const ok = await milestones.update(milestone.id, {
       steps: milestone.steps.map((step) =>
         completedNames.has(step.title)
-          ? { ...step, completedSessions: Math.min(step.sessionsRequired, step.completedSessions + 1) }
+          ? {
+              ...step,
+              completedSessions: Math.max(0, Math.min(step.sessionsRequired, step.completedSessions + direction)),
+            }
           : step,
       ),
     });
+    return ok;
   }
 
   async function endTask(
@@ -420,7 +428,13 @@ function useDataStore() {
   ) {
     const instance = itemOccurrences.items.find((occurrence) => occurrence.id === instanceId);
     if (!instance) return false;
-    const ok = await persistInstance({
+    const item = items.items.find((entry) => entry.id === instance.itemId);
+    // Only the first completion counts toward the milestone. Re-saving via "Edit
+    // this completion" hits this same path, and without the guard each save would
+    // advance the milestone again.
+    const shouldAdvance = !instance.milestoneAdvanced;
+    const advanced = shouldAdvance && item ? await advanceLinkedMilestone(item, checklist, 1) : false;
+    return persistInstance({
       ...instance,
       state: "completed",
       endTime,
@@ -428,12 +442,30 @@ function useDataStore() {
       checklist,
       rating,
       ratingNotes,
+      milestoneAdvanced: instance.milestoneAdvanced || advanced,
       history: withHistory(instance, { type: "end", oldValue: instance.startTime ?? "", newValue: endTime, reason: "" }),
     });
-    if (!ok) return false;
-    const item = items.items.find((entry) => entry.id === instance.itemId);
-    if (item) await advanceLinkedMilestone(item, checklist);
-    return true;
+  }
+
+  /** Undo a completion — back to not-started, keeping the checklist and scores that
+   * were recorded so reopening isn't destructive. Any milestone progress this
+   * occurrence contributed is rolled back, since the session is no longer claimed
+   * to have happened. */
+  async function reopenTask(instanceId: string, reason: string) {
+    const instance = itemOccurrences.items.find((occurrence) => occurrence.id === instanceId);
+    if (!instance) return false;
+    if (instance.milestoneAdvanced) {
+      const item = items.items.find((entry) => entry.id === instance.itemId);
+      if (item) await advanceLinkedMilestone(item, instance.checklist, -1);
+    }
+    return persistInstance({
+      ...instance,
+      state: "not_started",
+      endTime: undefined,
+      endTimeZone: undefined,
+      milestoneAdvanced: false,
+      history: withHistory(instance, { type: "reopen", oldValue: "completed", newValue: "not_started", reason }),
+    });
   }
 
   async function rescheduleTask(template: Item, date: string, newDate: string, newTime: string, reason: string) {
@@ -581,6 +613,7 @@ function useDataStore() {
     locations,
     shelfLifeDefaultsDays,
     completeTask,
+    reopenTask,
     occurrenceFor,
     isCompletedOn,
     logMilestoneSession,

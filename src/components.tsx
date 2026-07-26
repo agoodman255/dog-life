@@ -500,9 +500,9 @@ export function ItemDetailModal({
    * can run the item but never change what it is. */
   onEdit?: (item: Item) => void;
 }) {
-  const { dogs, milestones, locations, people, getInstance, startTask, endTask, rescheduleTask, skipTask, delegateTask, deleteItem } = useStore();
+  const { dogs, milestones, locations, people, getInstance, startTask, endTask, reopenTask, rescheduleTask, skipTask, delegateTask, deleteItem } = useStore();
   const { navigate, timezone } = useNavigation();
-  const [activePanel, setActivePanel] = useState<null | "start" | "end" | "reschedule" | "skip" | "delegate" | "log">(null);
+  const [activePanel, setActivePanel] = useState<null | "start" | "end" | "reopen" | "reschedule" | "skip" | "delegate" | "log">(null);
   const [error, setError] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
@@ -603,6 +603,28 @@ export function ItemDetailModal({
     }
     const ok = await endTask(fresh.id, nowIso, timezone, buildDefaultChecklist(task, milestones.items), rating);
     if (!ok) setError(true);
+    setSubmitting(false);
+  }
+
+  const [reopenReason, setReopenReason] = useState("");
+
+  function openReopen() {
+    setError(false);
+    setActivePanel("reopen");
+    setReopenReason("");
+  }
+
+  async function confirmReopen() {
+    if (submitting || !instance) return;
+    if (!reopenReason.trim()) {
+      setError(true);
+      return;
+    }
+    setSubmitting(true);
+    setError(false);
+    const ok = await reopenTask(instance.id, reopenReason.trim());
+    if (!ok) setError(true);
+    else setActivePanel(null);
     setSubmitting(false);
   }
 
@@ -843,6 +865,7 @@ export function ItemDetailModal({
               {instance.rating ? ` · Rated ${instance.rating}/5` : ""}
             </p>
             {instance.ratingNotes && <p className="small">{instance.ratingNotes}</p>}
+            {instance.milestoneAdvanced && <p className="small">Counted toward its linked milestone.</p>}
             <div className="checklist">
               {instance.checklist.map((item) => (
                 <div key={`${item.dogId ?? "all"}-${item.itemName}`} className="checklist-summary-item">
@@ -853,9 +876,36 @@ export function ItemDetailModal({
                 </div>
               ))}
             </div>
-            <button className="text-button" type="button" onClick={openEnd}>
-              Edit this completion
-            </button>
+            <div className="row" style={{ gap: 12 }}>
+              <button className="text-button" type="button" onClick={openEnd}>
+                Edit this completion
+              </button>
+              <button className="text-button danger" type="button" onClick={openReopen}>
+                Mark as not done
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activePanel === "reopen" && (
+          <div className="task-lifecycle-panel">
+            <p className="small">
+              This goes back to not started. The checklist and scores you recorded are kept, so finishing again picks up
+              where you left off.
+              {instance?.milestoneAdvanced ? " The milestone progress it counted for will be rolled back." : ""}
+            </p>
+            <label>
+              Why? (required)
+              <textarea rows={2} value={reopenReason} onChange={(event) => setReopenReason(event.target.value)} />
+            </label>
+            <div className="form-actions">
+              <button className="text-button" type="button" onClick={() => setActivePanel(null)}>
+                Cancel
+              </button>
+              <button className="primary-button" type="button" onClick={confirmReopen} disabled={submitting}>
+                Confirm
+              </button>
+            </div>
           </div>
         )}
 

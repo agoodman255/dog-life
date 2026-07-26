@@ -1662,7 +1662,6 @@ export function HealthView() {
     .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
   return (
     <div className="stack">
-      <CalendarView />
       <section className="panel">
         <div className="section-heading">
           <div>

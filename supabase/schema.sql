@@ -470,8 +470,13 @@ create table if not exists item_occurrences (
   rating int,
   rating_notes text,
   checklist jsonb not null default '[]',
+  -- Guard against double-counting milestone progress: re-saving a completion or
+  -- reopening and finishing again would otherwise advance it every time.
+  milestone_advanced boolean not null default false,
   history jsonb not null default '[]'
 );
+
+alter table item_occurrences add column if not exists milestone_advanced boolean not null default false;
 
 -- Timestamped log entries against an item. Multiple per item (and per occurrence)
 -- is the point: weight over time, symptoms across days. `processed_at` is stamped
