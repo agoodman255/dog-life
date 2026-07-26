@@ -743,7 +743,7 @@ export function AloneTimeLogForm({
           <input type="number" min={1} {...register("durationMinutes", { valueAsNumber: true })} />
         </label>
       </div>
-      <label>
+      <div className="form-field">
         Which dog(s) was this?
         <div className="subtabs" role="group" aria-label="Dogs covered">
           {dogOptions.map((dog) => (
@@ -753,7 +753,7 @@ export function AloneTimeLogForm({
           ))}
         </div>
         {errors.dogIds && <small className="form-error">{errors.dogIds.message}</small>}
-      </label>
+      </div>
       <label>
         Notes
         <textarea rows={2} {...register("notes")} placeholder="How did it go? Any signs of stress?" />
@@ -1161,10 +1161,10 @@ export function ItemForm({
           <input {...register("title")} />
           {errors.title && <small className="form-error">{errors.title.message}</small>}
         </label>
-        <label>
+        <div className="form-field">
           Category
           <CategoryPicker value={category} onChange={handleCategoryChange} />
-        </label>
+        </div>
       </div>
 
       {/* The two capability toggles, stated in plain language. This block is the
@@ -1337,7 +1337,7 @@ export function ItemForm({
               <input type="number" min={1} {...register("interval", { valueAsNumber: true })} />
             </label>
             {frequency === "weekly" && (
-              <label>
+              <div className="form-field">
                 Days of week
                 <div className="subtabs" role="group" aria-label="Days of week">
                   {DAY_OF_WEEK_OPTIONS.map((day) => (
@@ -1346,7 +1346,7 @@ export function ItemForm({
                     </button>
                   ))}
                 </div>
-              </label>
+              </div>
             )}
             {frequency === "monthly" && (
               <label>
@@ -1419,7 +1419,7 @@ export function ItemForm({
           </select>
         </label>
 
-        <label>
+        <div className="form-field">
           Also attending (optional)
           <div className="subtabs" role="group" aria-label="Attendees">
             {peopleOptions.map((person) => (
@@ -1428,9 +1428,9 @@ export function ItemForm({
               </button>
             ))}
           </div>
-        </label>
+        </div>
 
-        <label>
+        <div className="form-field">
           Dogs involved (optional)
           <div className="subtabs" role="group" aria-label="Dogs involved">
             {dogOptions.map((dog) => (
@@ -1439,7 +1439,7 @@ export function ItemForm({
               </button>
             ))}
           </div>
-        </label>
+        </div>
 
         <label>
           Dog alone time required

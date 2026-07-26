@@ -2025,7 +2025,8 @@ textarea:focus-visible,
   gap: 14px;
 }
 
-.entity-form label {
+.entity-form label,
+.entity-form .form-field {
   display: grid;
   gap: 4px;
   font-size: 0.85rem;
