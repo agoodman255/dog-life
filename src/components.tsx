@@ -500,9 +500,9 @@ export function ItemDetailModal({
    * can run the item but never change what it is. */
   onEdit?: (item: Item) => void;
 }) {
-  const { dogs, milestones, locations, people, getInstance, startTask, endTask, reopenTask, rescheduleTask, skipTask, delegateTask, deleteItem } = useStore();
+  const { dogs, milestones, locations, people, getInstance, startTask, endTask, reopenTask, unstartTask, rescheduleTask, skipTask, delegateTask, deleteItem } = useStore();
   const { navigate, timezone } = useNavigation();
-  const [activePanel, setActivePanel] = useState<null | "start" | "end" | "reopen" | "reschedule" | "skip" | "delegate" | "log">(null);
+  const [activePanel, setActivePanel] = useState<null | "start" | "end" | "reopen" | "unstart" | "reschedule" | "skip" | "delegate" | "log">(null);
   const [error, setError] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
@@ -623,6 +623,21 @@ export function ItemDetailModal({
     setSubmitting(true);
     setError(false);
     const ok = await reopenTask(instance.id, reopenReason.trim());
+    if (!ok) setError(true);
+    else setActivePanel(null);
+    setSubmitting(false);
+  }
+
+  function openUnstart() {
+    setError(false);
+    setActivePanel("unstart");
+  }
+
+  async function confirmUnstart() {
+    if (submitting || !instance) return;
+    setSubmitting(true);
+    setError(false);
+    const ok = await unstartTask(instance.id);
     if (!ok) setError(true);
     else setActivePanel(null);
     setSubmitting(false);
@@ -847,6 +862,9 @@ export function ItemDetailModal({
             <button className="text-button" type="button" onClick={openSkip}>
               Skip
             </button>
+            <button className="text-button danger" type="button" onClick={openUnstart}>
+              Mark not as started
+            </button>
           </div>
         )}
 
@@ -903,6 +921,20 @@ export function ItemDetailModal({
                 Cancel
               </button>
               <button className="primary-button" type="button" onClick={confirmReopen} disabled={submitting}>
+                Confirm
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activePanel === "unstart" && (
+          <div className="task-lifecycle-panel">
+            <p className="small">This goes back to not started. The start time you set will be cleared.</p>
+            <div className="form-actions">
+              <button className="text-button" type="button" onClick={() => setActivePanel(null)}>
+                Cancel
+              </button>
+              <button className="primary-button" type="button" onClick={confirmUnstart} disabled={submitting}>
                 Confirm
               </button>
             </div>

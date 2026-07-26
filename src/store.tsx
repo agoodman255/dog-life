@@ -447,6 +447,21 @@ function useDataStore() {
     });
   }
 
+  /** Undo a start — back to not-started, before any completion data exists. Just
+   * clears the start time so the task looks untouched; nothing else to roll back
+   * since only a completion (not a start) can advance a milestone. */
+  async function unstartTask(instanceId: string) {
+    const instance = itemOccurrences.items.find((occurrence) => occurrence.id === instanceId);
+    if (!instance) return false;
+    return persistInstance({
+      ...instance,
+      state: "not_started",
+      startTime: undefined,
+      startTimeZone: undefined,
+      history: withHistory(instance, { type: "unstart", oldValue: instance.startTime ?? "", newValue: "", reason: "" }),
+    });
+  }
+
   /** Undo a completion — back to not-started, keeping the checklist and scores that
    * were recorded so reopening isn't destructive. Any milestone progress this
    * occurrence contributed is rolled back, since the session is no longer claimed
@@ -614,6 +629,7 @@ function useDataStore() {
     shelfLifeDefaultsDays,
     completeTask,
     reopenTask,
+    unstartTask,
     occurrenceFor,
     isCompletedOn,
     logMilestoneSession,

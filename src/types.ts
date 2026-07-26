@@ -261,7 +261,7 @@ export type ItemState =
   | "assigned_pending"
   | "reassigned";
 
-export type ItemHistoryEntryType = "start" | "end" | "reopen" | "reschedule" | "skip" | "delegate" | "accept" | "decline";
+export type ItemHistoryEntryType = "start" | "unstart" | "end" | "reopen" | "reschedule" | "skip" | "delegate" | "accept" | "decline";
 
 export type ItemHistoryEntry = {
   id: string;
