@@ -13,9 +13,45 @@
 -- paste without looking any ids up.
 
 -- ===========================================================================
--- 0. Look before you leap — what did the migration actually produce?
+-- 0a. Reconciliation — did everything actually make it across?
 -- ===========================================================================
--- Run this first. It's read-only.
+-- Run this first. Read-only. The migration's inserts use `on conflict do nothing`,
+-- so a title that collides with an already-inserted one is silently skipped —
+-- this is how you find out if that happened.
+
+select 'source rows (tasks + calendar_events + health_events)' as check, count(*)::text as value
+  from (select title from tasks
+        union all select title from calendar_events
+        union all select title from health_events) s
+union all select 'migrated items',            count(*)::text from items
+union all select 'old task_instances',        count(*)::text from task_instances
+union all select 'new item_occurrences',      count(*)::text from item_occurrences
+union all select 'deletion audit rows moved', count(*)::text from item_deletions
+union all select '--- capability split ---',  ''
+union all select 'needs completing',          count(*)::text from items where requires_completion
+union all select 'logs data',                 count(*)::text from items where requires_log
+union all select 'calendar only',             count(*)::text from items
+       where not requires_completion and not requires_log;
+
+-- The first two numbers should match. If `migrated items` is lower, run this to
+-- see exactly which rows were skipped — then insert them by hand with a
+-- disambiguated title.
+
+select s.source, s.title
+  from (select 'tasks' as source, title from tasks
+        union all select 'calendar_events', title from calendar_events
+        union all select 'health_events', title from health_events) s
+  left join items i on i.title = s.title
+ where i.id is null
+ order by s.source, s.title;
+
+
+-- ===========================================================================
+-- 0b. Shape check — what did the migration decide about each item?
+-- ===========================================================================
+-- Also read-only. This is the input for choosing which blocks below to run —
+-- paste the output back to Claude if you want the exact statements written for
+-- your actual rows.
 
 select
   category,
