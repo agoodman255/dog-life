@@ -385,68 +385,6 @@ create table if not exists product_feedback (
 );
 
 -- ---------------------------------------------------------------------------
--- Row Level Security
---
--- v1 policy: any authenticated user can read/write everything. This app has
--- exactly one household with two known logins (Andrew, Bree), so per-household
--- scoping isn't worth the complexity yet — the goal right now is just "signed
--- out visitors see nothing," which this achieves. If more households/users are
--- ever added, tighten these to check people.auth_user_id = auth.uid() joined
--- through household_id instead of a blanket authenticated check.
--- ---------------------------------------------------------------------------
-
-alter table households enable row level security;
-alter table people enable row level security;
-alter table dogs enable row level security;
-alter table tasks enable row level security;
-alter table milestones enable row level security;
-alter table health_events enable row level security;
-alter table journal_entries enable row level security;
-alter table exposure_items enable row level security;
-alter table relationship_logs enable row level security;
-alter table feedback enable row level security;
-alter table product_feedback enable row level security;
-alter table calendar_events enable row level security;
-alter table calendar_event_deletions enable row level security;
-alter table task_deletions enable row level security;
-alter table alone_time_logs enable row level security;
-alter table task_instances enable row level security;
-alter table inbox_requests enable row level security;
-alter table meals enable row level security;
-alter table recipe_ingredients enable row level security;
-alter table inventory enable row level security;
-alter table grocery_list enable row level security;
-alter table items enable row level security;
-alter table item_occurrences enable row level security;
-alter table item_logs enable row level security;
-alter table item_deletions enable row level security;
-
-do $$
-declare
-  t text;
-begin
-  for t in select unnest(array[
-    'households', 'people', 'dogs', 'tasks', 'milestones',
-    'health_events', 'journal_entries', 'exposure_items',
-    'relationship_logs', 'feedback', 'product_feedback',
-    'calendar_events', 'calendar_event_deletions', 'task_deletions', 'alone_time_logs', 'task_instances', 'inbox_requests',
-    'meals', 'recipe_ingredients', 'inventory', 'grocery_list',
-    'items', 'item_occurrences', 'item_logs', 'item_deletions'
-  ])
-  loop
-    if not exists (
-      select 1 from pg_policies where tablename = t and policyname = 'authenticated read/write'
-    ) then
-      execute format(
-        'create policy "authenticated read/write" on %I for all to authenticated using (true) with check (true);',
-        t
-      );
-    end if;
-  end loop;
-end $$;
-
-
--- ---------------------------------------------------------------------------
 -- Unified items (2026-07-25)
 --
 -- Replaces the old tasks / calendar_events / health_events split. Those three
@@ -568,6 +506,69 @@ create table if not exists item_deletions (
 
 -- inbox_requests now points at item_occurrences instead of task_instances.
 alter table inbox_requests add column if not exists item_occurrence_id text;
+
+-- ---------------------------------------------------------------------------
+-- Row Level Security
+--
+-- v1 policy: any authenticated user can read/write everything. This app has
+-- exactly one household with two known logins (Andrew, Bree), so per-household
+-- scoping isn't worth the complexity yet — the goal right now is just "signed
+-- out visitors see nothing," which this achieves. If more households/users are
+-- ever added, tighten these to check people.auth_user_id = auth.uid() joined
+-- through household_id instead of a blanket authenticated check.
+-- ---------------------------------------------------------------------------
+
+alter table households enable row level security;
+alter table people enable row level security;
+alter table dogs enable row level security;
+alter table tasks enable row level security;
+alter table milestones enable row level security;
+alter table health_events enable row level security;
+alter table journal_entries enable row level security;
+alter table exposure_items enable row level security;
+alter table relationship_logs enable row level security;
+alter table feedback enable row level security;
+alter table product_feedback enable row level security;
+alter table calendar_events enable row level security;
+alter table calendar_event_deletions enable row level security;
+alter table task_deletions enable row level security;
+alter table alone_time_logs enable row level security;
+alter table task_instances enable row level security;
+alter table inbox_requests enable row level security;
+alter table meals enable row level security;
+alter table recipe_ingredients enable row level security;
+alter table inventory enable row level security;
+alter table grocery_list enable row level security;
+alter table items enable row level security;
+alter table item_occurrences enable row level security;
+alter table item_logs enable row level security;
+alter table item_deletions enable row level security;
+
+do $$
+declare
+  t text;
+begin
+  for t in select unnest(array[
+    'households', 'people', 'dogs', 'tasks', 'milestones',
+    'health_events', 'journal_entries', 'exposure_items',
+    'relationship_logs', 'feedback', 'product_feedback',
+    'calendar_events', 'calendar_event_deletions', 'task_deletions', 'alone_time_logs', 'task_instances', 'inbox_requests',
+    'meals', 'recipe_ingredients', 'inventory', 'grocery_list',
+    'items', 'item_occurrences', 'item_logs', 'item_deletions'
+  ])
+  loop
+    if not exists (
+      select 1 from pg_policies where tablename = t and policyname = 'authenticated read/write'
+    ) then
+      execute format(
+        'create policy "authenticated read/write" on %I for all to authenticated using (true) with check (true);',
+        t
+      );
+    end if;
+  end loop;
+end $$;
+
+
 
 -- ---------------------------------------------------------------------------
 -- Realtime
