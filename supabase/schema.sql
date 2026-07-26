@@ -496,13 +496,31 @@ create index if not exists item_logs_unprocessed_idx on item_logs (processed_at)
 create table if not exists item_deletions (
   id text primary key,
   household_id uuid not null references households (id) on delete cascade,
-  item_id uuid not null,
+  -- text, not uuid, and deliberately no foreign key: this is an audit trail of a
+  -- row that no longer exists, so the id is a dead reference kept for the record.
+  -- Matches how calendar_event_deletions.event_id and task_deletions.task_id were
+  -- both typed, and how ItemDeletion.itemId is a plain string in types.ts.
+  item_id text not null,
   item_title text not null,
   scope text not null,
   occurrence_date date,
   note text not null,
   deleted_at timestamptz not null default now()
 );
+
+-- `create table if not exists` above is a no-op for anyone who ran an earlier
+-- version of this file, where item_id was mistyped as uuid — which made the
+-- migration fail on the deletion-audit copy, since both source columns are text.
+-- The table is an audit log that starts empty, so this widening is free.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'item_deletions' and column_name = 'item_id' and data_type = 'uuid'
+  ) then
+    alter table item_deletions alter column item_id type text using item_id::text;
+  end if;
+end $$;
 
 -- inbox_requests now points at item_occurrences instead of task_instances.
 alter table inbox_requests add column if not exists item_occurrence_id text;
