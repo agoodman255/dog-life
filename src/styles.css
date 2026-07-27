@@ -2727,6 +2727,30 @@ textarea:focus-visible,
   gap: 14px;
 }
 
+/* Every field wrapper — "Which dog(s)?", the primary chips, the rating, Notes — needs
+   its title stacked above its control. Without this, a bare <label> or <div> here has
+   no layout of its own: the title text and the control (especially a <textarea>,
+   which is inline-replaced) can end up sitting on the same line instead of the title
+   reading as a heading above its field. Mirrors .entity-form's identical rule. */
+.quick-log-form label,
+.quick-log-form .form-field {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.quick-log-form textarea {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--bg);
+  color: var(--ink);
+  font-weight: 400;
+  font-size: 0.95rem;
+}
+
 /* Kind picker. Icon over label so five options still fit a phone without wrapping
    into a scrollable row. */
 .quick-log-kinds {
@@ -2971,6 +2995,32 @@ textarea:focus-visible,
 
 .quick-log-row .icon-button.small:hover {
   color: var(--ink);
+}
+
+/* Edit (pencil) above delete (trash), pinned to the far right of the row — a fixed
+   vertical stack rather than sitting inline with the time, so the two destructive/
+   corrective actions read as a distinct control cluster. */
+.quick-log-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.quick-log-editing-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quick-log-locked-value {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--ink);
+  font-weight: 700;
 }
 
 /* "Work on next" — the deterministic recommendation, shown both in the Log section

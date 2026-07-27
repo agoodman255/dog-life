@@ -12,6 +12,7 @@ import {
   Import,
   Info,
   Moon,
+  Pencil,
   Plus,
   Sparkles,
   Sun,
@@ -228,7 +229,9 @@ function QuickLogRow({ log, dogs }: { log: ItemLog; dogs: Dog[] }) {
   const { deleteQuickLog, milestones } = useStore();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
   const Icon = QUICK_LOG_ICONS[log.quickLogKind ?? "potty"];
+  const label = quickLogSpec(log.quickLogKind ?? "potty").label;
   const names = log.dogIds
     .map((id) => dogs.find((dog) => dog.id === id)?.name)
     .filter(Boolean)
@@ -251,18 +254,8 @@ function QuickLogRow({ log, dogs }: { log: ItemLog; dogs: Dog[] }) {
       </span>
       <div className="quick-log-row-body">
         <div className="row between">
-          <strong>{summary || quickLogSpec(log.quickLogKind ?? "potty").label}</strong>
-          <span className="row" style={{ gap: 6, alignItems: "center" }}>
-            <span className="small">{time}</span>
-            <button
-              className="icon-button small"
-              type="button"
-              onClick={() => setConfirming((prev) => !prev)}
-              aria-label={`Delete this ${quickLogSpec(log.quickLogKind ?? "potty").label.toLowerCase()} entry`}
-            >
-              <Trash2 size={13} aria-hidden />
-            </button>
-          </span>
+          <strong>{summary || label}</strong>
+          <span className="small">{time}</span>
         </div>
         <p className="small">
           {names}
@@ -287,6 +280,29 @@ function QuickLogRow({ log, dogs }: { log: ItemLog; dogs: Dog[] }) {
           </div>
         )}
       </div>
+      <div className="quick-log-row-actions">
+        <button
+          className="icon-button small"
+          type="button"
+          onClick={() => setEditing(true)}
+          aria-label={`Edit this ${label.toLowerCase()} entry`}
+        >
+          <Pencil size={13} aria-hidden />
+        </button>
+        <button
+          className="icon-button small"
+          type="button"
+          onClick={() => setConfirming((prev) => !prev)}
+          aria-label={`Delete this ${label.toLowerCase()} entry`}
+        >
+          <Trash2 size={13} aria-hidden />
+        </button>
+      </div>
+      {editing && (
+        <Modal title="Edit entry" onClose={() => setEditing(false)}>
+          <QuickLogForm date={log.occurrenceDate ?? ""} editingLog={log} onClose={() => setEditing(false)} />
+        </Modal>
+      )}
     </article>
   );
 }

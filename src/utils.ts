@@ -157,6 +157,22 @@ export const QUICK_LOG_SPECS: QuickLogSpec[] = [
         ],
       },
       {
+        // A clear-to-dark scale, same idea as stool consistency: both are hydration/
+        // health signals worth a quick tap rather than free text. Ordered light to
+        // dark so the chips read left-to-right the way the scale is usually pictured.
+        name: "Color",
+        label: "Pee color",
+        input: "choice",
+        showWhen: { field: "Type", values: ["pee", "both"] },
+        options: [
+          { value: "clear", label: "Clear" },
+          { value: "pale", label: "Pale yellow" },
+          { value: "yellow", label: "Yellow" },
+          { value: "dark", label: "Dark yellow" },
+          { value: "amber", label: "Very dark / amber" },
+        ],
+      },
+      {
         name: "Consistency",
         label: "Stool consistency",
         input: "choice",
@@ -180,12 +196,8 @@ export const QUICK_LOG_SPECS: QuickLogSpec[] = [
       label: "What kind of play?",
       input: "choice",
       options: [
-        { value: "fetch", label: "Fetch" },
-        { value: "tug", label: "Tug" },
-        { value: "chase", label: "Chase" },
-        { value: "puzzle", label: "Puzzle / enrichment" },
-        { value: "social", label: "With another dog" },
-        { value: "free", label: "Free play" },
+        { value: "physical", label: "Physical" },
+        { value: "mental", label: "Mental" },
       ],
     },
     fields: [
@@ -196,9 +208,7 @@ export const QUICK_LOG_SPECS: QuickLogSpec[] = [
         input: "choice",
         options: [
           { value: "indoors", label: "Indoors" },
-          { value: "yard", label: "Yard" },
-          { value: "park", label: "Park" },
-          { value: "trail", label: "Trail" },
+          { value: "outdoors", label: "Outdoors" },
         ],
       },
       {
@@ -287,7 +297,7 @@ export const QUICK_LOG_SPECS: QuickLogSpec[] = [
         { value: "refused", label: "Wouldn't drink" },
       ],
     },
-    fields: [{ name: "Amount", label: "Amount (if you measured)", input: "number", unit: "oz" }],
+    fields: [],
     ratingLabel: "How's their hydration?",
     notesPlaceholder: "Anything unusual — gulping, panting, dry gums…",
   },

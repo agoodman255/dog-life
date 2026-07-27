@@ -10,6 +10,7 @@ import {
   FeedbackType,
   Item,
   ItemDeletionScope,
+  ItemLog,
   ItemOccurrence,
   LogFieldValue,
   Milestone,
@@ -516,6 +517,7 @@ export function QuickLogForm({
   date,
   initialKind = "potty",
   initialTrainingType,
+  editingLog,
   onClose,
 }: {
   date: string;
@@ -523,16 +525,30 @@ export function QuickLogForm({
    * panel jump straight to the right kind instead of making you re-pick. */
   initialKind?: QuickLogKind;
   initialTrainingType?: string;
+  /** Present = editing this entry instead of creating a new one. Kind and (for
+   * training) which milestone it's against are fixed once an entry exists — those
+   * aren't mistakes an edit fixes, they're what delete-and-relog is for. Everything
+   * else (dogs, sub-fields, ticked steps, rating, notes) stays editable. */
+  editingLog?: ItemLog;
   onClose: () => void;
 }) {
-  const { dogs, milestones, addQuickLog } = useStore();
-  const [kind, setKind] = useState<QuickLogKind>(initialKind);
-  const [dogIds, setDogIds] = useState<string[]>(() => dogs.items.map((dog) => dog.id));
-  const [selections, setSelections] = useState<Record<string, string | number | null>>({});
-  const [trainingType, setTrainingType] = useState(initialTrainingType ?? "");
-  const [stepTitles, setStepTitles] = useState<string[]>([]);
-  const [rating, setRating] = useState<number | undefined>(undefined);
-  const [notes, setNotes] = useState("");
+  const { dogs, milestones, addQuickLog, editQuickLog } = useStore();
+  const [kind, setKind] = useState<QuickLogKind>(editingLog?.quickLogKind ?? initialKind);
+  const [dogIds, setDogIds] = useState<string[]>(() => editingLog?.dogIds ?? []);
+  const [selections, setSelections] = useState<Record<string, string | number | null>>(() =>
+    editingLog
+      ? Object.fromEntries(editingLog.values.filter((value) => value.fieldName !== "Training type").map((value) => [value.fieldName, value.value]))
+      : {},
+  );
+  const [trainingType, setTrainingType] = useState(() => {
+    if (!editingLog) return initialTrainingType ?? "";
+    if (editingLog.milestoneId) return editingLog.milestoneId;
+    const isAlone = editingLog.values.some((value) => value.fieldName === "Training type" && value.value === "Alone time");
+    return isAlone ? ALONE_TIME_TRAINING_ID : "";
+  });
+  const [stepTitles, setStepTitles] = useState<string[]>(() => editingLog?.advancedStepTitles ?? []);
+  const [rating, setRating] = useState<number | undefined>(editingLog?.rating);
+  const [notes, setNotes] = useState(editingLog?.text ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<QuickLogResult | null>(null);
@@ -610,7 +626,7 @@ export function QuickLogForm({
       values.push({ fieldName: field.name, dataType: field.input === "number" ? "number" : "text", unit: field.unit, value });
     });
 
-    const outcome = await addQuickLog({
+    const input = {
       kind,
       date,
       dogIds,
@@ -620,8 +636,20 @@ export function QuickLogForm({
       milestoneId: kind === "training" && !isAloneTime ? trainingType : undefined,
       completedStepTitles: kind === "training" && !isAloneTime ? stepTitles : [],
       aloneTimeMinutes: isAloneTime ? Number(selections.Duration) : undefined,
-    });
+    };
 
+    // Editing closes straight back to the feed rather than showing the "logged"
+    // summary screen — that screen exists to celebrate a new session (progress,
+    // unlocks, what's next), which is the wrong tone for "I fixed a typo in the notes".
+    if (editingLog) {
+      const outcome = await editQuickLog(editingLog.id, input);
+      setSubmitting(false);
+      if (!outcome) return setError("Couldn't save that. Try again.");
+      onClose();
+      return;
+    }
+
+    const outcome = await addQuickLog(input);
     setSubmitting(false);
     if (!outcome) return setError("Couldn't save that. Try again.");
     setResult(outcome);
@@ -700,26 +728,34 @@ export function QuickLogForm({
     );
   }
 
+  const Icon = QUICK_LOG_ICONS[kind];
+
   return (
     <div className="quick-log-form">
-      <div className="quick-log-kinds" role="tablist" aria-label="What are you logging?">
-        {QUICK_LOG_SPECS.map((entry) => {
-          const Icon = QUICK_LOG_ICONS[entry.kind];
-          return (
-            <button
-              key={entry.kind}
-              type="button"
-              role="tab"
-              aria-selected={kind === entry.kind}
-              className={kind === entry.kind ? "active" : ""}
-              onClick={() => resetKind(entry.kind)}
-            >
-              <Icon size={18} aria-hidden />
-              {entry.label}
-            </button>
-          );
-        })}
-      </div>
+      {editingLog ? (
+        <p className="eyebrow quick-log-editing-label">
+          <Icon size={16} aria-hidden /> Editing this {spec.label.toLowerCase()} entry
+        </p>
+      ) : (
+        <div className="quick-log-kinds" role="tablist" aria-label="What are you logging?">
+          {QUICK_LOG_SPECS.map((entry) => {
+            const KindIcon = QUICK_LOG_ICONS[entry.kind];
+            return (
+              <button
+                key={entry.kind}
+                type="button"
+                role="tab"
+                aria-selected={kind === entry.kind}
+                className={kind === entry.kind ? "active" : ""}
+                onClick={() => resetKind(entry.kind)}
+              >
+                <KindIcon size={18} aria-hidden />
+                {entry.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div className="form-field">
         Which dog(s)?
@@ -734,29 +770,39 @@ export function QuickLogForm({
 
       {kind === "training" ? (
         <>
-          <label>
-            {spec.primary.label}
-            <select
-              value={trainingType}
-              onChange={(event) => {
-                setTrainingType(event.target.value);
-                setStepTitles([]);
-              }}
-            >
-              <option value="">Select a training type…</option>
-              <option value={ALONE_TIME_TRAINING_ID}>Alone time</option>
-              {Object.entries(milestonesByTrack).map(([track, entries]) => (
-                <optgroup key={track} label={track[0].toUpperCase() + track.slice(1)}>
-                  {entries.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.title}
-                      {entry.status === "locked" ? " (not yet unlocked)" : entry.status === "completed" ? " (complete)" : ""}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </label>
+          {editingLog ? (
+            // Which milestone this counts toward isn't editable — that's what
+            // delete-and-relog is for. Only which of its steps got ticked, plus the
+            // shared fields below, can change.
+            <div className="form-field">
+              {spec.primary.label}
+              <p className="quick-log-locked-value">{isAloneTime ? "Alone time" : (selectedMilestone?.title ?? trainingType)}</p>
+            </div>
+          ) : (
+            <label>
+              {spec.primary.label}
+              <select
+                value={trainingType}
+                onChange={(event) => {
+                  setTrainingType(event.target.value);
+                  setStepTitles([]);
+                }}
+              >
+                <option value="">Select a training type…</option>
+                <option value={ALONE_TIME_TRAINING_ID}>Alone time</option>
+                {Object.entries(milestonesByTrack).map(([track, entries]) => (
+                  <optgroup key={track} label={track[0].toUpperCase() + track.slice(1)}>
+                    {entries.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.title}
+                        {entry.status === "locked" ? " (not yet unlocked)" : entry.status === "completed" ? " (complete)" : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+          )}
           {selectedMilestone && (
             <div className="form-field">
               Which steps did you work through?
@@ -867,10 +913,10 @@ export function QuickLogForm({
         </div>
       </div>
 
-      <label>
+      <div className="form-field">
         Notes
         <textarea rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={spec.notesPlaceholder} />
-      </label>
+      </div>
 
       {error && <p className="form-error">{error}</p>}
       <div className="form-actions">
@@ -878,7 +924,7 @@ export function QuickLogForm({
           Cancel
         </button>
         <button className="primary-button" type="button" onClick={submit} disabled={submitting}>
-          {submitting ? "Saving…" : `Log ${spec.label.toLowerCase()}`}
+          {submitting ? "Saving…" : editingLog ? "Save changes" : `Log ${spec.label.toLowerCase()}`}
         </button>
       </div>
     </div>
