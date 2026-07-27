@@ -504,10 +504,19 @@ const TRACK_LABELS: Record<Milestone["track"], string> = {
   relationship: "Relationship",
 };
 
+const TRACK_ORDER: Milestone["track"][] = ["obedience", "socialization", "confidence", "handling", "health"];
+
 /** Picks the training type for a Quick log. Replaced a native <select> holding all
  * 36 milestones in one flat list (2026-07-27) — optgroups alone don't make that
  * navigable on a phone, there was no way to search, and no way to see what a
  * milestone actually involves without selecting it and looking at what appeared.
+ *
+ * Top level mirrors the Training page's tabs (obedience, socialization, confidence,
+ * handling, health, alone time) rather than the individual training types — six
+ * categories fit on a phone screen without scrolling; 36 milestones don't. Each
+ * category expands to its training types on tap (2026-07-27); a per-type "show
+ * steps" expander was tried alongside that and cut for adding a second layer of
+ * disclosure nobody asked for.
  *
  * Collapsed to a single button until opened, so the common case (arriving with a
  * type already chosen, from "Log it" on a recommendation) stays one line. */
@@ -519,29 +528,30 @@ function TrainingTypePicker({
   onChange,
 }: {
   milestones: Milestone[];
-  /** Whose session counts to show on each expanded step. */
+  /** Whose progress to show next to each training type. */
   dogIds: string[];
   dogs: Dog[];
   value: string;
   onChange: (id: string) => void;
 }) {
+  const selected = milestones.find((entry) => entry.id === value);
   const [open, setOpen] = useState(!value);
   const [query, setQuery] = useState("");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expandedTrack, setExpandedTrack] = useState<string | null>(selected?.track ?? null);
 
   const search = query.trim().toLowerCase();
-  const matches = milestones.filter(
-    (milestone) =>
-      search === "" ||
-      milestone.title.toLowerCase().includes(search) ||
-      milestone.steps.some((step) => step.title.toLowerCase().includes(search)),
-  );
-  const byTrack = matches.reduce<Record<string, Milestone[]>>((acc, milestone) => {
-    (acc[milestone.track] ??= []).push(milestone);
-    return acc;
-  }, {});
+  const matchesSearch = (milestone: Milestone) =>
+    search === "" ||
+    milestone.title.toLowerCase().includes(search) ||
+    milestone.steps.some((step) => step.title.toLowerCase().includes(search));
 
-  const selected = milestones.find((entry) => entry.id === value);
+  const groups = TRACK_ORDER.map((track) => ({
+    track,
+    label: TRACK_LABELS[track],
+    entries: milestones.filter((milestone) => milestone.track === track && matchesSearch(milestone)),
+  })).filter((group) => search === "" || group.entries.length > 0);
+  const aloneTimeMatches = search === "" || "alone time".includes(search);
+
   const selectedLabel = value === ALONE_TIME_TRAINING_ID ? "Alone time" : (selected?.title ?? "");
   const countDogs = dogIds.length > 0 ? dogIds : [];
 
@@ -570,72 +580,60 @@ function TrainingTypePicker({
         aria-label="Search training types"
       />
       <div className="training-picker-list">
-        <button
-          type="button"
-          className={`training-picker-option ${value === ALONE_TIME_TRAINING_ID ? "active" : ""}`}
-          onClick={() => {
-            onChange(ALONE_TIME_TRAINING_ID);
-            setOpen(false);
-          }}
-        >
-          <span className="training-picker-option-title">Alone time</span>
-        </button>
-        {Object.entries(byTrack).map(([track, entries]) => (
-          <div className="training-picker-group" key={track}>
-            <p className="training-picker-group-label">{TRACK_LABELS[track as Milestone["track"]]}</p>
-            {entries.map((milestone) => {
-              const isExpanded = expanded === milestone.id;
-              return (
-                <div className="training-picker-row" key={milestone.id}>
-                  <button
-                    type="button"
-                    className={`training-picker-option ${value === milestone.id ? "active" : ""}`}
-                    onClick={() => {
-                      onChange(milestone.id);
-                      setOpen(false);
-                    }}
-                  >
-                    <span className="training-picker-option-title">{milestone.title}</span>
-                    <span className="training-picker-meta">
-                      {countDogs.map((dogId) => {
-                        const name = dogs.find((dog) => dog.id === dogId)?.name ?? "";
-                        return `${name} ${milestoneProgress(milestone, dogId)}%`;
-                      }).join(" · ")}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-button small training-picker-expand"
-                    aria-label={`${isExpanded ? "Hide" : "Show"} steps for ${milestone.title}`}
-                    aria-expanded={isExpanded}
-                    onClick={() => setExpanded(isExpanded ? null : milestone.id)}
-                  >
-                    <ChevronDown size={14} aria-hidden className={isExpanded ? "rotated" : ""} />
-                  </button>
-                  {isExpanded && (
-                    <ul className="training-picker-steps">
-                      {milestone.steps.map((step) => (
-                        <li key={step.title}>
-                          <strong>{step.title}</strong>
-                          <small>{step.successCriteria}</small>
-                          <small>
-                            {countDogs
-                              .map((dogId) => {
-                                const name = dogs.find((dog) => dog.id === dogId)?.name ?? "";
-                                return `${name} ${stepSessions(step, dogId)}/${step.sessionsRequired}`;
-                              })
-                              .join(" · ")}
-                          </small>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+        {groups.map((group) => {
+          const isExpanded = expandedTrack === group.track || (search !== "" && group.entries.length > 0);
+          return (
+            <div className="training-picker-category" key={group.track}>
+              <button
+                type="button"
+                className="training-picker-category-header"
+                aria-expanded={isExpanded}
+                onClick={() => setExpandedTrack(isExpanded ? null : group.track)}
+              >
+                <span>{group.label}</span>
+                <ChevronDown size={16} aria-hidden className={isExpanded ? "rotated" : ""} />
+              </button>
+              {isExpanded && (
+                <div className="training-picker-children">
+                  {group.entries.map((milestone) => (
+                    <button
+                      key={milestone.id}
+                      type="button"
+                      className={`training-picker-option ${value === milestone.id ? "active" : ""}`}
+                      onClick={() => {
+                        onChange(milestone.id);
+                        setOpen(false);
+                      }}
+                    >
+                      <span className="training-picker-option-title">{milestone.title}</span>
+                      <span className="training-picker-meta">
+                        {countDogs
+                          .map((dogId) => {
+                            const name = dogs.find((dog) => dog.id === dogId)?.name ?? "";
+                            return `${name} ${milestoneProgress(milestone, dogId)}%`;
+                          })
+                          .join(" · ")}
+                      </span>
+                    </button>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
-        ))}
-        {matches.length === 0 && <p className="small">Nothing matches "{query.trim()}".</p>}
+              )}
+            </div>
+          );
+        })}
+        {aloneTimeMatches && (
+          <button
+            type="button"
+            className={`training-picker-option training-picker-category-leaf ${value === ALONE_TIME_TRAINING_ID ? "active" : ""}`}
+            onClick={() => {
+              onChange(ALONE_TIME_TRAINING_ID);
+              setOpen(false);
+            }}
+          >
+            <span className="training-picker-option-title">Alone time</span>
+          </button>
+        )}
+        {groups.length === 0 && !aloneTimeMatches && <p className="small">Nothing matches "{query.trim()}".</p>}
       </div>
     </div>
   );

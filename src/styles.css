@@ -3098,22 +3098,47 @@ textarea:focus-visible,
   overflow-y: auto;
 }
 
-.training-picker-group-label {
-  margin: 8px 0 2px;
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--teal);
+.training-picker-category + .training-picker-category {
+  margin-top: 4px;
 }
 
-/* The row is a grid so the expand chevron sits beside the option button and the
-   expanded step list spans the full width underneath both. */
-.training-picker-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
+.training-picker-category-header {
+  display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  min-height: 40px;
+}
+
+.training-picker-category-header:hover {
+  background: var(--soft);
+}
+
+.training-picker-category-header svg {
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.training-picker-category-header svg.rotated {
+  transform: rotate(180deg);
+}
+
+.training-picker-children {
+  display: grid;
+  gap: 2px;
+  padding-left: 8px;
+}
+
+.training-picker-category-leaf {
+  font-weight: 800;
 }
 
 .training-picker-option {
@@ -3153,48 +3178,6 @@ textarea:focus-visible,
 
 .training-picker-option.active .training-picker-meta {
   color: rgba(249, 244, 233, 0.8);
-}
-
-/* Sized to the option row beside it — a 30px target next to a 40px one reads as an
-   afterthought and is fiddly on a phone, and expanding is a primary action here. */
-.training-picker-expand.icon-button.small {
-  width: 40px;
-  height: 40px;
-  min-height: 40px;
-  color: var(--muted);
-}
-
-.training-picker-expand.icon-button.small:hover {
-  color: var(--ink);
-}
-
-.training-picker-expand svg {
-  transition: transform 0.15s ease;
-}
-
-.training-picker-expand svg.rotated {
-  transform: rotate(180deg);
-}
-
-.training-picker-steps {
-  grid-column: 1 / -1;
-  list-style: none;
-  margin: 2px 0 6px;
-  padding: 8px 10px;
-  display: grid;
-  gap: 8px;
-  border-radius: 8px;
-  background: var(--soft);
-}
-
-.training-picker-steps li {
-  display: grid;
-  gap: 1px;
-}
-
-.training-picker-steps small {
-  color: var(--muted);
-  font-size: 0.78rem;
 }
 
 /* Collapsed state — one line showing what's picked, with a way back in. */
