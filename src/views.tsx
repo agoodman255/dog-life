@@ -4,10 +4,12 @@ import {
   Bell,
   Calendar as CalendarIcon,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
   Download,
+  GraduationCap,
   HeartPulse,
   Import,
   Info,
@@ -71,6 +73,7 @@ import {
   ItemLog,
   ItemOccurrence,
   ItemState,
+  Location,
   Milestone,
   NotificationItem,
   QuickLogKind,
@@ -664,8 +667,8 @@ function assignTracks(items: AgendaItem[]): (AgendaItem & { track: number; track
   return result;
 }
 
-const DAY_START_MIN = 6 * 60;
-const DAY_END_MIN = 22 * 60;
+const DAY_START_MIN = 0;
+const DAY_END_MIN = 24 * 60;
 const HOUR_HEIGHT = 48;
 const MOBILE_HOUR_HEIGHT = 96;
 
@@ -789,10 +792,12 @@ function CalendarWeekStrip({
 
 function CalendarDayAgenda({
   items,
+  locations,
   shouldDim,
   onOpenItem,
 }: {
   items: AgendaItem[];
+  locations: Location[];
   shouldDim: (item: AgendaItem) => boolean;
   onOpenItem: (item: Item, date: string) => void;
 }) {
@@ -810,17 +815,24 @@ function CalendarDayAgenda({
   return (
     <div className="day-agenda">
       {unscheduled.length > 0 && (
-        <div className="day-agenda-unscheduled">
-          {unscheduled.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`agenda-chip ${item.placeholder ? "placeholder" : ""} ${shouldDim(item) ? "dimmed" : ""}`}
-              onClick={() => openItem(item)}
-            >
-              {item.title}
-            </button>
-          ))}
+        <div className="day-allday-section">
+          <p className="day-allday-heading">All day</p>
+          <div className="day-allday-list">
+            {unscheduled.map((item) => {
+              const meta = agendaMetaLine(item, locations);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`day-allday-row ${item.item.requiresCompletion ? "completable" : "informational"} ${item.placeholder ? "placeholder" : ""} ${shouldDim(item) ? "dimmed" : ""} ${item.coverageNeeded ? "needs-coverage" : ""}`}
+                  onClick={() => openItem(item)}
+                >
+                  <strong>{item.title}</strong>
+                  {meta && <span className="day-allday-meta">{meta}</span>}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
       <div className="day-timeline" style={{ height: totalHours * hourHeight }}>
@@ -853,6 +865,87 @@ function CalendarDayAgenda({
       </div>
     </div>
   );
+}
+
+// One row per scheduled item in time order, no blank-hour scaffolding — so a day
+// with three events at 7am, noon, and 9pm reads as three rows, not a scroll through
+// empty timeline. Start/end both show (iOS Calendar's condensed list) so gaps between
+// items are still inferrable without rendering the gap itself.
+function CalendarDayCondensed({
+  items,
+  locations,
+  shouldDim,
+  onOpenItem,
+}: {
+  items: AgendaItem[];
+  locations: Location[];
+  shouldDim: (item: AgendaItem) => boolean;
+  onOpenItem: (item: Item, date: string) => void;
+}) {
+  const allDay = items.filter((item) => item.startMinutes === null);
+  const scheduled = items.filter((item) => item.startMinutes !== null).sort((a, b) => a.startMinutes! - b.startMinutes!);
+
+  function openItem(entry: AgendaItem) {
+    onOpenItem(entry.item, entry.date);
+  }
+
+  // All-day entries lead the list (nothing to sort them by) and swap the start/end
+  // time column for a plain "All day" label; everything else about the row is shared.
+  function renderRow(entry: AgendaItem) {
+    const meta = agendaMetaLine(entry, locations);
+    return (
+      <button
+        key={entry.id}
+        type="button"
+        className={`day-condensed-row ${entry.item.requiresCompletion ? "completable" : "informational"} ${entry.placeholder ? "placeholder" : ""} ${shouldDim(entry) ? "dimmed" : ""} ${entry.coverageNeeded ? "needs-coverage" : ""} state-${entry.state ?? ""}`}
+        onClick={() => openItem(entry)}
+      >
+        <div className="day-condensed-time">
+          {entry.startMinutes === null ? (
+            <span className="day-condensed-allday-label">All day</span>
+          ) : (
+            <>
+              <span>{formatMinutes(entry.startMinutes)}</span>
+              <span className="day-condensed-time-end">{formatMinutes(entry.startMinutes + entry.durationMinutes)}</span>
+            </>
+          )}
+        </div>
+        <div className="day-condensed-body">
+          <div className="day-condensed-title-row">
+            <strong>{entry.title}</strong>
+            {entry.priority && <span className={`priority ${entry.priority}`}>{entry.priority}</span>}
+            {entry.state && entry.state !== "not_started" && (
+              <span className={`state-tag ${entry.state}`}>{itemStateLabels[entry.state]}</span>
+            )}
+          </div>
+          {meta && <span className="day-condensed-meta">{meta}</span>}
+        </div>
+      </button>
+    );
+  }
+
+  return (
+    <div className="day-agenda day-agenda-condensed">
+      {allDay.length === 0 && scheduled.length === 0 ? (
+        <p className="day-condensed-empty">Nothing scheduled today.</p>
+      ) : (
+        <div className="day-condensed-list">
+          {allDay.map(renderRow)}
+          {scheduled.map(renderRow)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Location beats a freeform note beats which dogs are involved — whichever is the
+// single most useful thing to see without opening the item.
+function agendaMetaLine(entry: AgendaItem, locations: Location[]): string {
+  const location = entry.item.location ? locations.find((loc) => loc.id === entry.item.location)?.name : undefined;
+  if (location) return location;
+  if (entry.item.notes) return entry.item.notes.split(/(?<=[.!?])\s+/)[0];
+  if (entry.dogNames) return entry.dogNames;
+  return "";
 }
 
 function DeleteEventModal({
@@ -1036,6 +1129,7 @@ function CategoryFilterPicker({ selected, onChange }: { selected: Set<Category>;
 }
 
 const viewerStorageKey = "dog-life-os-viewer";
+const dayDisplayStorageKey = "dog-life-os-day-display";
 
 function loadViewerId(fallback: string): string {
   try {
@@ -1045,8 +1139,16 @@ function loadViewerId(fallback: string): string {
   }
 }
 
+function loadDayDisplay(): "full" | "condensed" {
+  try {
+    return localStorage.getItem(dayDisplayStorageKey) === "condensed" ? "condensed" : "full";
+  } catch {
+    return "full";
+  }
+}
+
 export function CalendarView() {
-  const { items, milestones, dogs, itemOccurrences, people, aloneTimeLogs, deleteItem } = useStore();
+  const { items, milestones, dogs, itemOccurrences, people, aloneTimeLogs, deleteItem, locations } = useStore();
   const { navigate } = useNavigation();
   const attendeeNames = (ids?: string[]) =>
     !ids || ids.length === 0 ? "" : ids.map((id) => people.items.find((person) => person.id === id)?.name ?? id).join(" & ");
@@ -1057,6 +1159,7 @@ export function CalendarView() {
   const [viewMode, setViewMode] = useState<"day" | "week" | "month" | "upcoming" | "milestones">("day");
   const [cursorDate, setCursorDate] = useState<Date>(() => new Date());
   const [viewerId, setViewerId] = useState<string>(() => loadViewerId(people.items[0]?.id ?? ""));
+  const [dayDisplay, setDayDisplay] = useState<"full" | "condensed">(loadDayDisplay);
   const [filterMode, setFilterMode] = useState<"all" | "mine" | "other">("all");
   const [categoryFilter, setCategoryFilter] = useState<Set<Category>>(new Set());
   const [detailTask, setDetailTask] = useState<{ task: Item; date: string } | null>(null);
@@ -1070,6 +1173,14 @@ export function CalendarView() {
       // ignore
     }
   }, [viewerId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(dayDisplayStorageKey, dayDisplay);
+    } catch {
+      // ignore
+    }
+  }, [dayDisplay]);
 
   function shouldDim(item: AgendaItem): boolean {
     if (filterMode === "all" || !item.assignedTo) return false;
@@ -1217,14 +1328,32 @@ export function CalendarView() {
               </button>
             ))}
           </div>
+          {viewMode === "day" && (
+            <div className="subtabs" role="group" aria-label="Day view display">
+              {(["full", "condensed"] as const).map((mode) => (
+                <button key={mode} className={dayDisplay === mode ? "active" : ""} type="button" onClick={() => setDayDisplay(mode)}>
+                  {mode === "full" ? "Full" : "Condensed"}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {isGridMode && (
         <div className="calendar-swipe-area" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-          {viewMode === "day" && (
+          {viewMode === "day" && dayDisplay === "condensed" && (
+            <CalendarDayCondensed
+              items={dayAgenda}
+              locations={locations}
+              shouldDim={shouldDim}
+              onOpenItem={(item, date) => setDetailTask({ task: item, date })}
+            />
+          )}
+          {viewMode === "day" && dayDisplay === "full" && (
             <CalendarDayAgenda
               items={dayAgenda}
+              locations={locations}
               shouldDim={shouldDim}
               onOpenItem={(item, date) => setDetailTask({ task: item, date })}
             />
@@ -1675,6 +1804,12 @@ export function TrainingView() {
   const [dogId, setDogId] = useState("");
   const [query, setQuery] = useState("");
   const [aloneTimeModal, setAloneTimeModal] = useState(false);
+  const [jumpOpen, setJumpOpen] = useState(false);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  // "top" = generic Quick log launched from the page header, with no milestone
+  // preselected. A milestone id = the per-card button, which locks Quick log straight
+  // to that milestone so logging a rated session never requires the type picker.
+  const [quickLogTarget, setQuickLogTarget] = useState<"top" | string | null>(null);
   const allDogIds = dogs.items.map((dog) => dog.id);
   // Falls back rather than seeding state from `dogs.items`, which is empty on the
   // first render when the collection loads from Supabase.
@@ -1688,16 +1823,32 @@ export function TrainingView() {
     { id: "alone-time", label: "Alone Time" },
   ];
 
+  // Every milestone in the current track for this dog, regardless of the search box —
+  // this is what the jump-to dropdown lists, since it's a browse-everything-here
+  // shortcut rather than a filter.
+  const tabMilestones = milestones.items.filter(
+    (milestone) => milestone.track === tab && (milestone.dogIds.length === 0 || milestone.dogIds.includes(activeDogId)),
+  );
+
   // Only this dog's milestones, in the current track. Every track now renders its
   // milestones — before, only obedience did, which left the socialization, confidence,
   // handling and health milestones reachable from the Quick log picker but nowhere on
   // the page they belong to.
-  const trackMilestones = milestones.items.filter(
-    (milestone) =>
-      milestone.track === tab &&
-      (milestone.dogIds.length === 0 || milestone.dogIds.includes(activeDogId)) &&
-      (query.trim() === "" || milestone.title.toLowerCase().includes(query.trim().toLowerCase())),
+  const trackMilestones = tabMilestones.filter(
+    (milestone) => query.trim() === "" || milestone.title.toLowerCase().includes(query.trim().toLowerCase()),
   );
+
+  // Clears the search first so the target is guaranteed to be in the DOM — a filtered
+  // search could otherwise hide the very card being jumped to.
+  function jumpToMilestone(id: string) {
+    setJumpOpen(false);
+    setQuery("");
+    requestAnimationFrame(() => {
+      document.getElementById(`milestone-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    setHighlightId(id);
+    setTimeout(() => setHighlightId((current) => (current === id ? null : current)), 2000);
+  }
 
   return (
     <div className="stack">
@@ -1711,14 +1862,46 @@ export function TrainingView() {
       {tab !== "alone-time" && (
         <div className="training-toolbar">
           <DogSwitcher dogs={dogs.items} value={activeDogId} onChange={setDogId} />
-          <input
-            className="training-search"
-            type="search"
-            placeholder="Search training types…"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            aria-label="Search training types"
-          />
+          <div className="training-search-group">
+            <input
+              className="training-search"
+              type="search"
+              placeholder="Search training types…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              aria-label="Search training types"
+            />
+            <div className="training-jump">
+              <button
+                type="button"
+                className="training-jump-toggle"
+                aria-label={`Jump to a ${tab} training item`}
+                aria-expanded={jumpOpen}
+                onClick={() => setJumpOpen((prev) => !prev)}
+              >
+                <ChevronDown size={16} aria-hidden className={jumpOpen ? "rotated" : ""} />
+              </button>
+              {jumpOpen && (
+                <div className="training-jump-panel">
+                  {tabMilestones.length === 0 && <p className="small">Nothing in {tab} yet.</p>}
+                  {tabMilestones.map((milestone) => (
+                    <button
+                      key={milestone.id}
+                      type="button"
+                      className="training-jump-option"
+                      onClick={() => jumpToMilestone(milestone.id)}
+                    >
+                      <span className="training-jump-option-title">{milestone.title}</span>
+                      <span className="small">{milestoneProgress(milestone, activeDogId)}%</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <button className="primary-button small" type="button" onClick={() => setQuickLogTarget("top")}>
+            <GraduationCap size={16} aria-hidden /> Quick log
+          </button>
         </div>
       )}
       {tab !== "alone-time" && (
@@ -1729,8 +1912,13 @@ export function TrainingView() {
             </p>
           )}
           {trackMilestones.map((milestone) => (
-            <div id={`milestone-${milestone.id}`} key={milestone.id}>
-              <MilestoneCard milestone={milestone} dogId={activeDogId} />
+            <div id={`milestone-${milestone.id}`} className={highlightId === milestone.id ? "milestone-jump-target" : ""} key={milestone.id}>
+              <MilestoneCard
+                milestone={milestone}
+                dogId={activeDogId}
+                defaultCollapsed
+                onQuickLog={() => setQuickLogTarget(milestone.id)}
+              />
             </div>
           ))}
         </section>
@@ -1752,6 +1940,17 @@ export function TrainingView() {
             initialKind="training"
             initialTrainingType={ALONE_TIME_TRAINING_ID}
             onClose={() => setAloneTimeModal(false)}
+          />
+        </Modal>
+      )}
+      {quickLogTarget && (
+        <Modal title="Quick log" onClose={() => setQuickLogTarget(null)}>
+          <QuickLogForm
+            date={toDateKey(new Date())}
+            initialKind="training"
+            initialTrainingType={quickLogTarget === "top" ? undefined : quickLogTarget}
+            initialDogIds={activeDogId ? [activeDogId] : undefined}
+            onClose={() => setQuickLogTarget(null)}
           />
         </Modal>
       )}
