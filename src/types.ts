@@ -229,6 +229,20 @@ export type QuickLogResult = {
  * so the UI can label the item and re-seed sensible defaults on edit. */
 export type ItemIntent = "routine" | "event" | "appointment" | "training" | "health-record";
 
+export type ReminderOffsetUnit = "minutes" | "hours" | "days";
+
+/** One scheduled email reminder, expressed relative to the item's next occurrence
+ * (its wall-clock startTime — items without a startTime can't compute "before" and
+ * are skipped by the sender). An item can stack several (e.g. 1 day before AND 1
+ * hour before). Sent to the household member(s) resolved from `assignedTo`, or
+ * everyone in the household when unassigned — there's no separate email field to
+ * fill in, since login email is already captured by Supabase Auth. */
+export type ItemReminder = {
+  id: string;
+  amount: number;
+  unit: ReminderOffsetUnit;
+};
+
 /** One type for everything that lands on the calendar. Replaces the old
  * Task / CalendarEvent / HealthEvent split, which forced the scheduling machinery
  * (recurrence, times, coverage) onto one type and the completion machinery
@@ -253,6 +267,8 @@ export type Item = {
   endTime?: string;
   durationHours?: number;
   status: "confirmed" | "placeholder";
+  /** Empty = no email reminders (the default for every item until edited). */
+  reminders: ItemReminder[];
 
   // --- who ---
   /** Person id who owns getting this done. Blank = whole household. */

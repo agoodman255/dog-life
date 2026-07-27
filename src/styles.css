@@ -2587,7 +2587,8 @@ textarea:focus-visible,
 }
 
 .checklist-def-row,
-.log-field-row {
+.log-field-row,
+.reminder-row {
   display: flex;
   gap: 8px;
   align-items: center;
@@ -2596,8 +2597,10 @@ textarea:focus-visible,
 
 .checklist-def-row input,
 .log-field-row input,
+.reminder-row input,
 .checklist-def-row select,
-.log-field-row select {
+.log-field-row select,
+.reminder-row select {
   flex: 1 1 120px;
   min-width: 0;
   border: 1px solid var(--line);
@@ -2605,6 +2608,10 @@ textarea:focus-visible,
   padding: 8px 10px;
   background: var(--bg);
   color: var(--ink);
+}
+
+.reminder-row input {
+  flex: 0 1 90px;
 }
 
 .log-field-row input:last-of-type {
@@ -2673,12 +2680,17 @@ textarea:focus-visible,
 
 @media (max-width: 760px) {
   .checklist-def-row,
-  .log-field-row {
+  .log-field-row,
+  .reminder-row {
     flex-direction: column;
     align-items: stretch;
   }
 
   .log-field-row input:last-of-type {
+    flex: 1 1 auto;
+  }
+
+  .reminder-row input {
     flex: 1 1 auto;
   }
 }

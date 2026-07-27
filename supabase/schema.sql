@@ -11,8 +11,15 @@ create extension if not exists pgcrypto;
 create table if not exists households (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- IANA zone the household's wall-clock item times (startTime, recurrence) are
+  -- interpreted in. There's no per-item zone field — every item.startTime is a
+  -- bare "7:00 AM" label — so this is the one place the reminder sender looks up
+  -- to turn that into an actual instant.
+  timezone text not null default 'America/Denver'
 );
+
+alter table households add column if not exists timezone text not null default 'America/Denver';
 
 create table if not exists people (
   id uuid primary key default gen_random_uuid(),
@@ -414,6 +421,9 @@ create table if not exists items (
   end_time text,
   duration_hours numeric,
   status text not null default 'confirmed',
+  -- Each entry is { id, amount, unit: "minutes"|"hours"|"days" }, one row per
+  -- configured email reminder. Empty (the default) = no reminders.
+  reminders jsonb not null default '[]',
   assigned_to uuid references people (id) on delete set null,
   attendees uuid[] not null default '{}',
   dog_ids uuid[] not null default '{}',
@@ -449,6 +459,8 @@ begin
     alter table items add constraint items_household_title_key unique (household_id, title);
   end if;
 end $$;
+
+alter table items add column if not exists reminders jsonb not null default '[]';
 
 -- Per-date state for an item. A recurring item needs independent completion state
 -- per occurrence — finishing Monday's must not finish Tuesday's — which is exactly
@@ -524,6 +536,18 @@ end $$;
 create index if not exists item_logs_unprocessed_idx on item_logs (processed_at) where processed_at is null;
 create index if not exists item_logs_quick_idx on item_logs (quick_log_kind, occurrence_date) where quick_log_kind is not null;
 
+-- Idempotency guard for the send-reminders edge function (supabase/functions/
+-- send-reminders): one row per reminder actually emailed, so a cron run that
+-- overlaps the previous one (or reruns after a failure) never double-sends. Not
+-- exposed to the client at all — only the edge function's service-role key
+-- touches this table.
+create table if not exists sent_item_reminders (
+  item_id uuid not null references items (id) on delete cascade,
+  occurrence_date date not null,
+  reminder_id text not null,
+  sent_at timestamptz not null default now(),
+  primary key (item_id, occurrence_date, reminder_id)
+);
 
 -- Merges the old calendar_event_deletions and task_deletions audit tables, which
 -- differed only in column naming.
@@ -595,6 +619,7 @@ alter table items enable row level security;
 alter table item_occurrences enable row level security;
 alter table item_logs enable row level security;
 alter table item_deletions enable row level security;
+alter table sent_item_reminders enable row level security;
 
 do $$
 declare
@@ -606,7 +631,7 @@ begin
     'relationship_logs', 'feedback', 'product_feedback',
     'calendar_events', 'calendar_event_deletions', 'task_deletions', 'alone_time_logs', 'task_instances', 'inbox_requests',
     'meals', 'recipe_ingredients', 'inventory', 'grocery_list',
-    'items', 'item_occurrences', 'item_logs', 'item_deletions'
+    'items', 'item_occurrences', 'item_logs', 'item_deletions', 'sent_item_reminders'
   ])
   loop
     if not exists (

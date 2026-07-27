@@ -22,6 +22,7 @@ import {
   Person,
   Recurrence,
   RecurrenceFrequency,
+  ReminderOffsetUnit,
   RelationshipLog,
 } from "./types";
 import { locations } from "./data";
@@ -724,6 +725,12 @@ const logFieldSchema = z.object({
   unit: z.string(),
 });
 
+const reminderSchema = z.object({
+  id: z.string(),
+  amount: z.number().min(1, "Enter a number"),
+  unit: z.enum(["minutes", "hours", "days"]),
+});
+
 const itemSchema = z
   .object({
     title: z.string().min(1, "Title is required"),
@@ -743,6 +750,8 @@ const itemSchema = z
     startTime: z.string(),
     endTime: z.string(),
     durationHours: z.number().min(0),
+    remindersEnabled: z.boolean(),
+    reminders: z.array(reminderSchema),
     assignedTo: z.string(),
     attendees: z.array(z.string()),
     dogIds: z.array(z.string()),
@@ -795,6 +804,9 @@ const itemSchema = z
     if (values.coverageConfirmed && !values.coverageNotes.trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["coverageNotes"], message: "Explain what the arranged coverage is" });
     }
+    if (values.remindersEnabled && values.reminders.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["reminders"], message: "Add at least one reminder, or turn this off" });
+    }
   });
 
 export type ItemFormValues = z.infer<typeof itemSchema>;
@@ -829,6 +841,7 @@ export function itemFormValuesToItem(
     endTime: values.endTime ? to12Hour(values.endTime) : undefined,
     durationHours: values.durationHours || undefined,
     status: values.status,
+    reminders: values.remindersEnabled ? values.reminders : [],
     assignedTo: values.assignedTo,
     attendees: values.attendees.length > 0 ? values.attendees : undefined,
     dogIds: values.dogIds.length > 0 ? values.dogIds : undefined,
@@ -929,6 +942,8 @@ export function ItemForm({
       startTime: initial?.startTime ? to24Hour(initial.startTime) : "",
       endTime: initial?.endTime ? to24Hour(initial.endTime) : "",
       durationHours: initial?.durationHours ?? 0,
+      remindersEnabled: (initial?.reminders?.length ?? 0) > 0,
+      reminders: initial?.reminders ?? [],
       assignedTo: initial?.assignedTo ?? "",
       attendees: initial?.attendees ?? [],
       dogIds: initial?.dogIds ?? [],
@@ -965,6 +980,9 @@ export function ItemForm({
   const aloneTimeRequired = watch("aloneTimeRequired");
   const aloneTimeRequiredAmount = watch("aloneTimeRequiredAmount");
   const durationHours = watch("durationHours");
+  const startTime = watch("startTime");
+  const remindersEnabled = watch("remindersEnabled");
+  const reminders = watch("reminders");
   const daysOfWeek = watch("daysOfWeek");
   const attendees = watch("attendees");
   const dogIds = watch("dogIds");
@@ -1047,6 +1065,22 @@ export function ItemForm({
     setValue(
       "logFields",
       getValues("logFields").filter((_, i) => i !== index),
+    );
+  }
+
+  function addReminderRow() {
+    setValue("reminders", [...getValues("reminders"), { id: makeId("reminder"), amount: 1, unit: "hours" as const }]);
+  }
+  function updateReminderRow(index: number, patch: Partial<ItemFormValues["reminders"][number]>) {
+    setValue(
+      "reminders",
+      getValues("reminders").map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    );
+  }
+  function removeReminderRow(index: number) {
+    setValue(
+      "reminders",
+      getValues("reminders").filter((_, i) => i !== index),
     );
   }
 
@@ -1414,6 +1448,53 @@ export function ItemForm({
           </label>
         </div>
       )}
+
+      <fieldset className="capability-detail">
+        <legend>Email reminder</legend>
+        <label className="capability-toggle">
+          <input type="checkbox" {...register("remindersEnabled")} />
+          <span>
+            <strong>Send an email reminder</strong>
+            <small>Emailed to whoever&apos;s assigned (or the whole household) ahead of when this is scheduled. Sent to your login email — nothing else to set up.</small>
+          </span>
+        </label>
+        {remindersEnabled && (
+          <>
+            {!startTime && (
+              <p className="small capability-hint">Add a start time above — reminders need a clock time to count down from.</p>
+            )}
+            {reminders.map((row, index) => (
+              <div className="reminder-row" key={row.id}>
+                <input
+                  type="number"
+                  min={1}
+                  aria-label="Amount"
+                  value={row.amount}
+                  onChange={(event) => updateReminderRow(index, { amount: Number(event.target.value) })}
+                />
+                <select
+                  aria-label="Unit"
+                  value={row.unit}
+                  onChange={(event) => updateReminderRow(index, { unit: event.target.value as ReminderOffsetUnit })}
+                >
+                  <option value="minutes">Minutes before</option>
+                  <option value="hours">Hours before</option>
+                  <option value="days">Days before</option>
+                </select>
+                <button type="button" className="text-button danger" onClick={() => removeReminderRow(index)}>
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button type="button" className="text-button" onClick={addReminderRow}>
+              + Add reminder
+            </button>
+            {errors.reminders && !Array.isArray(errors.reminders) && (
+              <small className="form-error">{errors.reminders.message}</small>
+            )}
+          </>
+        )}
+      </fieldset>
 
       <button type="button" className="text-button" onClick={() => setShowAdvanced((prev) => !prev)}>
         {showAdvanced ? "Hide" : "Show"} more options
