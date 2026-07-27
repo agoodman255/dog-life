@@ -3212,15 +3212,93 @@ textarea:focus-visible,
   gap: 10px;
 }
 
+.training-search-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 240px;
+  max-width: 360px;
+}
+
 .training-search {
-  flex: 1 1 200px;
-  max-width: 320px;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 10px;
   background: var(--paper);
   color: var(--ink);
   font-size: 0.95rem;
+}
+
+.training-jump {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.training-jump-toggle {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.training-jump-toggle svg {
+  transition: transform 0.15s ease;
+}
+
+.training-jump-toggle svg.rotated {
+  transform: rotate(180deg);
+}
+
+.training-jump-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(260px, 80vw);
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.training-jump-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 0;
+  background: none;
+  text-align: left;
+  padding: 8px 10px;
+  min-height: 40px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.training-jump-option:hover {
+  background: var(--soft);
+}
+
+.training-jump-option-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Inline comparison on a milestone card, so switching dogs isn't needed just to see
@@ -3230,6 +3308,47 @@ textarea:focus-visible,
   font-size: 0.78rem;
   color: var(--muted);
   font-weight: 700;
+}
+
+.milestone-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.milestone-card-summary {
+  margin: 4px 0 0;
+}
+
+.milestone-card-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.milestone-card-toggle svg {
+  transition: transform 0.15s ease;
+}
+
+.milestone-card-toggle svg.rotated {
+  transform: rotate(180deg);
+}
+
+@keyframes milestone-jump-highlight {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+  20%,
+  80% {
+    box-shadow: 0 0 0 3px var(--teal);
+  }
+}
+
+.milestone-jump-target .milestone-card {
+  border-radius: 12px;
+  animation: milestone-jump-highlight 2s ease;
 }
 
 .quick-log-dog-result {
@@ -3244,7 +3363,18 @@ textarea:focus-visible,
     align-items: stretch;
   }
 
-  .training-search {
+  .training-search-group {
     max-width: none;
+  }
+
+  .training-search {
+    padding: 5px 8px;
+    min-height: 32px;
+    font-size: 0.85rem;
+  }
+
+  .training-jump-toggle {
+    width: 32px;
+    height: 32px;
   }
 }

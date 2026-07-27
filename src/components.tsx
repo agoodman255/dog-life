@@ -18,6 +18,7 @@ import {
   QuickLogKind,
   QuickLogResult,
 } from "./types";
+import { MilestonePicker } from "./milestonePicker";
 import { formatInZone, isoToZonedParts, searchTimezones, zonedTimeToUtcIso, zoneLabel } from "./timezones";
 import {
   ALONE_TIME_TRAINING_ID,
@@ -495,31 +496,12 @@ function LogEntryPanel({
   );
 }
 
-const TRACK_LABELS: Record<Milestone["track"], string> = {
-  obedience: "Obedience",
-  handling: "Handling",
-  socialization: "Socialization",
-  confidence: "Confidence",
-  health: "Health",
-  relationship: "Relationship",
-};
+const ALONE_TIME_PINNED_OPTION = { id: ALONE_TIME_TRAINING_ID, label: "Alone time" };
 
-const TRACK_ORDER: Milestone["track"][] = ["obedience", "socialization", "confidence", "handling", "health"];
-
-/** Picks the training type for a Quick log. Replaced a native <select> holding all
- * 36 milestones in one flat list (2026-07-27) — optgroups alone don't make that
- * navigable on a phone, there was no way to search, and no way to see what a
- * milestone actually involves without selecting it and looking at what appeared.
- *
- * Top level mirrors the Training page's tabs (obedience, socialization, confidence,
- * handling, health, alone time) rather than the individual training types — six
- * categories fit on a phone screen without scrolling; 36 milestones don't. Each
- * category expands to its training types on tap (2026-07-27); a per-type "show
- * steps" expander was tried alongside that and cut for adding a second layer of
- * disclosure nobody asked for.
- *
- * Collapsed to a single button until opened, so the common case (arriving with a
- * type already chosen, from "Log it" on a recommendation) stays one line. */
+/** Picks the training type for a Quick log — a thin wrapper around the shared
+ * [[MilestonePicker]] that adds "Alone time" as a pinned option alongside the
+ * grouped milestones, since alone time is loggable the same way but isn't a
+ * milestone. See milestonePicker.tsx for the picker itself. */
 function TrainingTypePicker({
   milestones,
   dogIds,
@@ -534,108 +516,16 @@ function TrainingTypePicker({
   value: string;
   onChange: (id: string) => void;
 }) {
-  const selected = milestones.find((entry) => entry.id === value);
-  const [open, setOpen] = useState(!value);
-  const [query, setQuery] = useState("");
-  const [expandedTrack, setExpandedTrack] = useState<string | null>(selected?.track ?? null);
-
-  const search = query.trim().toLowerCase();
-  const matchesSearch = (milestone: Milestone) =>
-    search === "" ||
-    milestone.title.toLowerCase().includes(search) ||
-    milestone.steps.some((step) => step.title.toLowerCase().includes(search));
-
-  const groups = TRACK_ORDER.map((track) => ({
-    track,
-    label: TRACK_LABELS[track],
-    entries: milestones.filter((milestone) => milestone.track === track && matchesSearch(milestone)),
-  })).filter((group) => search === "" || group.entries.length > 0);
-  const aloneTimeMatches = search === "" || "alone time".includes(search);
-
-  const selectedLabel = value === ALONE_TIME_TRAINING_ID ? "Alone time" : (selected?.title ?? "");
-  const countDogs = dogIds.length > 0 ? dogIds : [];
-
-  if (!open) {
-    return (
-      <div className="training-picker-selected">
-        <div>
-          <strong>{selectedLabel || "No training type picked"}</strong>
-          {selected && <p className="small">{TRACK_LABELS[selected.track]}</p>}
-        </div>
-        <button className="text-button" type="button" onClick={() => setOpen(true)}>
-          Change
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="training-picker">
-      <input
-        type="search"
-        className="training-picker-search"
-        placeholder="Search training types or steps…"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        aria-label="Search training types"
-      />
-      <div className="training-picker-list">
-        {groups.map((group) => {
-          const isExpanded = expandedTrack === group.track || (search !== "" && group.entries.length > 0);
-          return (
-            <div className="training-picker-category" key={group.track}>
-              <button
-                type="button"
-                className="training-picker-category-header"
-                aria-expanded={isExpanded}
-                onClick={() => setExpandedTrack(isExpanded ? null : group.track)}
-              >
-                <span>{group.label}</span>
-                <ChevronDown size={16} aria-hidden className={isExpanded ? "rotated" : ""} />
-              </button>
-              {isExpanded && (
-                <div className="training-picker-children">
-                  {group.entries.map((milestone) => (
-                    <button
-                      key={milestone.id}
-                      type="button"
-                      className={`training-picker-option ${value === milestone.id ? "active" : ""}`}
-                      onClick={() => {
-                        onChange(milestone.id);
-                        setOpen(false);
-                      }}
-                    >
-                      <span className="training-picker-option-title">{milestone.title}</span>
-                      <span className="training-picker-meta">
-                        {countDogs
-                          .map((dogId) => {
-                            const name = dogs.find((dog) => dog.id === dogId)?.name ?? "";
-                            return `${name} ${milestoneProgress(milestone, dogId)}%`;
-                          })
-                          .join(" · ")}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-        {aloneTimeMatches && (
-          <button
-            type="button"
-            className={`training-picker-option training-picker-category-leaf ${value === ALONE_TIME_TRAINING_ID ? "active" : ""}`}
-            onClick={() => {
-              onChange(ALONE_TIME_TRAINING_ID);
-              setOpen(false);
-            }}
-          >
-            <span className="training-picker-option-title">Alone time</span>
-          </button>
-        )}
-        {groups.length === 0 && !aloneTimeMatches && <p className="small">Nothing matches "{query.trim()}".</p>}
-      </div>
-    </div>
+    <MilestonePicker
+      milestones={milestones}
+      dogIds={dogIds}
+      dogs={dogs}
+      value={value}
+      onChange={onChange}
+      pinnedOptions={[ALONE_TIME_PINNED_OPTION]}
+      emptyLabel="No training type picked"
+    />
   );
 }
 
@@ -1923,14 +1813,31 @@ export function WhyUnlocked({ milestone, allMilestones, dogId }: { milestone: Mi
 /** A milestone as it stands for one dog. `dogId` is required rather than optional
  * because there is no honest dog-less answer any more: status, progress, which
  * prerequisites are met and whether a step is done all differ per dog. */
-export function MilestoneCard({ milestone, dogId }: { milestone: Milestone; dogId: string }) {
+export function MilestoneCard({
+  milestone,
+  dogId,
+  defaultCollapsed,
+  onQuickLog,
+}: {
+  milestone: Milestone;
+  dogId: string;
+  /** Training page defaults every card to collapsed so the list of milestones for a
+   * track fits on screen without scrolling past detail nobody asked to see yet. Other
+   * callers (the Milestones roadmap) leave this unset and get the old always-open card. */
+  defaultCollapsed?: boolean;
+  /** Opens the full Quick log form pre-scoped to this milestone, so logging a rated
+   * session doesn't require expanding the card and hunting for the per-step button. */
+  onQuickLog?: () => void;
+}) {
   const { milestones, dogs, logMilestoneSession } = useStore();
+  const [collapsed, setCollapsed] = useState(defaultCollapsed ?? false);
   const progress = milestoneProgress(milestone, dogId);
   const effectiveStatus = milestoneStatusFor(milestone, milestones.items, dogId);
   const dogName = dogs.items.find((dog) => dog.id === dogId)?.name ?? "";
   // Everyone else on this milestone, so you can see where the other dog sits without
   // switching the whole page over to them.
   const otherDogs = milestone.dogIds.filter((id) => id !== dogId);
+  const doneSteps = milestone.steps.filter((step) => stepSessions(step, dogId) >= step.sessionsRequired).length;
   return (
     <article className="milestone-card">
       <div className="row between">
@@ -1938,10 +1845,22 @@ export function MilestoneCard({ milestone, dogId }: { milestone: Milestone; dogI
           <p className="eyebrow">{milestone.track}</p>
           <h3>{milestone.title}</h3>
         </div>
-        <span className={`status ${effectiveStatus}`}>
-          {effectiveStatus === "locked" && <Lock size={14} aria-hidden />}
-          {effectiveStatus}
-        </span>
+        <div className="milestone-card-actions">
+          {onQuickLog && (
+            <button
+              className="icon-button small"
+              type="button"
+              aria-label={`Quick log a session for ${milestone.title}`}
+              onClick={onQuickLog}
+            >
+              <GraduationCap size={14} aria-hidden />
+            </button>
+          )}
+          <span className={`status ${effectiveStatus}`}>
+            {effectiveStatus === "locked" && <Lock size={14} aria-hidden />}
+            {effectiveStatus}
+          </span>
+        </div>
       </div>
       <ProgressBar value={progress} />
       {otherDogs.length > 0 && (
@@ -1959,43 +1878,60 @@ export function MilestoneCard({ milestone, dogId }: { milestone: Milestone; dogI
           })}
         </p>
       )}
-      <p className="eyebrow">Why isn't this unlocked?</p>
-      <WhyUnlocked milestone={milestone} allMilestones={milestones.items} dogId={dogId} />
-      <p>{milestone.why}</p>
-      <div className="steps">
-        {milestone.steps.map((step) => {
-          const sessions = stepSessions(step, dogId);
-          const done = sessions >= step.sessionsRequired;
-          return (
-            <div className="step" key={step.title}>
-              <span className={done ? "dot done" : "dot"} />
-              <div>
-                <strong>{step.title}</strong>
-                <p>
-                  {step.successCriteria} · {sessions}/{step.sessionsRequired} sessions
-                </p>
-              </div>
-              {!done && (
-                <button
-                  className="icon-button small"
-                  type="button"
-                  aria-label={`Log a session for ${step.title} for ${dogName}`}
-                  onClick={() => logMilestoneSession(milestone.id, step.title, dogId)}
-                >
-                  <Play size={14} aria-hidden />
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <div className="source-list">
-        {milestone.sources.map((source) => (
-          <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
-            {source.publisher}: {source.title}
-          </a>
-        ))}
-      </div>
+      {collapsed ? (
+        <p className="milestone-card-summary small">
+          {doneSteps}/{milestone.steps.length} steps mastered
+        </p>
+      ) : (
+        <>
+          <p className="eyebrow">Why isn't this unlocked?</p>
+          <WhyUnlocked milestone={milestone} allMilestones={milestones.items} dogId={dogId} />
+          <p>{milestone.why}</p>
+          <div className="steps">
+            {milestone.steps.map((step) => {
+              const sessions = stepSessions(step, dogId);
+              const done = sessions >= step.sessionsRequired;
+              return (
+                <div className="step" key={step.title}>
+                  <span className={done ? "dot done" : "dot"} />
+                  <div>
+                    <strong>{step.title}</strong>
+                    <p>
+                      {step.successCriteria} · {sessions}/{step.sessionsRequired} sessions
+                    </p>
+                  </div>
+                  {!done && (
+                    <button
+                      className="icon-button small"
+                      type="button"
+                      aria-label={`Log a session for ${step.title} for ${dogName}`}
+                      onClick={() => logMilestoneSession(milestone.id, step.title, dogId)}
+                    >
+                      <Play size={14} aria-hidden />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="source-list">
+            {milestone.sources.map((source) => (
+              <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
+                {source.publisher}: {source.title}
+              </a>
+            ))}
+          </div>
+        </>
+      )}
+      <button
+        className="text-button small milestone-card-toggle"
+        type="button"
+        aria-expanded={!collapsed}
+        onClick={() => setCollapsed((prev) => !prev)}
+      >
+        {collapsed ? "Details" : "Collapse"}
+        <ChevronDown size={14} aria-hidden className={collapsed ? "" : "rotated"} />
+      </button>
     </article>
   );
 }

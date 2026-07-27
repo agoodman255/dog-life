@@ -26,6 +26,7 @@ import {
   RelationshipLog,
 } from "./types";
 import { locations } from "./data";
+import { MilestonePicker } from "./milestonePicker";
 import { makeId } from "./store";
 import {
   computeEventCoverageNeeded,
@@ -1164,17 +1165,18 @@ export function ItemForm({
         <fieldset className="capability-detail">
           <legend>Checklist</legend>
           {milestoneOptions.length > 0 && (
-            <label>
+            <div className="form-field">
               Pull steps from a training milestone (optional)
-              <select {...register("checklistSourceMilestoneId")}>
-                <option value="">Write my own steps below</option>
-                {milestoneOptions.map((milestone) => (
-                  <option key={milestone.id} value={milestone.id}>
-                    {milestone.title}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <MilestonePicker
+                milestones={milestoneOptions}
+                dogIds={dogIds}
+                dogs={selectedDogs}
+                value={checklistSourceMilestoneId}
+                onChange={(id) => setValue("checklistSourceMilestoneId", id)}
+                noneOption={{ id: "", label: "Write my own steps below" }}
+                emptyLabel="Write my own steps below"
+              />
+            </div>
           )}
           {sourceMilestone ? (
             <div className="milestone-pull">
