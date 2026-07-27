@@ -16,6 +16,7 @@ import {
   Sparkles,
   Sun,
   Target,
+  Trash2,
   Type as TypeIcon,
 } from "lucide-react";
 import { FormEvent, TouchEvent as ReactTouchEvent, useEffect, useRef, useState } from "react";
@@ -28,6 +29,8 @@ import {
   MilestoneCard,
   PersonName,
   ProgressBar,
+  QuickLogForm,
+  QUICK_LOG_ICONS,
   Sparkline,
   TaskCard,
   ItemDetailModal,
@@ -35,7 +38,6 @@ import {
 } from "./components";
 import { Modal } from "./components";
 import {
-  AloneTimeLogForm,
   DogForm,
   ExposureLogForm,
   ItemForm,
@@ -44,7 +46,6 @@ import {
   RelationshipLogForm,
   CATEGORY_LABELS,
   CATEGORY_OPTIONS,
-  aloneTimeLogFormValuesToLog,
   dogFormValuesToDog,
   itemFormValuesToItem,
   journalFormValuesToEntry,
@@ -66,13 +67,21 @@ import {
   Item,
   ItemDeletionScope,
   ItemIntent,
+  ItemLog,
   ItemOccurrence,
   ItemState,
   Milestone,
   NotificationItem,
+  QuickLogKind,
   Recurrence,
 } from "./types";
 import {
+  ALONE_TIME_TRAINING_ID,
+  QUICK_LOG_SPECS,
+  nextTrainingFocus,
+  quickLogSpec,
+  quickLogsOn,
+  summarizeQuickLog,
   addDays,
   addMonths,
   ageLabel,
@@ -208,13 +217,88 @@ function AloneTimeReadinessPanel({
   );
 }
 
+/** One entry in the Dashboard's Log feed. Reads the option labels back off the Quick
+ * log spec so a row says "Poo · Inside (accident)" rather than echoing raw values.
+ *
+ * Delete is the undo: a Quick log takes seconds to re-enter, so there's no edit flow,
+ * but a mis-ticked training step would otherwise inflate a milestone permanently. The
+ * confirm step names what will be rolled back, since that consequence isn't obvious
+ * from a feed row. */
+function QuickLogRow({ log, dogs }: { log: ItemLog; dogs: Dog[] }) {
+  const { deleteQuickLog, milestones } = useStore();
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const Icon = QUICK_LOG_ICONS[log.quickLogKind ?? "potty"];
+  const names = log.dogIds
+    .map((id) => dogs.find((dog) => dog.id === id)?.name)
+    .filter(Boolean)
+    .join(" & ");
+  const time = new Date(log.loggedAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const summary = summarizeQuickLog(log);
+  const milestoneTitle = milestones.items.find((entry) => entry.id === log.milestoneId)?.title;
+  const rollback = log.advancedStepTitles ?? [];
+
+  async function confirmDelete() {
+    setDeleting(true);
+    const ok = await deleteQuickLog(log.id);
+    if (!ok) setDeleting(false);
+  }
+
+  return (
+    <article className="quick-log-row">
+      <span className="quick-log-row-icon">
+        <Icon size={16} aria-hidden />
+      </span>
+      <div className="quick-log-row-body">
+        <div className="row between">
+          <strong>{summary || quickLogSpec(log.quickLogKind ?? "potty").label}</strong>
+          <span className="row" style={{ gap: 6, alignItems: "center" }}>
+            <span className="small">{time}</span>
+            <button
+              className="icon-button small"
+              type="button"
+              onClick={() => setConfirming((prev) => !prev)}
+              aria-label={`Delete this ${quickLogSpec(log.quickLogKind ?? "potty").label.toLowerCase()} entry`}
+            >
+              <Trash2 size={13} aria-hidden />
+            </button>
+          </span>
+        </div>
+        <p className="small">
+          {names}
+          {log.rating ? ` · ${log.rating}/5` : ""}
+        </p>
+        {log.text && <p className="quick-log-row-note">{log.text}</p>}
+        {confirming && (
+          <div className="quick-log-row-confirm">
+            <p className="small">
+              {rollback.length > 0 && milestoneTitle
+                ? `Deletes this entry and takes one session back off ${rollback.join(", ")} in ${milestoneTitle}.`
+                : "Deletes this entry."}
+            </p>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="text-button" type="button" onClick={() => setConfirming(false)} disabled={deleting}>
+                Keep
+              </button>
+              <button className="text-button danger" type="button" onClick={confirmDelete} disabled={deleting}>
+                {deleting ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
 export function DashboardView() {
-  const { items, itemOccurrences, milestones, dogs, completeTask, occurrenceFor, aloneTimeLogs, journalEntries } = useStore();
+  const { items, itemOccurrences, milestones, dogs, completeTask, occurrenceFor, aloneTimeLogs, itemLogs } = useStore();
   const todayKey = toDateKey(new Date());
   const adaptive = useAdaptivePlan(items.items, itemOccurrences.items, todayKey);
   const [detailTask, setDetailTask] = useState<Item | null>(null);
-  const [aloneTimeModal, setAloneTimeModal] = useState(false);
-  const [quickLogModal, setQuickLogModal] = useState(false);
+  const [quickLog, setQuickLog] = useState<null | { kind: QuickLogKind; trainingType?: string }>(null);
+  const todayLogs = quickLogsOn(itemLogs.items, todayKey);
+  const nextFocus = nextTrainingFocus(milestones.items);
   const puppy = dogs.items.find((dog) => dog.status === "puppy") ?? dogs.items[0];
   const currentMilestone =
     milestones.items.find((item) => item.status !== "completed" && item.dependencies.length > 0) ?? milestones.items[0];
@@ -233,12 +317,15 @@ export function DashboardView() {
   return (
     <div className="dashboard">
       <section className="dashboard-toolbar">
-        <button className="primary-button small" type="button" onClick={() => setQuickLogModal(true)}>
+        <button className="primary-button small" type="button" onClick={() => setQuickLog({ kind: "potty" })}>
           <Plus size={16} aria-hidden /> Quick log
         </button>
         <nav className="dashboard-jump-nav" aria-label="Jump to dashboard section">
           <button type="button" onClick={() => jumpTo("today-section")}>
             Today
+          </button>
+          <button type="button" onClick={() => jumpTo("log-section")}>
+            Log
           </button>
           {currentMilestone && (
             <button type="button" onClick={() => jumpTo("focus-milestone-section")}>
@@ -278,6 +365,68 @@ export function DashboardView() {
         </div>
 
         <div className="stack">
+          <section className="panel" id="log-section">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Log</p>
+                <h2 style={{ fontSize: "1.1rem" }}>What happened today</h2>
+              </div>
+              <button className="text-button" type="button" onClick={() => setQuickLog({ kind: "potty" })}>
+                <Plus size={16} aria-hidden /> Quick log
+              </button>
+            </div>
+            <div className="quick-log-tallies">
+              {QUICK_LOG_SPECS.map((spec) => {
+                const Icon = QUICK_LOG_ICONS[spec.kind];
+                const count = todayLogs.filter((log) => log.quickLogKind === spec.kind).length;
+                return (
+                  <button
+                    key={spec.kind}
+                    type="button"
+                    className={`quick-log-tally ${count > 0 ? "has-entries" : ""}`}
+                    onClick={() => setQuickLog({ kind: spec.kind })}
+                    aria-label={`Log ${spec.label.toLowerCase()} — ${count} today`}
+                  >
+                    <Icon size={16} aria-hidden />
+                    <strong>{count}</strong>
+                    <span>{spec.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {nextFocus && (
+              <div className="quick-log-next">
+                <div>
+                  <p className="eyebrow">Work on next</p>
+                  <strong>{nextFocus.stepTitle}</strong>
+                  <p className="small">
+                    {nextFocus.milestoneTitle} · {nextFocus.completedSessions}/{nextFocus.sessionsRequired} sessions ·{" "}
+                    {nextFocus.successCriteria}
+                  </p>
+                </div>
+                <button
+                  className="text-button"
+                  type="button"
+                  onClick={() => setQuickLog({ kind: "training", trainingType: nextFocus.milestoneId })}
+                >
+                  Log it
+                </button>
+              </div>
+            )}
+            {todayLogs.length === 0 ? (
+              <p className="small">
+                Nothing logged yet today. Tap any of the five above to record a potty break, play session, training rep,
+                meal, or water check.
+              </p>
+            ) : (
+              <div className="quick-log-feed">
+                {todayLogs.map((log) => (
+                  <QuickLogRow key={log.id} log={log} dogs={dogs.items} />
+                ))}
+              </div>
+            )}
+          </section>
+
           {currentMilestone && (
             <section className="panel" id="focus-milestone-section">
               <div className="section-heading">
@@ -314,104 +463,23 @@ export function DashboardView() {
               allDogIds={allDogIds}
               aloneTimeLogs={aloneTimeLogs.items}
               calendarEvents={items.items}
-              onLog={() => setAloneTimeModal(true)}
+              onLog={() => setQuickLog({ kind: "training", trainingType: ALONE_TIME_TRAINING_ID })}
             />
           </div>
         </div>
       </section>
 
-      {aloneTimeModal && (
-        <Modal title="Log alone time" onClose={() => setAloneTimeModal(false)}>
-          <AloneTimeLogForm
-            dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
-            onCancel={() => setAloneTimeModal(false)}
-            onSubmit={(values) => {
-              aloneTimeLogs.add(aloneTimeLogFormValuesToLog(values, makeId("alone")));
-              setAloneTimeModal(false);
-            }}
-          />
-        </Modal>
-      )}
-      {quickLogModal && (
-        <Modal title="Quick log" onClose={() => setQuickLogModal(false)}>
+      {quickLog && (
+        <Modal title="Quick log" onClose={() => setQuickLog(null)}>
           <QuickLogForm
-            dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
-            onCancel={() => setQuickLogModal(false)}
-            onSubmit={({ kind, dogIds, note }) => {
-              journalEntries.add({
-                id: makeId("entry"),
-                dogIds,
-                date: todayKey,
-                title: kind === "accident" ? "Accident" : kind === "potty-win" ? "Good potty break" : "Quick log",
-                text: note,
-                tags: ["quick-log", kind],
-                mood: kind === "accident" ? "hard" : kind === "potty-win" ? "great" : "steady",
-              });
-              setQuickLogModal(false);
-            }}
+            date={todayKey}
+            initialKind={quickLog.kind}
+            initialTrainingType={quickLog.trainingType}
+            onClose={() => setQuickLog(null)}
           />
         </Modal>
       )}
     </div>
-  );
-}
-
-function QuickLogForm({
-  dogOptions,
-  onSubmit,
-  onCancel,
-}: {
-  dogOptions: { id: string; name: string }[];
-  onSubmit: (values: { kind: "accident" | "potty-win" | "other"; dogIds: string[]; note: string }) => void;
-  onCancel: () => void;
-}) {
-  const [kind, setKind] = useState<"accident" | "potty-win" | "other">("potty-win");
-  const [dogIds, setDogIds] = useState<string[]>(dogOptions.map((dog) => dog.id));
-  const [note, setNote] = useState("");
-
-  function toggleDog(id: string) {
-    setDogIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
-  }
-
-  return (
-    <form
-      className="entity-form"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSubmit({ kind, dogIds, note });
-      }}
-    >
-      <div className="subtabs" role="group" aria-label="What happened">
-        {(["accident", "potty-win", "other"] as const).map((option) => (
-          <button key={option} type="button" className={kind === option ? "active" : ""} onClick={() => setKind(option)}>
-            {option === "accident" ? "Accident" : option === "potty-win" ? "Good potty break" : "Other"}
-          </button>
-        ))}
-      </div>
-      <label>
-        Dog(s)
-        <div className="row" style={{ gap: 12, flexWrap: "wrap", marginTop: 6 }}>
-          {dogOptions.map((dog) => (
-            <label key={dog.id} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-              <input type="checkbox" checked={dogIds.includes(dog.id)} onChange={() => toggleDog(dog.id)} />
-              {dog.name}
-            </label>
-          ))}
-        </div>
-      </label>
-      <label>
-        Note (optional)
-        <textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} />
-      </label>
-      <div className="form-actions">
-        <button className="text-button" type="button" onClick={onCancel}>
-          Cancel
-        </button>
-        <button className="primary-button" type="submit">
-          Log it
-        </button>
-      </div>
-    </form>
   );
 }
 
@@ -1572,14 +1640,12 @@ export function TrainingView() {
       )}
       {tab !== "obedience" && tab !== "alone-time" && <ExposureGrid category={tab} />}
       {aloneTimeModal && (
-        <Modal title="Log alone time" onClose={() => setAloneTimeModal(false)}>
-          <AloneTimeLogForm
-            dogOptions={dogs.items.map((dog) => ({ id: dog.id, name: dog.name }))}
-            onCancel={() => setAloneTimeModal(false)}
-            onSubmit={(values) => {
-              aloneTimeLogs.add(aloneTimeLogFormValuesToLog(values, makeId("alone")));
-              setAloneTimeModal(false);
-            }}
+        <Modal title="Quick log" onClose={() => setAloneTimeModal(false)}>
+          <QuickLogForm
+            date={toDateKey(new Date())}
+            initialKind="training"
+            initialTrainingType={ALONE_TIME_TRAINING_ID}
+            onClose={() => setAloneTimeModal(false)}
           />
         </Modal>
       )}
@@ -1975,16 +2041,25 @@ export function RelationshipTracker() {
 }
 
 export function AnalyticsView() {
-  const { itemOccurrences, journalEntries, dogs } = useStore();
+  const { itemOccurrences, journalEntries, itemLogs, dogs } = useStore();
   // Sourced from real completions now. The old version read DailyFeedback, whose
   // `accident` flag was never observed — it was derived as
   // `category === "potty" && rating <= 2`, i.e. a low score on a potty break got
-  // charted as an accident. Actual accidents are the ones logged through Quick log,
-  // which writes a journal entry tagged "accident".
+  // charted as an accident.
   const completedOccurrences = itemOccurrences.items.filter((entry) => entry.state === "completed");
   const rated = completedOccurrences.filter((entry) => entry.rating !== undefined);
   const completed = completedOccurrences.length;
-  const accidents = journalEntries.items.filter((entry) => entry.tags.includes("accident")).length;
+  // Two sources, because the Quick log rework (2026-07-26) changed where an accident
+  // gets recorded: it's now a potty log whose "Where" is indoors, rather than a
+  // journal entry tagged "accident". Counting both keeps entries made before that
+  // change in the total instead of silently dropping them off the chart.
+  const legacyAccidents = journalEntries.items.filter((entry) => entry.tags.includes("accident")).length;
+  const loggedAccidents = itemLogs.items.filter(
+    (log) =>
+      log.quickLogKind === "potty" &&
+      log.values.some((value) => value.fieldName === "Where" && (value.value === "inside" || value.value === "crate")),
+  ).length;
+  const accidents = legacyAccidents + loggedAccidents;
   const avgRating = rated.length ? (rated.reduce((sum, entry) => sum + (entry.rating ?? 0), 0) / rated.length).toFixed(1) : "0.0";
   const ratingTrend = rated
     .slice()

@@ -137,23 +137,89 @@ export type LogFieldValue = {
   value: number | string | null;
 };
 
-/** One timestamped log against an item. Multiple entries per item (and per
- * occurrence) are the point — weight over time, symptoms across days. Free text
- * always allowed; structured `values` come from the item's logFields. */
+/** The five things that get logged constantly during a day, independent of anything
+ * on the calendar. A Quick log entry is one of these; an item-attached log is none of
+ * them. Distinct from `Category` on purpose — this is the Quick log taxonomy the
+ * Dashboard's Log section groups by, and it has no meaningful `Category` equivalents
+ * for "play" or "water". */
+export type QuickLogKind = "potty" | "play" | "training" | "food" | "water";
+
+/** One timestamped log. Usually against an item (weight over time, symptoms across
+ * days) but a Quick log has no item behind it — it's recorded against the dog(s)
+ * directly from the Dashboard. Free text always allowed; structured `values` come
+ * from the item's logFields, or from the Quick log kind's field spec. */
 export type ItemLog = {
   id: string;
-  itemId: string;
-  /** YYYY-MM-DD of the occurrence this log belongs to, when the item recurs. */
+  /** Absent on a Quick log: potty breaks and meals aren't scheduled items, they just
+   * happen. Present when logged from an item's detail modal. */
+  itemId?: string;
+  /** Set only on Quick logs — which of the five this is. Makes the row self-describing
+   * so the ingest pass doesn't have to join to `items` to know what it's reading. */
+  quickLogKind?: QuickLogKind;
+  /** YYYY-MM-DD of the occurrence this log belongs to, when the item recurs. For a
+   * Quick log this is simply the day it happened. */
   occurrenceDate?: string;
   loggedAt: string;
   loggedBy: string;
   text: string;
   values: LogFieldValue[];
   dogIds: string[];
+  /** 1-5 for how the thing being logged actually went. Same scale as an occurrence's
+   * overall rating, so the two read as one signal to the ingest pass. */
+  rating?: number;
+  /** Milestone this entry counted a training session toward, when the Quick log's
+   * training type was a milestone. Lets a deleted log be traced back. */
+  milestoneId?: string;
+  /** Which of that milestone's steps this entry advanced, by title. Recorded for two
+   * reasons: deleting the log rolls exactly these back, and the ingest pass wants to
+   * know which steps were actually practised, not just which milestone. */
+  advancedStepTitles?: string[];
   /** ISO timestamp set by the review-logs skill once it has folded this entry into
    * the dog record / milestones / docs. Absent = not yet ingested, so re-runs stay
    * incremental instead of re-reading the whole history. */
   processedAt?: string;
+};
+
+/** One Quick log submission, before the store turns it into an `ItemLog` (plus, for
+ * alone time, an `AloneTimeLog`, and for a training type, milestone progress). */
+export type QuickLogInput = {
+  kind: QuickLogKind;
+  /** YYYY-MM-DD the entry is recorded against. */
+  date: string;
+  dogIds: string[];
+  values: LogFieldValue[];
+  rating?: number;
+  notes: string;
+  /** Training only: the milestone picked as the training type. */
+  milestoneId?: string;
+  /** Training only: which of that milestone's steps were actually worked through.
+   * Each one advances that step's `completedSessions` by exactly one. */
+  completedStepTitles: string[];
+  /** Training only, alone-time type: also written as an `AloneTimeLog` so the
+   * readiness math keeps seeing it. */
+  aloneTimeMinutes?: number;
+};
+
+/** What a Quick log changed, so the form can report it rather than closing silently. */
+export type QuickLogResult = {
+  milestone?: {
+    id: string;
+    title: string;
+    progress: number;
+    completed: boolean;
+    advancedSteps: { title: string; completedSessions: number; sessionsRequired: number }[];
+  };
+  /** Milestones that were locked before this entry and aren't any more. */
+  unlocked: { id: string; title: string }[];
+  /** What to work on next, computed against the state this entry just produced. Set
+   * only for training entries — the other four kinds have no "next" to point at. */
+  nextFocus?: {
+    milestoneId: string;
+    milestoneTitle: string;
+    stepTitle: string;
+    completedSessions: number;
+    sessionsRequired: number;
+  };
 };
 
 // --- The unified item -------------------------------------------------------

@@ -1,4 +1,4 @@
-import { Activity, Check, ChevronRight, Lock, Play, X } from "lucide-react";
+import { Activity, Check, ChevronRight, Droplet, Dumbbell, GlassWater, GraduationCap, Lock, Play, Trophy, Unlock, Utensils, X } from "lucide-react";
 import { FormEvent, ReactNode, useState } from "react";
 import { useSession } from "./auth";
 import { useNavigation } from "./navigation";
@@ -14,9 +14,12 @@ import {
   LogFieldValue,
   Milestone,
   Person,
+  QuickLogKind,
+  QuickLogResult,
 } from "./types";
 import { formatInZone, isoToZonedParts, searchTimezones, zonedTimeToUtcIso, zoneLabel } from "./timezones";
 import {
+  ALONE_TIME_TRAINING_ID,
   buildDefaultChecklist,
   computeMilestoneStatus,
   emptyLogValues,
@@ -25,6 +28,9 @@ import {
   itemDurationMinutes,
   itemStateLabels,
   milestoneProgress,
+  QUICK_LOG_SPECS,
+  quickLogFieldVisible,
+  quickLogSpec,
   resolveChecklistDefs,
   isHealthItem,
   resolveDependencies,
@@ -483,6 +489,398 @@ function LogEntryPanel({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Icon per Quick log kind. Also used by the Dashboard's Log feed so an entry reads
+ * the same in both places. */
+export const QUICK_LOG_ICONS: Record<QuickLogKind, typeof Droplet> = {
+  potty: Droplet,
+  play: Dumbbell,
+  training: GraduationCap,
+  food: Utensils,
+  water: GlassWater,
+};
+
+/** The Dashboard's Quick log. Every kind follows the same four beats — pick the one
+ * predetermined selection, fill the sub-fields it reveals, score it 1-5, add a note —
+ * so the flow is muscle memory regardless of what you're recording.
+ *
+ * Training is the one kind whose primary selection is live data rather than a fixed
+ * list: you pick a milestone, tick the steps you actually worked through, and each tick
+ * advances that step's session count. That's the "logging the session *is* the training
+ * progress" rule from the unified-item work, reached from the Dashboard instead of
+ * requiring a scheduled calendar item to exist first. */
+export function QuickLogForm({
+  date,
+  initialKind = "potty",
+  initialTrainingType,
+  onClose,
+}: {
+  date: string;
+  /** Which of the five to open on. Lets a tally chip or the alone-time readiness
+   * panel jump straight to the right kind instead of making you re-pick. */
+  initialKind?: QuickLogKind;
+  initialTrainingType?: string;
+  onClose: () => void;
+}) {
+  const { dogs, milestones, addQuickLog } = useStore();
+  const [kind, setKind] = useState<QuickLogKind>(initialKind);
+  const [dogIds, setDogIds] = useState<string[]>(() => dogs.items.map((dog) => dog.id));
+  const [selections, setSelections] = useState<Record<string, string | number | null>>({});
+  const [trainingType, setTrainingType] = useState(initialTrainingType ?? "");
+  const [stepTitles, setStepTitles] = useState<string[]>([]);
+  const [rating, setRating] = useState<number | undefined>(undefined);
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<QuickLogResult | null>(null);
+
+  const spec = quickLogSpec(kind);
+  const isAloneTime = trainingType === ALONE_TIME_TRAINING_ID;
+  const selectedMilestone = milestones.items.find((entry) => entry.id === trainingType);
+
+  // Only milestones that involve a selected dog — picking Mara shouldn't make you
+  // scroll past Griz's whole track to find hers. Milestones with no dogs listed apply
+  // to the household and always show.
+  const relevantMilestones = milestones.items.filter(
+    (entry) => entry.dogIds.length === 0 || entry.dogIds.some((id) => dogIds.includes(id)),
+  );
+  const milestonesByTrack = relevantMilestones.reduce<Record<string, Milestone[]>>((acc, entry) => {
+    (acc[entry.track] ??= []).push(entry);
+    return acc;
+  }, {});
+
+  function resetKind(next: QuickLogKind) {
+    setKind(next);
+    setSelections({});
+    setTrainingType("");
+    setStepTitles([]);
+    setRating(undefined);
+    setError("");
+  }
+
+  function resetAll() {
+    setSelections({});
+    setTrainingType(initialTrainingType ?? "");
+    setStepTitles([]);
+    setRating(undefined);
+    setNotes("");
+    setError("");
+    setResult(null);
+  }
+
+  function toggleDog(id: string) {
+    setDogIds((prev) => (prev.includes(id) ? prev.filter((entry) => entry !== id) : [...prev, id]));
+  }
+
+  function setField(name: string, value: string | number | null) {
+    setSelections((prev) => ({ ...prev, [name]: prev[name] === value ? null : value }));
+  }
+
+  const visibleFields = spec.fields.filter((field) => quickLogFieldVisible(field, selections));
+
+  async function submit() {
+    if (submitting) return;
+    if (dogIds.length === 0) return setError("Pick at least one dog.");
+    if (kind === "training" && !trainingType) return setError("Pick what you worked on.");
+    if (kind !== "training" && !selections[spec.primary.name]) return setError(`Answer "${spec.primary.label}" first.`);
+    if (isAloneTime && !selections.Duration) return setError("Enter how long they were alone.");
+    if (!rating) return setError("Give it a 1-5 score.");
+
+    setSubmitting(true);
+    setError("");
+
+    // The primary selection for training is the milestone itself, which has no entry
+    // in the spec's option list — write it in by title so the log stays readable
+    // without a join.
+    const values: LogFieldValue[] = [];
+    if (kind === "training") {
+      values.push({
+        fieldName: "Training type",
+        dataType: "text",
+        value: isAloneTime ? "Alone time" : (selectedMilestone?.title ?? trainingType),
+      });
+    }
+    [spec.primary, ...visibleFields].forEach((field) => {
+      if (kind === "training" && field === spec.primary) return;
+      const value = selections[field.name];
+      if (value === null || value === undefined || value === "") return;
+      values.push({ fieldName: field.name, dataType: field.input === "number" ? "number" : "text", unit: field.unit, value });
+    });
+
+    const outcome = await addQuickLog({
+      kind,
+      date,
+      dogIds,
+      values,
+      rating,
+      notes: notes.trim(),
+      milestoneId: kind === "training" && !isAloneTime ? trainingType : undefined,
+      completedStepTitles: kind === "training" && !isAloneTime ? stepTitles : [],
+      aloneTimeMinutes: isAloneTime ? Number(selections.Duration) : undefined,
+    });
+
+    setSubmitting(false);
+    if (!outcome) return setError("Couldn't save that. Try again.");
+    setResult(outcome);
+  }
+
+  if (result) {
+    return (
+      <div className="quick-log-result">
+        <p className="quick-log-result-headline">
+          <Check size={18} aria-hidden /> Logged.
+        </p>
+        {result.milestone && (
+          <div className="quick-log-progress">
+            <div className="row between">
+              <strong>{result.milestone.title}</strong>
+              <span className="small">{result.milestone.progress}%</span>
+            </div>
+            <ProgressBar value={result.milestone.progress} />
+            <ul className="quick-log-step-progress">
+              {result.milestone.advancedSteps.map((step) => (
+                <li key={step.title}>
+                  {step.title} — <strong>{step.completedSessions}/{step.sessionsRequired}</strong> sessions
+                  {step.completedSessions >= step.sessionsRequired && " ✓"}
+                </li>
+              ))}
+            </ul>
+            {result.milestone.completed && (
+              <p className="quick-log-unlock">
+                <Trophy size={16} aria-hidden /> Milestone complete.
+              </p>
+            )}
+          </div>
+        )}
+        {result.unlocked.length > 0 && (
+          <p className="quick-log-unlock">
+            <Unlock size={16} aria-hidden /> Unlocked: {result.unlocked.map((entry) => entry.title).join(", ")}
+          </p>
+        )}
+        {result.nextFocus && (
+          <div className="quick-log-next">
+            <div>
+              <p className="eyebrow">Work on next</p>
+              <strong>{result.nextFocus.stepTitle}</strong>
+              <p className="small">
+                {result.nextFocus.milestoneTitle} · {result.nextFocus.completedSessions}/{result.nextFocus.sessionsRequired} sessions
+              </p>
+            </div>
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => {
+                // Straight into logging the thing it just recommended, rather than
+                // making you re-pick the milestone you were literally just told about.
+                setResult(null);
+                setKind("training");
+                setTrainingType(result.nextFocus!.milestoneId);
+                setStepTitles([]);
+                setSelections({});
+                setRating(undefined);
+                setNotes("");
+              }}
+            >
+              Log it
+            </button>
+          </div>
+        )}
+        <div className="form-actions">
+          <button className="text-button" type="button" onClick={resetAll}>
+            Log another
+          </button>
+          <button className="primary-button" type="button" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="quick-log-form">
+      <div className="quick-log-kinds" role="tablist" aria-label="What are you logging?">
+        {QUICK_LOG_SPECS.map((entry) => {
+          const Icon = QUICK_LOG_ICONS[entry.kind];
+          return (
+            <button
+              key={entry.kind}
+              type="button"
+              role="tab"
+              aria-selected={kind === entry.kind}
+              className={kind === entry.kind ? "active" : ""}
+              onClick={() => resetKind(entry.kind)}
+            >
+              <Icon size={18} aria-hidden />
+              {entry.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="form-field">
+        Which dog(s)?
+        <div className="subtabs" role="group" aria-label="Dogs">
+          {dogs.items.map((dog) => (
+            <button key={dog.id} type="button" className={dogIds.includes(dog.id) ? "active" : ""} onClick={() => toggleDog(dog.id)}>
+              {dog.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {kind === "training" ? (
+        <>
+          <label>
+            {spec.primary.label}
+            <select
+              value={trainingType}
+              onChange={(event) => {
+                setTrainingType(event.target.value);
+                setStepTitles([]);
+              }}
+            >
+              <option value="">Select a training type…</option>
+              <option value={ALONE_TIME_TRAINING_ID}>Alone time</option>
+              {Object.entries(milestonesByTrack).map(([track, entries]) => (
+                <optgroup key={track} label={track[0].toUpperCase() + track.slice(1)}>
+                  {entries.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.title}
+                      {entry.status === "locked" ? " (not yet unlocked)" : entry.status === "completed" ? " (complete)" : ""}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+          {selectedMilestone && (
+            <div className="form-field">
+              Which steps did you work through?
+              <p className="small">Each one you tick counts a session toward that step.</p>
+              <div className="quick-log-steps">
+                {selectedMilestone.steps.map((step) => (
+                  <label key={step.title} className="quick-log-step">
+                    <input
+                      type="checkbox"
+                      checked={stepTitles.includes(step.title)}
+                      onChange={() =>
+                        setStepTitles((prev) =>
+                          prev.includes(step.title) ? prev.filter((entry) => entry !== step.title) : [...prev, step.title],
+                        )
+                      }
+                    />
+                    <span>
+                      <strong>{step.title}</strong>
+                      <small>
+                        {step.completedSessions}/{step.sessionsRequired} sessions · {step.successCriteria}
+                      </small>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="form-field">
+          {spec.primary.label}
+          <div className="subtabs" role="group" aria-label={spec.primary.label}>
+            {spec.primary.options?.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={selections[spec.primary.name] === option.value ? "active" : ""}
+                onClick={() => setField(spec.primary.name, option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {visibleFields.map((field) =>
+        field.input === "choice" ? (
+          <div className="form-field" key={field.name}>
+            {field.label}
+            <div className="subtabs" role="group" aria-label={field.label}>
+              {field.options?.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={selections[field.name] === option.value ? "active" : ""}
+                  onClick={() => setField(field.name, option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="form-field" key={field.name}>
+            {field.label}
+            {field.unit ? ` (${field.unit})` : ""}
+            <div className="quick-log-number">
+              {field.presets?.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  className={selections[field.name] === preset ? "active" : ""}
+                  onClick={() => setField(field.name, preset)}
+                >
+                  {preset}
+                </button>
+              ))}
+              <input
+                type="number"
+                min={0}
+                step="any"
+                placeholder={field.unit ?? "Amount"}
+                value={typeof selections[field.name] === "number" ? String(selections[field.name]) : ""}
+                onChange={(event) =>
+                  setSelections((prev) => ({ ...prev, [field.name]: event.target.value === "" ? null : Number(event.target.value) }))
+                }
+              />
+            </div>
+          </div>
+        ),
+      )}
+
+      <div className="form-field">
+        {spec.ratingLabel}
+        <div className="rating-row" aria-label={spec.ratingLabel}>
+          {[1, 2, 3, 4, 5].map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={rating === value ? "selected" : ""}
+              aria-pressed={rating === value}
+              onClick={() => setRating(rating === value ? undefined : value)}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <label>
+        Notes
+        <textarea rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={spec.notesPlaceholder} />
+      </label>
+
+      {error && <p className="form-error">{error}</p>}
+      <div className="form-actions">
+        <button className="text-button" type="button" onClick={onClose} disabled={submitting}>
+          Cancel
+        </button>
+        <button className="primary-button" type="button" onClick={submit} disabled={submitting}>
+          {submitting ? "Saving…" : `Log ${spec.label.toLowerCase()}`}
+        </button>
+      </div>
     </div>
   );
 }

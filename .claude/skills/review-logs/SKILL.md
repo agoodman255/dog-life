@@ -19,12 +19,24 @@ milestone is worse than a slow one.
 
 `item_logs` rows (see `src/types.ts` → `ItemLog`, `supabase/schema.sql`). Each carries:
 
-- `itemId` → the `items` row it belongs to (title, category, dogIds, notes give you the context)
-- `occurrenceDate` → which day's occurrence, when the item recurs
+- `itemId` → the `items` row it belongs to (title, category, dogIds, notes give you the context). **Null on a Quick log** — see below.
+- `quickLogKind` → `potty` | `play` | `training` | `food` | `water` when this is a Quick log, null when it's an item log. Exactly one of `itemId`/`quickLogKind` is ever set.
+- `occurrenceDate` → which day's occurrence, when the item recurs; for a Quick log, simply the day it happened
 - `text` → free-form, always available, usually the most informative field
-- `values` → structured `{fieldName, dataType, unit, value}` pairs from the item's `logFields`
+- `values` → structured `{fieldName, dataType, unit, value}` pairs, from the item's `logFields` or from the Quick log kind's field spec (`QUICK_LOG_SPECS` in `src/utils.ts`)
+- `rating` → 1-5 for how it went. Always set on a Quick log
+- `milestoneId` → set when a Quick log's training type was a milestone; that entry already advanced the milestone's `completedSessions`, so **do not propose advancing it again**
 - `dogIds` → which dog(s) this is about
 - `processedAt` → **null means not yet ingested**
+
+Two kinds of row, and the difference matters when reading them:
+
+- **Item logs** are tied to something scheduled — a vet visit, a recurring training item. Context comes from the joined `items` row.
+- **Quick logs** (Dashboard → Quick log, added 2026-07-26) are the high-frequency day-to-day record: potty breaks, play, training reps, meals, water. They're the densest trend data in the app precisely because they're logged constantly. Their `values` use stable `fieldName` keys — e.g. potty carries `Type` (pee/poo/both/nothing), `Where` (outside/on-walk/inside/crate), `Consistency` (firm/soft/loose/watery). Read the option *values*, not labels; `QUICK_LOG_SPECS` maps them back to display text.
+
+An accident is a potty log whose `Where` is `inside` or `crate` — that's what the
+Analytics accident count reads, replacing the older convention of a journal entry
+tagged `accident`.
 
 Completion data lives separately on `item_occurrences`: per-checklist-row `rating` and
 `notes`, plus an overall `rating` and `ratingNotes`. Read those too — a training session
@@ -33,11 +45,12 @@ surfacing, and it will never appear in the free-text log.
 
 ## Phase 1 — Pull
 
-Only unprocessed rows, so repeat runs stay incremental:
+Only unprocessed rows, so repeat runs stay incremental. **Left join, not inner** — an
+inner join silently drops every Quick log, since those have no `item_id`:
 
 ```sql
 select l.*, i.title, i.category, i.notes as item_notes
-from item_logs l join items i on i.id = l.item_id
+from item_logs l left join items i on i.id = l.item_id
 where l.processed_at is null
 order by l.logged_at;
 ```

@@ -10,6 +10,7 @@ import {
   InventoryItem,
   Item,
   ItemIntent,
+  ItemLog,
   ItemOccurrence,
   ItemState,
   LogFieldDef,
@@ -17,6 +18,7 @@ import {
   Meal,
   Milestone,
   NotificationItem,
+  QuickLogKind,
   RecipeIngredient,
 } from "./types";
 
@@ -88,6 +90,304 @@ export const ITEM_INTENT_PRESETS: {
     defaultKind: "one-off",
   },
 ];
+
+// --- Quick log ---------------------------------------------------------------
+//
+// The five things logged constantly during a day. Every one follows the same shape:
+// one predetermined selection first, sub-fields that appear based on that selection,
+// a 1-5 score, then a note. Declared as data rather than five hand-written forms so
+// QuickLogForm renders them generically and the Dashboard's Log section can summarize
+// any entry without knowing which kind it is.
+
+export type QuickLogFieldInput = "choice" | "number";
+
+export type QuickLogField = {
+  /** Also the `fieldName` written into the log's `values`, so the ingest pass reads
+   * a stable key rather than a UI label that might get reworded. */
+  name: string;
+  label: string;
+  input: QuickLogFieldInput;
+  options?: { value: string; label: string }[];
+  unit?: string;
+  /** Tap-to-fill shortcuts for a number field — typing "30" on a phone is the friction
+   * this feature exists to remove. */
+  presets?: number[];
+  /** Only render once `field` holds one of `values`. How "consistency" stays hidden
+   * until you've said it was a poo. */
+  showWhen?: { field: string; values: string[] };
+};
+
+export type QuickLogSpec = {
+  kind: QuickLogKind;
+  label: string;
+  /** The one selection made first. Always rendered as chips — it's the fastest tap
+   * target and there are never more than five options. */
+  primary: QuickLogField;
+  /** Sub-fields, in order, revealed after the primary selection. */
+  fields: QuickLogField[];
+  ratingLabel: string;
+  notesPlaceholder: string;
+};
+
+export const QUICK_LOG_SPECS: QuickLogSpec[] = [
+  {
+    kind: "potty",
+    label: "Potty",
+    primary: {
+      name: "Type",
+      label: "What was it?",
+      input: "choice",
+      options: [
+        { value: "pee", label: "Pee" },
+        { value: "poo", label: "Poo" },
+        { value: "both", label: "Both" },
+        { value: "nothing", label: "Nothing" },
+      ],
+    },
+    fields: [
+      {
+        name: "Where",
+        label: "Where?",
+        input: "choice",
+        options: [
+          { value: "outside", label: "Outside" },
+          { value: "on-walk", label: "On a walk" },
+          { value: "inside", label: "Inside (accident)" },
+          { value: "crate", label: "In the crate" },
+        ],
+      },
+      {
+        name: "Consistency",
+        label: "Stool consistency",
+        input: "choice",
+        showWhen: { field: "Type", values: ["poo", "both"] },
+        options: [
+          { value: "firm", label: "Firm" },
+          { value: "soft", label: "Soft" },
+          { value: "loose", label: "Loose" },
+          { value: "watery", label: "Watery" },
+        ],
+      },
+    ],
+    ratingLabel: "How did the break go?",
+    notesPlaceholder: "Anything worth remembering — blood, straining, how long it took…",
+  },
+  {
+    kind: "play",
+    label: "Play time",
+    primary: {
+      name: "Type",
+      label: "What kind of play?",
+      input: "choice",
+      options: [
+        { value: "fetch", label: "Fetch" },
+        { value: "tug", label: "Tug" },
+        { value: "chase", label: "Chase" },
+        { value: "puzzle", label: "Puzzle / enrichment" },
+        { value: "social", label: "With another dog" },
+        { value: "free", label: "Free play" },
+      ],
+    },
+    fields: [
+      { name: "Duration", label: "How long?", input: "number", unit: "min", presets: [5, 10, 15, 30, 60] },
+      {
+        name: "Where",
+        label: "Where?",
+        input: "choice",
+        options: [
+          { value: "indoors", label: "Indoors" },
+          { value: "yard", label: "Yard" },
+          { value: "park", label: "Park" },
+          { value: "trail", label: "Trail" },
+        ],
+      },
+      {
+        name: "Energy after",
+        label: "Energy afterwards",
+        input: "choice",
+        options: [
+          { value: "settled", label: "Settled right down" },
+          { value: "calm", label: "Calm" },
+          { value: "still-wound", label: "Still wound up" },
+          { value: "overtired", label: "Overtired / nippy" },
+        ],
+      },
+    ],
+    ratingLabel: "How was the session?",
+    notesPlaceholder: "How did they play? Any resource guarding, over-arousal, good manners…",
+  },
+  {
+    // Training's primary selection is the milestone picker, which is built from live
+    // data rather than a fixed option list — QuickLogForm special-cases it. The sub-
+    // fields below apply to every training entry regardless of which type was picked.
+    kind: "training",
+    label: "Training",
+    primary: { name: "Training type", label: "What did you work on?", input: "choice" },
+    fields: [
+      { name: "Duration", label: "How long?", input: "number", unit: "min", presets: [2, 5, 10, 15, 20] },
+      {
+        name: "Distractions",
+        label: "Distraction level",
+        input: "choice",
+        options: [
+          { value: "none", label: "None (quiet room)" },
+          { value: "low", label: "Low" },
+          { value: "moderate", label: "Moderate" },
+          { value: "high", label: "High (out in the world)" },
+        ],
+      },
+    ],
+    ratingLabel: "How did the session go?",
+    notesPlaceholder: "What worked, what didn't, what to change next time…",
+  },
+  {
+    kind: "food",
+    label: "Food",
+    primary: {
+      name: "Type",
+      label: "What was it?",
+      input: "choice",
+      options: [
+        { value: "breakfast", label: "Breakfast" },
+        { value: "dinner", label: "Dinner" },
+        { value: "snack", label: "Snack" },
+        { value: "treat", label: "Training treats" },
+        { value: "chew", label: "Chew" },
+      ],
+    },
+    fields: [
+      {
+        name: "Amount eaten",
+        label: "How much did they eat?",
+        input: "choice",
+        options: [
+          { value: "all", label: "All of it" },
+          { value: "most", label: "Most" },
+          { value: "half", label: "About half" },
+          { value: "little", label: "A little" },
+          { value: "none", label: "Refused" },
+        ],
+      },
+      { name: "Amount", label: "Amount served", input: "number", unit: "cups" },
+    ],
+    ratingLabel: "How was the meal?",
+    notesPlaceholder: "Appetite, speed, any food guarding, new food reactions…",
+  },
+  {
+    kind: "water",
+    label: "Water",
+    primary: {
+      name: "Intake",
+      label: "How much did they drink?",
+      input: "choice",
+      options: [
+        { value: "normal", label: "Normal" },
+        { value: "more", label: "More than usual" },
+        { value: "less", label: "Less than usual" },
+        { value: "refused", label: "Wouldn't drink" },
+      ],
+    },
+    fields: [{ name: "Amount", label: "Amount (if you measured)", input: "number", unit: "oz" }],
+    ratingLabel: "How's their hydration?",
+    notesPlaceholder: "Anything unusual — gulping, panting, dry gums…",
+  },
+];
+
+export function quickLogSpec(kind: QuickLogKind): QuickLogSpec {
+  // Non-null: QUICK_LOG_SPECS covers every member of the QuickLogKind union, and the
+  // compiler enforces that any new kind added there gets a spec here too.
+  return QUICK_LOG_SPECS.find((spec) => spec.kind === kind)!;
+}
+
+/** The special training type that isn't a milestone. Alone time was its own Dashboard
+ * panel with its own Log button until 2026-07-26; it's a training type like any other,
+ * it just also feeds the alone-time readiness math via its own `alone_time_logs` row. */
+export const ALONE_TIME_TRAINING_ID = "alone-time";
+
+/** Whether a Quick log field should render, given what's been picked so far. */
+export function quickLogFieldVisible(field: QuickLogField, values: Record<string, string | number | null>): boolean {
+  if (!field.showWhen) return true;
+  const current = values[field.showWhen.field];
+  return typeof current === "string" && field.showWhen.values.includes(current);
+}
+
+/** One-line summary of a log's structured selections, for the Log feed. Reads the
+ * option labels back off the spec so the feed says "Poo · Inside (accident)" rather
+ * than echoing the raw stored values. */
+export function summarizeQuickLog(log: Pick<ItemLog, "quickLogKind" | "values">): string {
+  if (!log.quickLogKind) return log.values.map((value) => `${value.fieldName}: ${value.value}`).join(" · ");
+  const spec = quickLogSpec(log.quickLogKind);
+  const allFields = [spec.primary, ...spec.fields];
+  return log.values
+    .map((value) => {
+      const field = allFields.find((entry) => entry.name === value.fieldName);
+      const option = field?.options?.find((entry) => entry.value === value.value);
+      if (option) return option.label;
+      if (value.unit) return `${value.value} ${value.unit}`;
+      // The training type is written in by title rather than picked from an option
+      // list, and the milestone name speaks for itself — labelling it would just read
+      // "Training type: Marker word" in a feed row that already carries the icon.
+      if (value.fieldName === "Training type") return String(value.value);
+      return `${value.fieldName}: ${value.value}`;
+    })
+    .join(" · ");
+}
+
+/** The single step to work on next, with the milestone it belongs to. */
+export type TrainingFocus = {
+  milestoneId: string;
+  milestoneTitle: string;
+  stepTitle: string;
+  successCriteria: string;
+  completedSessions: number;
+  sessionsRequired: number;
+};
+
+/** "What should we work on next?" — the deterministic half of Andrew's ask (2026-07-26)
+ * that the Quick log's training type feeds. No model involved: milestone state already
+ * says what's unlocked and what's unfinished, so a formula answers this honestly and
+ * a generated sentence would only add a way to be wrong.
+ *
+ * The rule is momentum first, then curriculum order: finish a milestone that's already
+ * underway before opening a new one, and otherwise take them in the order they're
+ * authored, which is the order the training plan intends. Predictability matters more
+ * than cleverness here — the answer should be the same tomorrow unless something was
+ * actually logged. Anything richer (weaving training into meals and potty breaks by
+ * time of day) is backlog item 12's rule engine, not this.
+ *
+ * Pass `dogId` to scope to one dog; milestones with no dogs listed are household-wide
+ * and always count. */
+export function nextTrainingFocus(milestones: Milestone[], dogId?: string): TrainingFocus | null {
+  const candidates = milestones.filter((milestone) => {
+    if (milestone.status === "skipped" || milestone.status === "delayed") return false;
+    if (isMilestoneComplete(milestone)) return false;
+    if (computeMilestoneStatus(milestone, milestones) === "locked") return false;
+    if (dogId && milestone.dogIds.length > 0 && !milestone.dogIds.includes(dogId)) return false;
+    return milestone.steps.some((step) => step.completedSessions < step.sessionsRequired);
+  });
+  if (candidates.length === 0) return null;
+
+  const underway = candidates.filter((milestone) => milestone.steps.some((step) => step.completedSessions > 0));
+  const pick = (underway.length > 0 ? underway : candidates)[0];
+  const step = pick.steps.find((entry) => entry.completedSessions < entry.sessionsRequired);
+  if (!step) return null;
+
+  return {
+    milestoneId: pick.id,
+    milestoneTitle: pick.title,
+    stepTitle: step.title,
+    successCriteria: step.successCriteria,
+    completedSessions: step.completedSessions,
+    sessionsRequired: step.sessionsRequired,
+  };
+}
+
+/** Quick logs recorded on a given day, newest first. */
+export function quickLogsOn(logs: ItemLog[], dateKey: string): ItemLog[] {
+  return logs
+    .filter((log) => log.quickLogKind && log.occurrenceDate === dateKey)
+    .sort((a, b) => b.loggedAt.localeCompare(a.loggedAt));
+}
 
 /** Structured fields an item starts with when you turn logging on, keyed by
  * category. Only a starting point — the form lets you add/remove rows. Anything

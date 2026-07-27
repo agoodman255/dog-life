@@ -698,77 +698,10 @@ export function RelationshipLogForm({
 
 const DAY_OF_WEEK_OPTIONS: DayOfWeek[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
-const aloneTimeLogSchema = z.object({
-  date: z.string().min(1),
-  durationMinutes: z.number().min(1),
-  dogIds: z.array(z.string()).min(1, "Select which dog(s) this session covers"),
-  notes: z.string(),
-});
-
-type AloneTimeLogFormValues = z.infer<typeof aloneTimeLogSchema>;
-
-export function aloneTimeLogFormValuesToLog(values: AloneTimeLogFormValues, id: string): AloneTimeLog {
-  return { id, date: values.date, durationMinutes: values.durationMinutes, dogIds: values.dogIds, notes: values.notes };
-}
-
-export function AloneTimeLogForm({
-  dogOptions,
-  onSubmit,
-  onCancel,
-}: {
-  dogOptions: { id: string; name: string }[];
-  onSubmit: (values: AloneTimeLogFormValues) => void;
-  onCancel: () => void;
-}) {
-  const { register, handleSubmit, watch, setValue, getValues, formState: { errors } } = useForm<AloneTimeLogFormValues>({
-    resolver: zodResolver(aloneTimeLogSchema),
-    defaultValues: { date: new Date().toISOString().slice(0, 10), durationMinutes: 30, dogIds: dogOptions.map((dog) => dog.id), notes: "" },
-  });
-  const dogIds = watch("dogIds");
-
-  function toggleDogId(id: string) {
-    const current = getValues("dogIds");
-    setValue("dogIds", current.includes(id) ? current.filter((d) => d !== id) : [...current, id]);
-  }
-
-  return (
-    <form className="entity-form" onSubmit={handleSubmit(onSubmit)}>
-      <div className="form-grid">
-        <label>
-          Date
-          <input type="date" {...register("date")} />
-        </label>
-        <label>
-          Duration (minutes)
-          <input type="number" min={1} {...register("durationMinutes", { valueAsNumber: true })} />
-        </label>
-      </div>
-      <div className="form-field">
-        Which dog(s) was this?
-        <div className="subtabs" role="group" aria-label="Dogs covered">
-          {dogOptions.map((dog) => (
-            <button key={dog.id} type="button" className={dogIds.includes(dog.id) ? "active" : ""} onClick={() => toggleDogId(dog.id)}>
-              {dog.name}
-            </button>
-          ))}
-        </div>
-        {errors.dogIds && <small className="form-error">{errors.dogIds.message}</small>}
-      </div>
-      <label>
-        Notes
-        <textarea rows={2} {...register("notes")} placeholder="How did it go? Any signs of stress?" />
-      </label>
-      <div className="form-actions">
-        <button className="text-button" type="button" onClick={onCancel}>
-          Cancel
-        </button>
-        <button className="primary-button" type="submit">
-          Log alone time
-        </button>
-      </div>
-    </form>
-  );
-}
+// Alone time used to have its own standalone log form here. It's now one of the
+// training types in the Dashboard's Quick log (see QuickLogForm in components.tsx),
+// which writes the same `alone_time_logs` row the readiness math reads — so there's
+// one place to record it instead of two forms that never knew about each other.
 
 // --- The unified item form --------------------------------------------------
 //

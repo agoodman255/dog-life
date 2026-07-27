@@ -22,6 +22,7 @@ Vision shift noted here: Dog Life OS is expanding from a dog-training app into a
 | 14 | Condensed top navigation (hamburger menu replacing page nav bar) | Medium | Medium | ~3-4h | **Needs Andrew's confirmation before removing the existing nav bar** — build alongside the calendar view-switcher dropdown (Feedback backlog) since both restyle the same header |
 | 15 | Calendar event editing overhaul (delete + recurring exceptions, real recurrence engine, structured time fields, formulaic alone-time coverage) | High | High | Built | 🟡 **Built 2026-07-24 — all 3 open questions answered by Andrew, built same session.** Browser-verified end-to-end (see item 15 notes). |
 | 16 | Unify Task/Event/Health into one item type with capability toggles | High | Very High | Built | 🟡 **Built and migrated to production 2026-07-25.** Supersedes the three-type split. Old source tables (`tasks`, `calendar_events`, `health_events`, `task_instances`) still exist, unused, pending an explicit go-ahead to drop — see item 16 notes. |
+| 17 | Quick Log v2 — structured Dashboard "Log" tab (potty/play/training/food/water) | Medium-High | High | Built | 🟡 **Built and browser-verified 2026-07-26.** Migration `migrate-quick-logs-2026-07-26.sql` written but **not yet run against production** — see item 17 notes. |
 
 ## Details
 
@@ -93,6 +94,71 @@ Came up 2026-07-25. Andrew: "the item types of task, event, and health don't mak
 - **Field-wipe regression fixed.** `itemFormValuesToItem` had been hardcoding `supplies: []` / `setting: "either"` / `difficulty: 1` and omitting `location`, `formation`, `relatedMilestoneId`, so opening any item and saving silently wiped six fields. All six now round-trip through real inputs under "Show more options".
 - **"Edit item" added to the detail modal.** Unifying the calendar's open handler had accidentally made the detail modal a dead end — you could start, skip or delete an item but never change what it is. Wired in Calendar and Tasks.
 - **Dashboard "Today" now means today.** `useAdaptivePlan` filters to items that actually have an occurrence on the current date. Tasks never had recurrence before, so the old agenda listed every routine regardless of date.
+
+### 17. Quick Log v2 — structured Dashboard "Log" tab
+Came up 2026-07-26. Andrew wants the Dashboard's existing Quick Log button reworked into five structured categories instead of today's flat accident/potty-win/other picker (`QuickLogForm` in [views.tsx](src/views.tsx:359)):
+- **Potty** — pee or poo, a rating, and a note.
+- **Play time** — duration, and a note.
+- **Training** — pick a linked training type and complete the required training task, so the milestone-progress logic already wired up in item 16 (checking a checklist row advances `Milestone.completedSessions`) tracks it and the app can say what's next / what just unlocked.
+- **Food** — rating and a note.
+- **Water** — rating and a note.
+
+This data then surfaces on the Dashboard under a new **4th toolbar tab, "Log"**, ordered Today → Log → Milestone → Readiness (today's jump-nav only has Today/Milestone/Readiness — see the `dashboard-jump-nav` block in [views.tsx](src/views.tsx:239)).
+
+**Folds in the Alone-time readiness log.** Dashboard currently has a second, separate log entry point — the `AloneTimeReadinessPanel` with its own "Log" button and `AloneTimeLogForm` ([views.tsx](src/views.tsx:161)) writing to `aloneTimeLogs`. Andrew's read: alone time is really just one training type, so it should become an option under the new Training category rather than living in its own panel/button. `TrainingView` already lists alone-time as a tab alongside Obedience/Socialization/Confidence/Handling ([views.tsx](src/views.tsx:1534)), so the category set for the Training quick-log picker already exists — this is about routing through one entry point, not inventing new categories.
+
+**Resolved fork — the data lives in `item_logs`.** The open question was whether to extend `ItemLog`, extend `JournalEntry`, or add a new entity. Went with extending `ItemLog`: `item_id` is now nullable, and a Quick log carries `quick_log_kind` instead, plus `rating` (1-5) and `milestone_id`. The deciding reason was the ingest path — the `review-logs` skill already reads `item_logs` incrementally via `processed_at`, and a Quick log is the same shape (timestamped, structured `values`, free text, dog-scoped). A second table would have meant a second ingest path for no gain. `JournalEntry` was the wrong home: it has no structured fields at all, only title/text/tags/mood.
+
+**What shipped (2026-07-26):**
+- **One spec-driven form.** `QUICK_LOG_SPECS` in [utils.ts](src/utils.ts) declares all five kinds as data; `QuickLogForm` in [components.tsx](src/components.tsx) renders any of them. Every kind follows the same four beats Andrew asked for — one predetermined selection, sub-fields revealed by that selection, a 1-5 score, a note — so the flow is muscle memory regardless of what's being recorded. Adding a sixth kind is a data edit, not a new form.
+- **Conditional sub-fields.** `showWhen` hides a field until its trigger is picked — stool consistency only appears once you've said poo. Number fields (duration, amount) get tap-to-fill presets, since typing "30" on a phone is most of the friction the feature exists to remove.
+- **Training feeds the milestone engine.** The training type is a live milestone picker (grouped by track, lock status shown inline, filtered to the selected dogs). Picking one lists its steps with current session counts; ticking a step advances that step's `completedSessions`. On save the form reports what moved: step counts, milestone %, "Milestone complete", and **what that unlocked**. Verified end-to-end — completing "Marker word" printed `Unlocked: Sit, Come, Speak` and Sit flipped from locked to Current on the Dashboard.
+- **Dashboard "Log" section**, 4th in the jump nav (Today → Log → Milestone → Readiness), with per-kind tallies for the day that double as one-tap entry points into the right kind, and a chronological feed of the day's entries.
+- **Alone time folded into Training.** Both old entry points (the Dashboard readiness panel's Log button and the Training view's Alone Time tab) now open the Quick log pre-set to Training → Alone time. It still writes an `alone_time_logs` row alongside the `item_logs` one, because that table is what `computeDogAloneTimeReadiness` reads — verified readiness moved 0m → 45m proven, closing the gap 4h → 3.3h. The standalone `AloneTimeLogForm` was deleted.
+- **Analytics accident count kept whole.** An accident is now a potty log whose `Where` is `inside`/`crate`. Analytics counts those **plus** legacy journal entries tagged `accident`, so entries made before this change don't silently drop off the chart.
+- `review-logs` skill updated: its Phase 1 pull was an inner join on `items`, which would have silently dropped every Quick log. Now a left join, with the new fields documented.
+
+**Undo, built same day.** Deleting a Quick log now reverses everything it caused, which
+matters most for training: a mis-ticked step would otherwise inflate a milestone
+permanently. Each feed row has a delete whose confirm names the consequence ("takes one
+session back off Charge marker, Use on eye contact in Marker word") rather than asking
+a generic "are you sure". `advanced_step_titles` on the log is what makes the rollback
+exact — it records which steps the entry advanced, and doubles as the thing the ingest
+pass wants to know (which steps were practised, not just which milestone).
+
+Deleting also **re-locks what the entry unlocked**, so the form announcing "Unlocked:
+Sit, Come, Speak" isn't a one-way door. This is held to a deliberately narrow rule:
+only milestones with *zero* logged sessions whose prerequisites are genuinely no longer
+met. A milestone someone has already put work into is never yanked back — verified:
+with Sit at 1 logged session and Speak at 0, deleting the completing entry re-locked
+Speak and left Sit alone. (The status-sync effect in `store.tsx` deliberately never
+writes "locked" back, which is why this is handled in `deleteQuickLog` rather than
+there.) An alone-time entry's `alone_time_logs` row is deleted too, or the readiness
+panel would keep counting a retracted session — verified 0m ⇄ 1.5h both directions.
+
+No *edit* flow, deliberately: a Quick log takes seconds to re-enter, so delete-and-relog
+covers the mistake case without a second form to keep in sync.
+
+**Still open:**
+- **The migration has not been run against production.** `supabase/migrate-quick-logs-2026-07-26.sql` is written, idempotent, and mirrored into `schema.sql`, but deliberately not executed — same caution as item 16. Run it before using Quick log against the real database, or the inserts will fail on the missing columns. Browser verification was done in offline mode (`dog-life-dev-offline-alt`, port 5174) specifically to avoid touching production.
+- The alone-time row is matched on (date, duration, dogs) rather than a stored id, because `alone_time_logs` ids are DB-generated and the collection's `add` returns a boolean rather than the created row. Two identical alone-time entries on the same day would see the newer one deleted first. Fixable by having `add` return the row, but that changes a shared signature used by every collection — not worth it for this.
+**"What's next", built same day.** `nextTrainingFocus` in [utils.ts](src/utils.ts) answers
+the last part of Andrew's ask. No model involved — milestone state already says what's
+unlocked and unfinished, so a formula answers it honestly and a generated sentence would
+only add a way to be wrong. The rule is **momentum first, then curriculum order**: finish
+a milestone that's already underway before opening a new one, otherwise take them in
+authored order. Predictability beats cleverness — the answer shouldn't change unless
+something was actually logged.
+
+Surfaced in two places, both with a **Log it** button that opens the Quick log with that
+milestone already selected, so the gap between "what should I do" and "done, recorded"
+is one tap: a persistent card in the Dashboard's Log section, and in the post-save panel
+computed against the state the entry just produced (log Charge marker to 2/2 and the
+next card immediately reads "Use on eye contact · 0/3").
+
+This is *not* item 12. That one is about weaving training into the day automatically —
+around meals, potty breaks, time of day. This just answers "which step is next" from
+milestone state, which is the piece Quick log needed to close its own loop.
 
 **Migration run against production, 2026-07-25.** `schema.sql` then `migrate-items-2026-07-25.sql` then `tune-items-2026-07-25.sql` (blocks 0a/0b reconciliation, then block 3 twice — "Cooperative handling minis" and "Name + recall foundation" checklist steps assigned to Mara) all ran clean, in that order. "Parallel decompression walk" was checked and needs no per-dog split — its steps are shared/both-dogs by design, which is what an unset `dogId` already means. Two real bugs were found and fixed live against production data: a table-ordering bug in `schema.sql` (the unified-items block ran before `create table items`) and a column-type mismatch in the migration (`item_deletions.item_id` was `uuid`, needed to be `text` to match the audit-trail pattern of the tables it replaces). Both fixes are in the files now.
 

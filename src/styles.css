@@ -2704,3 +2704,303 @@ textarea:focus-visible,
   background: var(--soft);
   color: var(--tag-ink);
 }
+
+/* --- Quick log --------------------------------------------------------------
+   The five kinds and the Dashboard's Log feed. Every kind renders through the same
+   spec-driven form, so these styles cover all of them rather than being per-kind. */
+
+.quick-log-form,
+.quick-log-result {
+  display: grid;
+  gap: 14px;
+}
+
+/* Kind picker. Icon over label so five options still fit a phone without wrapping
+   into a scrollable row. */
+.quick-log-kinds {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.quick-log-kinds button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 4px;
+  min-height: 62px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.quick-log-kinds button:hover {
+  border-color: var(--teal);
+  color: var(--ink);
+}
+
+.quick-log-kinds button.active {
+  background: var(--green);
+  border-color: var(--green);
+  color: #f9f4e9;
+}
+
+/* Number sub-field: tap a preset or type an exact value. The presets exist because
+   typing "30" on a phone is most of the friction in logging a 30-minute session. */
+.quick-log-number {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.quick-log-number button {
+  min-width: 44px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.quick-log-number button.active {
+  background: var(--green);
+  border-color: var(--green);
+  color: #f9f4e9;
+}
+
+.quick-log-number input {
+  flex: 1 1 90px;
+  min-width: 90px;
+}
+
+.quick-log-steps {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.quick-log-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+}
+
+.quick-log-step input {
+  margin-top: 3px;
+  flex: 0 0 auto;
+}
+
+.quick-log-step span {
+  display: grid;
+  gap: 2px;
+}
+
+.quick-log-step small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+/* Post-save summary — the "what did this change" half of a training log. */
+.quick-log-result-headline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-weight: 800;
+  color: var(--teal);
+}
+
+.quick-log-progress {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--soft);
+}
+
+.quick-log-step-progress {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.quick-log-unlock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-weight: 700;
+  color: var(--teal);
+}
+
+/* Dashboard Log section: today's tallies, then the feed. */
+.quick-log-tallies {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.quick-log-tally {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.quick-log-tally strong {
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+.quick-log-tally:hover {
+  border-color: var(--teal);
+}
+
+.quick-log-tally.has-entries {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.quick-log-feed {
+  display: grid;
+  gap: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.quick-log-row {
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.quick-log-row-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--teal);
+}
+
+.quick-log-row-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.quick-log-row-body p {
+  margin: 2px 0 0;
+}
+
+.quick-log-row-note {
+  font-size: 0.85rem;
+}
+
+@media (max-width: 560px) {
+  /* Two rows of icons beats five columns squeezed to 60px on a narrow phone. */
+  .quick-log-kinds,
+  .quick-log-tallies {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Inline delete confirmation on a Log feed row. Inline rather than a modal because
+   the consequence is small and reversible-by-re-logging — but it still spells out
+   the milestone rollback, which isn't guessable from the row itself. */
+.quick-log-row-confirm {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.quick-log-row-confirm p {
+  margin: 0;
+}
+
+.quick-log-row .icon-button.small {
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  color: var(--muted);
+}
+
+.quick-log-row .icon-button.small:hover {
+  color: var(--ink);
+}
+
+/* "Work on next" — the deterministic recommendation, shown both in the Log section
+   and after a training entry. Deliberately looks like a card you act on, not a
+   heading: the Log it button is the whole point. */
+.quick-log-next {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--teal);
+  border-radius: 10px;
+  background: var(--soft);
+}
+
+.quick-log-next strong {
+  display: block;
+  margin-top: 2px;
+}
+
+.quick-log-next p {
+  margin: 0;
+}
+
+.quick-log-next .text-button {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 560px) {
+  .quick-log-next {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Stacked, the action becomes a full-width button and needs a real tap target —
+     the inline 30px version is fine beside text on a desktop row, not under it. */
+  .quick-log-next .text-button {
+    min-height: 40px;
+    justify-content: center;
+    border: 1px solid var(--teal);
+    border-radius: 8px;
+  }
+}

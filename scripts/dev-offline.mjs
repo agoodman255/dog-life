@@ -11,7 +11,9 @@ import { spawn } from "node:child_process";
 process.env.VITE_SUPABASE_URL = "";
 process.env.VITE_SUPABASE_ANON_KEY = "";
 
-const child = spawn("npx", ["vite", "--host", "127.0.0.1"], {
+// Extra args pass straight through to vite, so `node scripts/dev-offline.mjs --port
+// 5174` gives a second offline instance when the normal dev server already holds 5173.
+const child = spawn("npx", ["vite", "--host", "127.0.0.1", ...process.argv.slice(2)], {
   stdio: "inherit",
   shell: true,
   env: process.env,

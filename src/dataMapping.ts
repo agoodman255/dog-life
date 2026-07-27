@@ -208,13 +208,17 @@ export const itemLog = {
   fromRow(row: any): ItemLog {
     return {
       id: row.id,
-      itemId: row.item_id,
+      itemId: row.item_id ?? undefined,
+      quickLogKind: row.quick_log_kind ?? undefined,
       occurrenceDate: row.occurrence_date ?? undefined,
       loggedAt: row.logged_at,
       loggedBy: row.logged_by ?? "",
       text: row.text ?? "",
       values: row.values ?? [],
       dogIds: row.dog_ids ?? [],
+      rating: row.rating ?? undefined,
+      milestoneId: row.milestone_id ?? undefined,
+      advancedStepTitles: row.advanced_step_titles ?? undefined,
       processedAt: row.processed_at ?? undefined,
     };
   },
@@ -222,13 +226,17 @@ export const itemLog = {
     return {
       id: entry.id,
       household_id: householdId,
-      item_id: entry.itemId,
+      item_id: entry.itemId ?? null,
+      quick_log_kind: entry.quickLogKind ?? null,
       occurrence_date: entry.occurrenceDate || null,
       logged_at: entry.loggedAt,
       logged_by: entry.loggedBy || null,
       text: entry.text,
       values: entry.values,
       dog_ids: entry.dogIds,
+      rating: entry.rating ?? null,
+      milestone_id: entry.milestoneId ?? null,
+      advanced_step_titles: entry.advancedStepTitles ?? [],
       processed_at: entry.processedAt ?? null,
     };
   },

@@ -39,10 +39,20 @@ import {
   Milestone,
   Person,
   ProductFeedback,
+  QuickLogInput,
+  QuickLogResult,
   RecipeIngredient,
   RelationshipLog,
 } from "./types";
-import { buildDefaultChecklist, computeMilestoneStatus, resolveChecklistDefs } from "./utils";
+import {
+  buildDefaultChecklist,
+  computeMilestoneStatus,
+  isMilestoneComplete,
+  milestoneProgress,
+  nextTrainingFocus,
+  resolveChecklistDefs,
+  resolveDependencies,
+} from "./utils";
 
 const PREFIX = "dog-life-os";
 
@@ -533,6 +543,169 @@ function useDataStore() {
     return itemLogs.add({ ...entry, id: makeId("log"), loggedAt: new Date().toISOString() });
   }
 
+  /** Everything a Quick log changed, handed back so the form can say what just
+   * happened instead of silently closing. The "what's next / what unlocked" half of
+   * Andrew's ask (2026-07-26) lives here — logging a training session is only useful
+   * if it visibly moves the milestone it belongs to. */
+  async function addQuickLog(entry: QuickLogInput): Promise<QuickLogResult | null> {
+    const dateKey = entry.date;
+    const milestone = entry.milestoneId ? milestones.items.find((item) => item.id === entry.milestoneId) : undefined;
+
+    // Project the milestone forward locally rather than re-reading `milestones.items`
+    // after the update — the collection's state hasn't flushed yet at this point, so
+    // reading it back would report the pre-advance numbers.
+    const advancing = milestone && entry.completedStepTitles.length > 0;
+    const nextMilestone: Milestone | undefined = advancing
+      ? {
+          ...milestone,
+          steps: milestone.steps.map((step) =>
+            entry.completedStepTitles.includes(step.title)
+              ? { ...step, completedSessions: Math.min(step.sessionsRequired, step.completedSessions + 1) }
+              : step,
+          ),
+        }
+      : milestone;
+
+    const ok = await addItemLog({
+      quickLogKind: entry.kind,
+      occurrenceDate: dateKey,
+      loggedBy: people.items[0]?.id ?? "",
+      text: entry.notes,
+      values: entry.values,
+      dogIds: entry.dogIds,
+      rating: entry.rating,
+      milestoneId: entry.milestoneId,
+      advancedStepTitles: advancing ? entry.completedStepTitles : undefined,
+    });
+    if (!ok) return null;
+
+    // Alone time is a training type like any other in the Quick log, but it also
+    // feeds `computeDogAloneTimeReadiness`, which only reads `alone_time_logs`. Writing
+    // both keeps the readiness panel working off the same single entry point rather
+    // than stranding it behind the separate form it used to have.
+    if (entry.aloneTimeMinutes && entry.aloneTimeMinutes > 0) {
+      await aloneTimeLogs.add({
+        id: makeId("alone"),
+        date: dateKey,
+        durationMinutes: entry.aloneTimeMinutes,
+        dogIds: entry.dogIds,
+        notes: entry.notes,
+      });
+    }
+
+    if (!milestone || !nextMilestone || !advancing) return { unlocked: [] };
+
+    const saved = await milestones.update(milestone.id, { steps: nextMilestone.steps });
+    if (!saved) return { unlocked: [] };
+
+    const before = milestones.items;
+    const after = before.map((item) => (item.id === nextMilestone.id ? nextMilestone : item));
+    const unlocked = after
+      .filter((item) => {
+        const previous = before.find((entry) => entry.id === item.id);
+        if (!previous) return false;
+        return computeMilestoneStatus(previous, before) === "locked" && computeMilestoneStatus(item, after) !== "locked";
+      })
+      .map((item) => ({ id: item.id, title: item.title }));
+
+    // Computed off the projection, not `milestones.items` — the collection hasn't
+    // flushed yet, so reading it back would answer for the state before this session.
+    const focus = nextTrainingFocus(after);
+
+    return {
+      unlocked,
+      nextFocus: focus ?? undefined,
+      milestone: {
+        id: nextMilestone.id,
+        title: nextMilestone.title,
+        progress: milestoneProgress(nextMilestone),
+        completed: isMilestoneComplete(nextMilestone),
+        advancedSteps: nextMilestone.steps
+          .filter((step) => entry.completedStepTitles.includes(step.title))
+          .map((step) => ({ title: step.title, completedSessions: step.completedSessions, sessionsRequired: step.sessionsRequired })),
+      },
+    };
+  }
+
+  /** Undo a Quick log. Deleting is the whole undo story for Quick logs — they're
+   * seconds to re-enter, so an edit flow would be more machinery than the mistake is
+   * worth, but leaving a wrong entry to permanently inflate a milestone would not.
+   *
+   * Rolls back anything the entry caused before removing it:
+   *  - each step it advanced drops one session (never below zero), which also lets the
+   *    status-sync effect re-lock a milestone that this entry had completed;
+   *  - an alone-time entry's `alone_time_logs` row goes too, or the readiness panel
+   *    would keep counting a session that was retracted. */
+  async function deleteQuickLog(logId: string) {
+    const log = itemLogs.items.find((entry) => entry.id === logId);
+    if (!log) return false;
+
+    if (log.milestoneId && log.advancedStepTitles && log.advancedStepTitles.length > 0) {
+      const milestone = milestones.items.find((entry) => entry.id === log.milestoneId);
+      if (milestone) {
+        const rollingBack = new Set(log.advancedStepTitles);
+        const withRolledBackSteps: Milestone = {
+          ...milestone,
+          steps: milestone.steps.map((step) =>
+            rollingBack.has(step.title) ? { ...step, completedSessions: Math.max(0, step.completedSessions - 1) } : step,
+          ),
+        };
+        // Recompute the status rather than carrying the old one into the projection
+        // below. `resolveDependencies` treats a milestone as met if its status is
+        // "completed" *or* its steps are done — so a stale "completed" left on the
+        // rolled-back milestone would keep every dependent looking satisfied and
+        // nothing would re-lock. The status-sync effect writes this same value, so
+        // persisting it here just gets there a beat sooner.
+        const rolledBack: Milestone = {
+          ...withRolledBackSteps,
+          status: computeMilestoneStatus(withRolledBackSteps, milestones.items),
+        };
+        await milestones.update(milestone.id, { steps: rolledBack.steps, status: rolledBack.status });
+
+        // If this entry had completed the milestone, whatever it unlocked has to go
+        // back — otherwise the form announces "Unlocked: Sit, Come" and deleting the
+        // entry quietly leaves them open. The status-sync effect can't do this: it
+        // deliberately never writes "locked" back, so that a milestone someone is part
+        // way through is never yanked away from them. Re-locking here is held to the
+        // same standard — only milestones with no logged work at all, whose
+        // prerequisites genuinely aren't met any more, are touched.
+        const projected = milestones.items.map((entry) => (entry.id === rolledBack.id ? rolledBack : entry));
+        const reLock = projected.filter(
+          (entry) =>
+            entry.status !== "locked" &&
+            entry.status !== "skipped" &&
+            entry.status !== "delayed" &&
+            entry.dependencies.length > 0 &&
+            entry.steps.every((step) => step.completedSessions === 0) &&
+            !resolveDependencies(entry, projected).every((dep) => dep.met),
+        );
+        await Promise.all(reLock.map((entry) => milestones.update(entry.id, { status: "locked" })));
+      }
+    }
+
+    // No stored link between the two rows: `alone_time_logs` ids are generated by the
+    // DB and `add` doesn't hand them back, so the pair is matched on what the Quick log
+    // wrote — same day, same duration, same dogs — taking the most recent on a tie.
+    // Gated on the training type actually being alone time: every training log carries
+    // a Duration, so matching on that alone would let deleting a 5-minute milestone
+    // session take out an unrelated 5-minute alone-time row.
+    const isAloneTime = log.values.some((value) => value.fieldName === "Training type" && value.value === "Alone time");
+    const minutes = log.values.find((value) => value.fieldName === "Duration" && value.unit === "min")?.value;
+    if (isAloneTime && typeof minutes === "number") {
+      const matches = aloneTimeLogs.items.filter(
+        (entry) =>
+          entry.date === log.occurrenceDate &&
+          entry.durationMinutes === minutes &&
+          entry.dogIds.length === log.dogIds.length &&
+          entry.dogIds.every((id) => log.dogIds.includes(id)),
+      );
+      const match = matches[matches.length - 1];
+      if (match) await aloneTimeLogs.remove(match.id);
+    }
+
+    return itemLogs.remove(logId);
+  }
+
   /** Called by the review-logs skill after it has folded a batch into the dog
    * record / milestones / docs, so the next run only reads what's new. */
   async function markLogsProcessed(logIds: string[]) {
@@ -617,6 +790,8 @@ function useDataStore() {
     itemOccurrences,
     itemLogs,
     addItemLog,
+    addQuickLog,
+    deleteQuickLog,
     markLogsProcessed,
     logsForItem,
     inboxRequests,

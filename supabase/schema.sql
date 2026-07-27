@@ -478,13 +478,19 @@ create table if not exists item_occurrences (
 
 alter table item_occurrences add column if not exists milestone_advanced boolean not null default false;
 
--- Timestamped log entries against an item. Multiple per item (and per occurrence)
--- is the point: weight over time, symptoms across days. `processed_at` is stamped
--- by the review-logs skill so its next run only reads what is new.
+-- Timestamped log entries. Usually against an item — multiple per item (and per
+-- occurrence) is the point: weight over time, symptoms across days. `processed_at`
+-- is stamped by the review-logs skill so its next run only reads what is new.
+--
+-- `item_id` is nullable because a Quick log (Dashboard → Quick log, added 2026-07-26)
+-- has no item behind it: potty breaks, meals and water aren't scheduled, they just
+-- happen. Those rows carry `quick_log_kind` instead, which makes them self-describing
+-- so the ingest pass never has to join to `items` to know what it's reading. Exactly
+-- one of the two is always set — see the check constraint below.
 create table if not exists item_logs (
   id text primary key,
   household_id uuid not null references households (id) on delete cascade,
-  item_id uuid not null references items (id) on delete cascade,
+  item_id uuid references items (id) on delete cascade,
   occurrence_date date,
   logged_at timestamptz not null default now(),
   logged_by uuid references people (id) on delete set null,
@@ -494,7 +500,30 @@ create table if not exists item_logs (
   processed_at timestamptz
 );
 
+-- Additive for databases created before 2026-07-26. Dropping the not-null on item_id
+-- has to run separately from `create table if not exists`, which is a no-op there.
+alter table item_logs alter column item_id drop not null;
+alter table item_logs add column if not exists quick_log_kind text;
+alter table item_logs add column if not exists rating int;
+alter table item_logs add column if not exists milestone_id text references milestones (id) on delete set null;
+-- Which milestone steps the entry advanced. Deleting the log rolls exactly these back.
+alter table item_logs add column if not exists advanced_step_titles text[] not null default '{}';
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'item_logs_source_check') then
+    alter table item_logs add constraint item_logs_source_check
+      check ((item_id is not null) <> (quick_log_kind is not null));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'item_logs_rating_check') then
+    alter table item_logs add constraint item_logs_rating_check
+      check (rating is null or rating between 1 and 5);
+  end if;
+end $$;
+
 create index if not exists item_logs_unprocessed_idx on item_logs (processed_at) where processed_at is null;
+create index if not exists item_logs_quick_idx on item_logs (quick_log_kind, occurrence_date) where quick_log_kind is not null;
+
 
 -- Merges the old calendar_event_deletions and task_deletions audit tables, which
 -- differed only in column naming.
