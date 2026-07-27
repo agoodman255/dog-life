@@ -79,6 +79,7 @@ import {
 import {
   ALONE_TIME_TRAINING_ID,
   QUICK_LOG_SPECS,
+  TrainingFocus,
   nextTrainingFocus,
   quickLogSpec,
   quickLogsOn,
@@ -312,12 +313,20 @@ export function DashboardView() {
   const todayKey = toDateKey(new Date());
   const adaptive = useAdaptivePlan(items.items, itemOccurrences.items, todayKey);
   const [detailTask, setDetailTask] = useState<Item | null>(null);
-  const [quickLog, setQuickLog] = useState<null | { kind: QuickLogKind; trainingType?: string }>(null);
+  const [quickLog, setQuickLog] = useState<null | { kind: QuickLogKind; trainingType?: string; dogId?: string }>(null);
   const todayLogs = quickLogsOn(itemLogs.items, todayKey);
-  const nextFocus = nextTrainingFocus(milestones.items);
+  // One recommendation per dog — they're on different steps, so a single "next" would
+  // be wrong for at least one of them.
+  const nextFocuses = dogs.items
+    .map((dog) => ({ dog, focus: nextTrainingFocus(milestones.items, dog.id) }))
+    .filter((entry): entry is { dog: Dog; focus: TrainingFocus } => entry.focus !== null);
   const puppy = dogs.items.find((dog) => dog.status === "puppy") ?? dogs.items[0];
-  const currentMilestone =
-    milestones.items.find((item) => item.status !== "completed" && item.dependencies.length > 0) ?? milestones.items[0];
+  // The focus milestone follows the same per-dog recommendation rather than a global
+  // "first incomplete" guess, so the card on the Dashboard is the one you'd actually
+  // work on next for that dog.
+  const focusMilestones = nextFocuses
+    .map((entry) => ({ dog: entry.dog, milestone: milestones.items.find((item) => item.id === entry.focus.milestoneId) }))
+    .filter((entry): entry is { dog: Dog; milestone: Milestone } => !!entry.milestone);
   const allDogIds = dogs.items.map((dog) => dog.id);
 
   function jumpTo(id: string) {
@@ -343,7 +352,7 @@ export function DashboardView() {
           <button type="button" onClick={() => jumpTo("log-section")}>
             Log
           </button>
-          {currentMilestone && (
+          {focusMilestones.length > 0 && (
             <button type="button" onClick={() => jumpTo("focus-milestone-section")}>
               Milestone
             </button>
@@ -410,25 +419,25 @@ export function DashboardView() {
                 );
               })}
             </div>
-            {nextFocus && (
-              <div className="quick-log-next">
+            {nextFocuses.map(({ dog, focus }) => (
+              <div className="quick-log-next" key={dog.id}>
                 <div>
-                  <p className="eyebrow">Work on next</p>
-                  <strong>{nextFocus.stepTitle}</strong>
+                  <p className="eyebrow">{dogs.items.length > 1 ? `Next for ${dog.name}` : "Work on next"}</p>
+                  <strong>{focus.stepTitle}</strong>
                   <p className="small">
-                    {nextFocus.milestoneTitle} · {nextFocus.completedSessions}/{nextFocus.sessionsRequired} sessions ·{" "}
-                    {nextFocus.successCriteria}
+                    {focus.milestoneTitle} · {focus.completedSessions}/{focus.sessionsRequired} sessions ·{" "}
+                    {focus.successCriteria}
                   </p>
                 </div>
                 <button
                   className="text-button"
                   type="button"
-                  onClick={() => setQuickLog({ kind: "training", trainingType: nextFocus.milestoneId })}
+                  onClick={() => setQuickLog({ kind: "training", trainingType: focus.milestoneId, dogId: dog.id })}
                 >
                   Log it
                 </button>
               </div>
-            )}
+            ))}
             {todayLogs.length === 0 ? (
               <p className="small">
                 Nothing logged yet today. Tap any of the five above to record a potty break, play session, training rep,
@@ -443,15 +452,19 @@ export function DashboardView() {
             )}
           </section>
 
-          {currentMilestone && (
+          {focusMilestones.length > 0 && (
             <section className="panel" id="focus-milestone-section">
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">Focus milestone</p>
-                  <h2>{currentMilestone.title}</h2>
+                  <h2>{dogs.items.length > 1 ? "Where each dog is" : focusMilestones[0].milestone.title}</h2>
                 </div>
               </div>
-              <MilestoneCard milestone={currentMilestone} />
+              <div className="stack">
+                {focusMilestones.map(({ dog, milestone }) => (
+                  <MilestoneCard key={dog.id} milestone={milestone} dogId={dog.id} />
+                ))}
+              </div>
             </section>
           )}
           <div className="readiness-group" id="readiness-section">
@@ -491,6 +504,7 @@ export function DashboardView() {
             date={todayKey}
             initialKind={quickLog.kind}
             initialTrainingType={quickLog.trainingType}
+            initialDogIds={quickLog.dogId ? [quickLog.dogId] : undefined}
             onClose={() => setQuickLog(null)}
           />
         </Modal>
@@ -1349,7 +1363,13 @@ export function CalendarView() {
         </>
       )}
 
-      {viewMode === "milestones" && <CalendarMilestonesPanel milestonesList={milestones.items} onNavigate={() => navigate("training")} />}
+      {viewMode === "milestones" && (
+        <CalendarMilestonesPanel
+          milestonesList={milestones.items}
+          dogId={dogs.items[0]?.id ?? ""}
+          onNavigate={() => navigate("training")}
+        />
+      )}
 
       {eventModal && (
         <Modal
@@ -1403,7 +1423,17 @@ export function CalendarView() {
   );
 }
 
-function CalendarMilestonesPanel({ milestonesList, onNavigate }: { milestonesList: Milestone[]; onNavigate: () => void }) {
+function CalendarMilestonesPanel({
+  milestonesList,
+  dogId,
+  onNavigate,
+}: {
+  milestonesList: Milestone[];
+  /** Whose progress the expanded cards show. Grouping still uses the milestone's
+   * overall status, since this panel is a roadmap for the household. */
+  dogId: string;
+  onNavigate: () => void;
+}) {
   const current = milestonesList.filter((item) => item.status === "current");
   const delayed = milestonesList.filter((item) => item.status === "delayed");
   const upNext = milestonesList.filter((item) => item.status === "locked");
@@ -1417,7 +1447,7 @@ function CalendarMilestonesPanel({ milestonesList, onNavigate }: { milestonesLis
           <p className="eyebrow">Current focus</p>
           <div className="stack" style={{ marginBottom: 24 }}>
             {current.map((item) => (
-              <MilestoneCard key={item.id} milestone={item} />
+              <MilestoneCard key={item.id} milestone={item} dogId={dogId} />
             ))}
           </div>
         </>
@@ -1615,18 +1645,60 @@ function ExposureGrid({ category }: { category: ExposureCategory }) {
   );
 }
 
+/** Page-level dog switcher. Chosen over a per-card selector (2026-07-27): you train
+ * one dog at a time, so the whole page — which milestones are unlocked, what's next,
+ * how far along each step is — should be in that dog's world at once. Repeating a
+ * selector on all 36 cards would also make comparing the two dogs a 36-click job.
+ * Cards still show the other dog's percentage inline, so comparison doesn't need a
+ * switch at all. */
+function DogSwitcher({ dogs, value, onChange }: { dogs: Dog[]; value: string; onChange: (dogId: string) => void }) {
+  if (dogs.length < 2) return null;
+  return (
+    <div className="dog-switcher">
+      <span className="eyebrow">Viewing</span>
+      <div className="subtabs" role="group" aria-label="Which dog">
+        {dogs.map((dog) => (
+          <button key={dog.id} type="button" className={value === dog.id ? "active" : ""} onClick={() => onChange(dog.id)}>
+            {dog.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type TrainingTab = "obedience" | ExposureCategory | "health" | "alone-time";
+
 export function TrainingView() {
   const { milestones, dogs, aloneTimeLogs, items } = useStore();
-  const [tab, setTab] = useState<"obedience" | ExposureCategory | "alone-time">("obedience");
+  const [tab, setTab] = useState<TrainingTab>("obedience");
+  const [dogId, setDogId] = useState("");
+  const [query, setQuery] = useState("");
   const [aloneTimeModal, setAloneTimeModal] = useState(false);
   const allDogIds = dogs.items.map((dog) => dog.id);
-  const tabs: { id: typeof tab; label: string }[] = [
+  // Falls back rather than seeding state from `dogs.items`, which is empty on the
+  // first render when the collection loads from Supabase.
+  const activeDogId = dogId || dogs.items[0]?.id || "";
+  const tabs: { id: TrainingTab; label: string }[] = [
     { id: "obedience", label: "Obedience" },
     { id: "socialization", label: "Socialization" },
     { id: "confidence", label: "Confidence" },
     { id: "handling", label: "Handling" },
+    { id: "health", label: "Health" },
     { id: "alone-time", label: "Alone Time" },
   ];
+
+  // Only this dog's milestones, in the current track. Every track now renders its
+  // milestones — before, only obedience did, which left the socialization, confidence,
+  // handling and health milestones reachable from the Quick log picker but nowhere on
+  // the page they belong to.
+  const trackMilestones = milestones.items.filter(
+    (milestone) =>
+      milestone.track === tab &&
+      (milestone.dogIds.length === 0 || milestone.dogIds.includes(activeDogId)) &&
+      (query.trim() === "" || milestone.title.toLowerCase().includes(query.trim().toLowerCase())),
+  );
+
   return (
     <div className="stack">
       <div className="subtabs" role="tablist">
@@ -1636,13 +1708,31 @@ export function TrainingView() {
           </button>
         ))}
       </div>
-      {tab === "obedience" && (
+      {tab !== "alone-time" && (
+        <div className="training-toolbar">
+          <DogSwitcher dogs={dogs.items} value={activeDogId} onChange={setDogId} />
+          <input
+            className="training-search"
+            type="search"
+            placeholder="Search training types…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Search training types"
+          />
+        </div>
+      )}
+      {tab !== "alone-time" && (
         <section className="milestone-grid">
-          {milestones.items
-            .filter((milestone) => milestone.track === "obedience")
-            .map((milestone) => (
-              <MilestoneCard key={milestone.id} milestone={milestone} />
-            ))}
+          {trackMilestones.length === 0 && (
+            <p className="small">
+              {query.trim() ? `Nothing in ${tab} matches "${query.trim()}".` : `No ${tab} training assigned to this dog yet.`}
+            </p>
+          )}
+          {trackMilestones.map((milestone) => (
+            <div id={`milestone-${milestone.id}`} key={milestone.id}>
+              <MilestoneCard milestone={milestone} dogId={activeDogId} />
+            </div>
+          ))}
         </section>
       )}
       {tab === "alone-time" && (
@@ -1654,7 +1744,7 @@ export function TrainingView() {
           onLog={() => setAloneTimeModal(true)}
         />
       )}
-      {tab !== "obedience" && tab !== "alone-time" && <ExposureGrid category={tab} />}
+      {tab !== "obedience" && tab !== "alone-time" && tab !== "health" && <ExposureGrid category={tab} />}
       {aloneTimeModal && (
         <Modal title="Quick log" onClose={() => setAloneTimeModal(false)}>
           <QuickLogForm
@@ -1670,8 +1760,10 @@ export function TrainingView() {
 }
 
 export function MilestonesView() {
-  const { milestones } = useStore();
+  const { milestones, dogs } = useStore();
   const { focus, clearFocus } = useNavigation();
+  const [dogId, setDogId] = useState("");
+  const activeDogId = dogId || dogs.items[0]?.id || "";
 
   useEffect(() => {
     if (!focus?.milestoneId) return;
@@ -1682,13 +1774,18 @@ export function MilestonesView() {
   }, [focus?.milestoneId]);
 
   return (
-    <section className="roadmap">
-      {milestones.items.map((milestone) => (
-        <div id={`milestone-${milestone.id}`} className={focus?.milestoneId === milestone.id ? "focus-target" : ""} key={milestone.id}>
-          <MilestoneCard milestone={milestone} />
-        </div>
-      ))}
-    </section>
+    <div className="stack">
+      <DogSwitcher dogs={dogs.items} value={activeDogId} onChange={setDogId} />
+      <section className="roadmap">
+        {milestones.items
+          .filter((milestone) => milestone.dogIds.length === 0 || milestone.dogIds.includes(activeDogId))
+          .map((milestone) => (
+            <div id={`milestone-${milestone.id}`} className={focus?.milestoneId === milestone.id ? "focus-target" : ""} key={milestone.id}>
+              <MilestoneCard milestone={milestone} dogId={activeDogId} />
+            </div>
+          ))}
+      </section>
+    </div>
   );
 }
 

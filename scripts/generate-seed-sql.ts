@@ -10,6 +10,7 @@ import {
   people,
   relationshipLogs,
 } from "../src/data";
+import type { MilestoneStep } from "../src/types";
 
 const HOUSEHOLD_ID = "11111111-1111-1111-1111-111111111111";
 const PERSON_IDS: Record<string, string> = {
@@ -50,6 +51,19 @@ function dogRef(id: string): string {
   const mapped = DOG_IDS[id];
   if (!mapped) throw new Error(`Unknown dog id in seed data: ${id}`);
   return mapped;
+}
+
+// Milestone steps carry per-dog session counts keyed by dog id. In src/data.ts those
+// keys are the readable slugs ("puppy"/"griz"); in the database they have to be the
+// real dog uuids, or the app looks up progress under a key that doesn't exist and
+// every bar reads zero.
+function milestoneStepsForSeed(steps: MilestoneStep[]) {
+  return steps.map((step) => ({
+    ...step,
+    sessionsByDog: Object.fromEntries(
+      Object.entries(step.sessionsByDog).map(([dogId, sessions]) => [dogRef(dogId), sessions]),
+    ),
+  }));
 }
 
 function personRef(id: string): string {
@@ -154,7 +168,7 @@ for (const milestone of milestones) {
   lines.push(
     `insert into milestones (id, household_id, title, track, status, dependencies, age_gate_weeks, dog_ids, steps, sources, why) values (`,
     `  ${str(milestone.id)}, ${str(HOUSEHOLD_ID)}, ${str(milestone.title)}, ${str(milestone.track)}, ${str(milestone.status)}, ${textArray(milestone.dependencies)}, ${num(milestone.ageGateWeeks ?? null)},`,
-    `  ${uuidArray(milestone.dogIds.map(dogRef))}, ${jsonb(milestone.steps)}, ${jsonb(milestone.sources)}, ${str(milestone.why)}`,
+    `  ${uuidArray(milestone.dogIds.map(dogRef))}, ${jsonb(milestoneStepsForSeed(milestone.steps))}, ${jsonb(milestone.sources)}, ${str(milestone.why)}`,
     ")",
     upsertClause(["title", "track", "status", "dependencies", "age_gate_weeks", "dog_ids", "steps", "sources", "why"]),
     "",

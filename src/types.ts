@@ -200,8 +200,10 @@ export type QuickLogInput = {
   aloneTimeMinutes?: number;
 };
 
-/** What a Quick log changed, so the form can report it rather than closing silently. */
-export type QuickLogResult = {
+/** What a training Quick log changed for one dog. Progress is per-dog, so a session
+ * logged for both dogs produces two of these — they'll usually differ. */
+export type QuickLogDogResult = {
+  dogId: string;
   milestone?: {
     id: string;
     title: string;
@@ -209,10 +211,9 @@ export type QuickLogResult = {
     completed: boolean;
     advancedSteps: { title: string; completedSessions: number; sessionsRequired: number }[];
   };
-  /** Milestones that were locked before this entry and aren't any more. */
+  /** Milestones locked for this dog before the entry and unlocked for them after. */
   unlocked: { id: string; title: string }[];
-  /** What to work on next, computed against the state this entry just produced. Set
-   * only for training entries — the other four kinds have no "next" to point at. */
+  /** What this dog should work on next, against the state the entry just produced. */
   nextFocus?: {
     milestoneId: string;
     milestoneTitle: string;
@@ -220,6 +221,13 @@ export type QuickLogResult = {
     completedSessions: number;
     sessionsRequired: number;
   };
+};
+
+/** What a Quick log changed, so the form can report it rather than closing silently.
+ * Empty `perDog` means nothing moved — a non-training entry, or a training entry
+ * with no steps ticked. */
+export type QuickLogResult = {
+  perDog: QuickLogDogResult[];
 };
 
 // --- The unified item -------------------------------------------------------
@@ -426,15 +434,26 @@ export type MilestoneStep = {
   title: string;
   successCriteria: string;
   sessionsRequired: number;
-  completedSessions: number;
+  /** Sessions logged per dog, keyed by dog id. Replaced a single shared
+   * `completedSessions` counter (2026-07-27), which forced every dog on a milestone
+   * to share one number — an adult proofing a known cue and a puppy meeting it for
+   * the first time are not at the same place, and averaging them told you nothing.
+   * A missing key means no sessions logged for that dog; read it through
+   * `stepSessions` rather than indexing directly. */
+  sessionsByDog: Record<string, number>;
 };
+
+export type MilestoneStatus = "completed" | "current" | "locked" | "delayed" | "skipped";
 
 export type Milestone = {
   id: string;
   title: string;
   track: "obedience" | "handling" | "socialization" | "confidence" | "health" | "relationship";
   dogIds: string[];
-  status: "completed" | "current" | "locked" | "delayed" | "skipped";
+  /** The milestone's status across every dog it covers — "completed" only once all
+   * of them are done. Per-dog status is derived on demand (`milestoneStatusFor`),
+   * not stored, since it's a pure function of the same step data. */
+  status: MilestoneStatus;
   dependencies: string[];
   ageGateWeeks?: number;
   steps: MilestoneStep[];

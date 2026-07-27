@@ -45,13 +45,17 @@ import {
   RelationshipLog,
 } from "./types";
 import {
+  adjustStepSessions,
   buildDefaultChecklist,
   computeMilestoneStatus,
   isMilestoneComplete,
+  milestoneDogs,
   milestoneProgress,
+  milestoneStatusFor,
   nextTrainingFocus,
   resolveChecklistDefs,
   resolveDependencies,
+  stepSessions,
 } from "./utils";
 
 const PREFIX = "dog-life-os";
@@ -265,19 +269,21 @@ function useDataStore() {
 
   const backend = isBackendConfigured();
 
+  const allDogIds = dogs.items.map((dog) => dog.id);
+
   useEffect(() => {
     const stale = milestones.items.filter((milestone) => {
-      const computed = computeMilestoneStatus(milestone, milestones.items);
+      const computed = computeMilestoneStatus(milestone, milestones.items, allDogIds);
       return computed !== milestone.status && computed !== "locked";
     });
     if (stale.length > 0) {
       stale.forEach((milestone) => {
-        const computed = computeMilestoneStatus(milestone, milestones.items);
+        const computed = computeMilestoneStatus(milestone, milestones.items, allDogIds);
         milestones.update(milestone.id, { status: computed });
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [milestones.items]);
+  }, [milestones.items, dogs.items]);
 
   /** Quick-complete from a card: materializes the occurrence for `date` and closes it
    * with just an overall rating. Previously this wrote a `DailyFeedback` row keyed on
@@ -308,16 +314,10 @@ function useDataStore() {
     return occurrenceFor(itemId, date)?.state === "completed";
   }
 
-  function logMilestoneSession(milestoneId: string, stepTitle: string) {
+  function logMilestoneSession(milestoneId: string, stepTitle: string, dogId: string) {
     const target = milestones.items.find((item) => item.id === milestoneId);
     if (!target) return;
-    milestones.update(milestoneId, {
-      steps: target.steps.map((step) =>
-        step.title === stepTitle
-          ? { ...step, completedSessions: Math.min(step.sessionsRequired, step.completedSessions + 1) }
-          : step,
-      ),
-    });
+    milestones.update(milestoneId, { steps: adjustStepSessions(target.steps, [stepTitle], [dogId], 1) });
   }
 
   function logExposure(itemId: string, entry: ExposureItem["log"][number], status: ExposureItem["status"]) {
@@ -413,19 +413,17 @@ function useDataStore() {
     if (!item.checklistSourceMilestoneId) return false;
     const milestone = milestones.items.find((entry) => entry.id === item.checklistSourceMilestoneId);
     if (!milestone) return false;
-    const completedNames = new Set(checklist.filter((row) => row.value === true).map((row) => row.itemName));
-    if (completedNames.size === 0) return false;
-    const ok = await milestones.update(milestone.id, {
-      steps: milestone.steps.map((step) =>
-        completedNames.has(step.title)
-          ? {
-              ...step,
-              completedSessions: Math.max(0, Math.min(step.sessionsRequired, step.completedSessions + direction)),
-            }
-          : step,
-      ),
+    const checked = checklist.filter((row) => row.value === true);
+    if (checked.length === 0) return false;
+    // Now that progress is per-dog, a checklist row's `dogId` finally means something
+    // to the milestone: a row assigned to Mara advances only Mara. An unassigned row
+    // is shared work, so it counts for every dog the item involves.
+    const sharedDogs = item.dogIds && item.dogIds.length > 0 ? item.dogIds : milestone.dogIds;
+    let steps = milestone.steps;
+    checked.forEach((row) => {
+      steps = adjustStepSessions(steps, [row.itemName], row.dogId ? [row.dogId] : sharedDogs, direction);
     });
-    return ok;
+    return milestones.update(milestone.id, { steps });
   }
 
   async function endTask(
@@ -559,33 +557,35 @@ function useDataStore() {
     const milestone = milestones.items.find((entry) => entry.id === log.milestoneId);
     if (!milestone) return undefined;
 
-    const rollingBack = new Set(log.advancedStepTitles);
+    // Rolled back only for the dogs the entry was logged against — a session logged
+    // for Mara must not take anything off Griz's count.
     const withRolledBackSteps: Milestone = {
       ...milestone,
-      steps: milestone.steps.map((step) =>
-        rollingBack.has(step.title) ? { ...step, completedSessions: Math.max(0, step.completedSessions - 1) } : step,
-      ),
+      steps: adjustStepSessions(milestone.steps, log.advancedStepTitles, log.dogIds, -1),
     };
     // Recompute the status rather than carrying the old one into the projection below.
-    // `resolveDependencies` treats a milestone as met if its status is "completed" *or*
-    // its steps are done — so a stale "completed" left on the rolled-back milestone
-    // would keep every dependent looking satisfied and nothing would re-lock.
+    // `resolveDependencies` treats a milestone as met if its steps are done — so a
+    // stale "completed" left on the rolled-back milestone would keep every dependent
+    // looking satisfied and nothing would re-lock.
     const rolledBack: Milestone = {
       ...withRolledBackSteps,
-      status: computeMilestoneStatus(withRolledBackSteps, milestones.items),
+      status: computeMilestoneStatus(withRolledBackSteps, milestones.items, allDogIds),
     };
     await milestones.update(milestone.id, { steps: rolledBack.steps, status: rolledBack.status });
 
     const projected = milestones.items.map((entry) => (entry.id === rolledBack.id ? rolledBack : entry));
-    const reLock = projected.filter(
-      (entry) =>
-        entry.status !== "locked" &&
-        entry.status !== "skipped" &&
-        entry.status !== "delayed" &&
-        entry.dependencies.length > 0 &&
-        entry.steps.every((step) => step.completedSessions === 0) &&
-        !resolveDependencies(entry, projected).every((dep) => dep.met),
-    );
+    // Re-lock per dog: a milestone goes back to locked only if it's locked for every
+    // dog it covers once this entry's progress is removed. A dog with real sessions
+    // logged is never yanked back, which is what the zero-sessions test protects.
+    const reLock = projected.filter((entry) => {
+      if (entry.status === "locked" || entry.status === "skipped" || entry.status === "delayed") return false;
+      if (entry.dependencies.length === 0) return false;
+      return milestoneDogs(entry, allDogIds).every(
+        (dogId) =>
+          entry.steps.every((step) => stepSessions(step, dogId) === 0) &&
+          !resolveDependencies(entry, projected, dogId).every((dep) => dep.met),
+      );
+    });
     await Promise.all(reLock.map((entry) => milestones.update(entry.id, { status: "locked" })));
 
     return rolledBack;
@@ -622,48 +622,52 @@ function useDataStore() {
     baseMilestones: Milestone[],
     targetMilestone: Milestone | undefined,
     completedStepTitles: string[],
+    dogIds: string[],
   ): Promise<QuickLogResult> {
-    const advancing = !!targetMilestone && completedStepTitles.length > 0;
-    const nextMilestone: Milestone | undefined = advancing
-      ? {
-          ...targetMilestone!,
-          steps: targetMilestone!.steps.map((step) =>
-            completedStepTitles.includes(step.title)
-              ? { ...step, completedSessions: Math.min(step.sessionsRequired, step.completedSessions + 1) }
-              : step,
-          ),
-        }
-      : targetMilestone;
+    if (!targetMilestone || completedStepTitles.length === 0 || dogIds.length === 0) return { perDog: [] };
 
-    if (!targetMilestone || !nextMilestone || !advancing) return { unlocked: [] };
+    const nextMilestone: Milestone = {
+      ...targetMilestone,
+      steps: adjustStepSessions(targetMilestone.steps, completedStepTitles, dogIds, 1),
+    };
 
     const saved = await milestones.update(targetMilestone.id, { steps: nextMilestone.steps });
-    if (!saved) return { unlocked: [] };
+    if (!saved) return { perDog: [] };
 
     const before = baseMilestones;
     const after = before.map((item) => (item.id === nextMilestone.id ? nextMilestone : item));
-    const unlocked = after
-      .filter((item) => {
-        const previous = before.find((entry) => entry.id === item.id);
-        if (!previous) return false;
-        return computeMilestoneStatus(previous, before) === "locked" && computeMilestoneStatus(item, after) !== "locked";
-      })
-      .map((item) => ({ id: item.id, title: item.title }));
 
-    const focus = nextTrainingFocus(after);
-
+    // Everything below is computed per dog against the same projection. Two dogs
+    // logged in one session almost always land differently — one may finish the
+    // milestone while the other is two sessions off — so a single shared summary
+    // would have to lie about at least one of them.
     return {
-      unlocked,
-      nextFocus: focus ?? undefined,
-      milestone: {
-        id: nextMilestone.id,
-        title: nextMilestone.title,
-        progress: milestoneProgress(nextMilestone),
-        completed: isMilestoneComplete(nextMilestone),
-        advancedSteps: nextMilestone.steps
-          .filter((step) => completedStepTitles.includes(step.title))
-          .map((step) => ({ title: step.title, completedSessions: step.completedSessions, sessionsRequired: step.sessionsRequired })),
-      },
+      perDog: dogIds.map((dogId) => ({
+        dogId,
+        unlocked: after
+          .filter((item) => {
+            const previous = before.find((entry) => entry.id === item.id);
+            if (!previous) return false;
+            return (
+              milestoneStatusFor(previous, before, dogId) === "locked" && milestoneStatusFor(item, after, dogId) !== "locked"
+            );
+          })
+          .map((item) => ({ id: item.id, title: item.title })),
+        nextFocus: nextTrainingFocus(after, dogId) ?? undefined,
+        milestone: {
+          id: nextMilestone.id,
+          title: nextMilestone.title,
+          progress: milestoneProgress(nextMilestone, dogId),
+          completed: isMilestoneComplete(nextMilestone, dogId),
+          advancedSteps: nextMilestone.steps
+            .filter((step) => completedStepTitles.includes(step.title))
+            .map((step) => ({
+              title: step.title,
+              completedSessions: stepSessions(step, dogId),
+              sessionsRequired: step.sessionsRequired,
+            })),
+        },
+      })),
     };
   }
 
@@ -703,7 +707,7 @@ function useDataStore() {
       });
     }
 
-    return advanceMilestoneAndReport(milestones.items, milestone, entry.completedStepTitles);
+    return advanceMilestoneAndReport(milestones.items, milestone, entry.completedStepTitles, entry.dogIds);
   }
 
   /** Edit a Quick log in place: correct the rating, notes, dogs, or which steps got
@@ -745,7 +749,7 @@ function useDataStore() {
       });
     }
 
-    return advanceMilestoneAndReport(baseMilestones, targetMilestone, entry.completedStepTitles);
+    return advanceMilestoneAndReport(baseMilestones, targetMilestone, entry.completedStepTitles, entry.dogIds);
   }
 
   /** Undo a Quick log entirely. Rolls back anything it caused (see

@@ -17,6 +17,8 @@ import {
   LogFieldValue,
   Meal,
   Milestone,
+  MilestoneStatus,
+  MilestoneStep,
   NotificationItem,
   QuickLogKind,
   RecipeIngredient,
@@ -351,6 +353,8 @@ export type TrainingFocus = {
   successCriteria: string;
   completedSessions: number;
   sessionsRequired: number;
+  /** Which dog this recommendation is for — two dogs are rarely on the same step. */
+  dogId: string;
 };
 
 /** "What should we work on next?" — the deterministic half of Andrew's ask (2026-07-26)
@@ -365,21 +369,21 @@ export type TrainingFocus = {
  * actually logged. Anything richer (weaving training into meals and potty breaks by
  * time of day) is backlog item 12's rule engine, not this.
  *
- * Pass `dogId` to scope to one dog; milestones with no dogs listed are household-wide
- * and always count. */
-export function nextTrainingFocus(milestones: Milestone[], dogId?: string): TrainingFocus | null {
+ * Always scoped to one dog — "what's next" has no meaningful answer for two dogs at
+ * once, since they're rarely on the same step. */
+export function nextTrainingFocus(milestones: Milestone[], dogId: string): TrainingFocus | null {
   const candidates = milestones.filter((milestone) => {
     if (milestone.status === "skipped" || milestone.status === "delayed") return false;
-    if (isMilestoneComplete(milestone)) return false;
-    if (computeMilestoneStatus(milestone, milestones) === "locked") return false;
-    if (dogId && milestone.dogIds.length > 0 && !milestone.dogIds.includes(dogId)) return false;
-    return milestone.steps.some((step) => step.completedSessions < step.sessionsRequired);
+    if (milestone.dogIds.length > 0 && !milestone.dogIds.includes(dogId)) return false;
+    if (isMilestoneComplete(milestone, dogId)) return false;
+    if (milestoneStatusFor(milestone, milestones, dogId) === "locked") return false;
+    return milestone.steps.some((step) => stepSessions(step, dogId) < step.sessionsRequired);
   });
   if (candidates.length === 0) return null;
 
-  const underway = candidates.filter((milestone) => milestone.steps.some((step) => step.completedSessions > 0));
+  const underway = candidates.filter((milestone) => milestone.steps.some((step) => stepSessions(step, dogId) > 0));
   const pick = (underway.length > 0 ? underway : candidates)[0];
-  const step = pick.steps.find((entry) => entry.completedSessions < entry.sessionsRequired);
+  const step = pick.steps.find((entry) => stepSessions(entry, dogId) < entry.sessionsRequired);
   if (!step) return null;
 
   return {
@@ -387,8 +391,9 @@ export function nextTrainingFocus(milestones: Milestone[], dogId?: string): Trai
     milestoneTitle: pick.title,
     stepTitle: step.title,
     successCriteria: step.successCriteria,
-    completedSessions: step.completedSessions,
+    completedSessions: stepSessions(step, dogId),
     sessionsRequired: step.sessionsRequired,
+    dogId,
   };
 }
 
@@ -521,14 +526,63 @@ export function pct(value: number, max = 100) {
   return Math.max(0, Math.min(100, Math.round((value / max) * 100)));
 }
 
-export function milestoneProgress(milestone: Milestone) {
+// --- Milestone progress ------------------------------------------------------
+//
+// Everything below is per-dog. A milestone covering both dogs holds one row of
+// step definitions but two independent session counts, so Griz proofing "leave it"
+// and Mara meeting it for the first time never share a number. The `…ForAll`
+// variants exist only for the few places that genuinely have no dog in context
+// (the stored `status` field, the aggregate Milestones list).
+
+/** Sessions logged for one dog on one step. Read through this rather than indexing
+ * `sessionsByDog` directly — the key is absent until the first session is logged. */
+export function stepSessions(step: MilestoneStep, dogId: string): number {
+  return step.sessionsByDog[dogId] ?? 0;
+}
+
+/** The dogs a milestone actually tracks. An empty `dogIds` means household-wide, in
+ * which case every dog passed in counts. */
+export function milestoneDogs(milestone: Milestone, allDogIds: string[]): string[] {
+  return milestone.dogIds.length > 0 ? milestone.dogIds : allDogIds;
+}
+
+/** Moves the named steps' session counts by `direction` for each of `dogIds`,
+ * clamped to [0, sessionsRequired]. The single place per-dog session arithmetic
+ * happens — logging a session, undoing one, and re-applying an edited Quick log all
+ * route through here so they can't drift apart on the clamping rules. */
+export function adjustStepSessions(
+  steps: MilestoneStep[],
+  stepTitles: string[],
+  dogIds: string[],
+  direction: 1 | -1,
+): MilestoneStep[] {
+  const targets = new Set(stepTitles);
+  return steps.map((step) => {
+    if (!targets.has(step.title)) return step;
+    const sessionsByDog = { ...step.sessionsByDog };
+    dogIds.forEach((dogId) => {
+      const next = (sessionsByDog[dogId] ?? 0) + direction;
+      sessionsByDog[dogId] = Math.max(0, Math.min(step.sessionsRequired, next));
+    });
+    return { ...step, sessionsByDog };
+  });
+}
+
+export function milestoneProgress(milestone: Milestone, dogId: string) {
   const total = milestone.steps.reduce((sum, step) => sum + step.sessionsRequired, 0);
-  const done = milestone.steps.reduce((sum, step) => sum + Math.min(step.completedSessions, step.sessionsRequired), 0);
+  const done = milestone.steps.reduce((sum, step) => sum + Math.min(stepSessions(step, dogId), step.sessionsRequired), 0);
   return total === 0 ? 0 : pct(done, total);
 }
 
-export function isMilestoneComplete(milestone: Milestone) {
-  return milestone.steps.every((step) => step.completedSessions >= step.sessionsRequired);
+export function isMilestoneComplete(milestone: Milestone, dogId: string) {
+  return milestone.steps.every((step) => stepSessions(step, dogId) >= step.sessionsRequired);
+}
+
+/** Complete for every dog it covers — what the stored `status` field means. */
+export function isMilestoneCompleteForAll(milestone: Milestone, allDogIds: string[]) {
+  const dogIds = milestoneDogs(milestone, allDogIds);
+  if (dogIds.length === 0) return false;
+  return dogIds.every((dogId) => isMilestoneComplete(milestone, dogId));
 }
 
 export type DependencyStatus = {
@@ -538,24 +592,39 @@ export type DependencyStatus = {
   progress: number;
 };
 
-export function resolveDependencies(milestone: Milestone, allMilestones: Milestone[]): DependencyStatus[] {
+/** Dependencies resolved for one dog: Griz can't start "Sit" until *Griz* has
+ * finished "Marker word", regardless of how far along Mara is. */
+export function resolveDependencies(milestone: Milestone, allMilestones: Milestone[], dogId: string): DependencyStatus[] {
   return milestone.dependencies.map((depId) => {
     const dep = allMilestones.find((item) => item.id === depId);
     if (!dep) {
       return { id: depId, title: depId, met: false, progress: 0 };
     }
-    return { id: dep.id, title: dep.title, met: isMilestoneComplete(dep) || dep.status === "completed", progress: milestoneProgress(dep) };
+    // A dependency this dog isn't enrolled in can't be a blocker for them.
+    const applies = dep.dogIds.length === 0 || dep.dogIds.includes(dogId);
+    if (!applies) return { id: dep.id, title: dep.title, met: true, progress: 100 };
+    return { id: dep.id, title: dep.title, met: isMilestoneComplete(dep, dogId), progress: milestoneProgress(dep, dogId) };
   });
 }
 
-export function computeMilestoneStatus(milestone: Milestone, allMilestones: Milestone[]): Milestone["status"] {
+export function milestoneStatusFor(milestone: Milestone, allMilestones: Milestone[], dogId: string): MilestoneStatus {
   if (milestone.status === "skipped" || milestone.status === "delayed") return milestone.status;
-  if (isMilestoneComplete(milestone)) return "completed";
-  const hasLoggedProgress = milestone.steps.some((step) => step.completedSessions > 0);
+  if (isMilestoneComplete(milestone, dogId)) return "completed";
+  const hasLoggedProgress = milestone.steps.some((step) => stepSessions(step, dogId) > 0);
   if (hasLoggedProgress) return "current";
-  const deps = resolveDependencies(milestone, allMilestones);
-  const allDepsMet = deps.every((dep) => dep.met);
-  return allDepsMet ? "current" : "locked";
+  const deps = resolveDependencies(milestone, allMilestones, dogId);
+  return deps.every((dep) => dep.met) ? "current" : "locked";
+}
+
+/** The stored status: completed once every covered dog is done, locked only while
+ * it's locked for all of them, current as soon as any dog can work on it. */
+export function computeMilestoneStatus(milestone: Milestone, allMilestones: Milestone[], allDogIds: string[]): MilestoneStatus {
+  if (milestone.status === "skipped" || milestone.status === "delayed") return milestone.status;
+  const dogIds = milestoneDogs(milestone, allDogIds);
+  if (dogIds.length === 0) return milestone.status;
+  const perDog = dogIds.map((dogId) => milestoneStatusFor(milestone, allMilestones, dogId));
+  if (perDog.every((status) => status === "completed")) return "completed";
+  return perDog.some((status) => status !== "locked") ? "current" : "locked";
 }
 
 export function readinessScore(
@@ -999,7 +1068,7 @@ export function computeNotifications(
   });
 
   milestones.forEach((milestone) => {
-    const status = computeMilestoneStatus(milestone, milestones);
+    const status = computeMilestoneStatus(milestone, milestones, dogs.map((dog) => dog.id));
     if (status === "current" && milestone.status === "locked") {
       notifications.push({
         id: `unlocked-${milestone.id}`,

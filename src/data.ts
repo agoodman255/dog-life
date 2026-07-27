@@ -414,17 +414,46 @@ const todayTasks: TaskSeed[] = [
   },
 ];
 
-export const milestones: Milestone[] = [
+/** Milestones that only make sense for a puppy. Everything else in the catalogue
+ * applies to any dog at any age — the age gates handle "not yet", not "never". */
+const PUPPY_ONLY_MILESTONES = new Set(["vaccines-complete"]);
+
+/** Griz is a trained six-year-old, so he starts the catalogue all but finished —
+ * every step of every milestone he's on is complete except one session on the last
+ * step. That's the closest you can get to 100% without being there, which is the
+ * honest position: he knows this material, but nothing has been *observed and logged*
+ * in this app yet, so nothing is signed off. It also leaves every milestone one real
+ * session away from completing, which is exactly the nudge that makes logging worth
+ * doing. Mara starts at zero across the board — she's a brand-new puppy.
+ *
+ * Applied at export time rather than written into each of the 36 entries by hand, so
+ * the catalogue below stays readable and the rule lives in one place. */
+function withStartingProgress(milestone: Milestone): Milestone {
+  if (!milestone.dogIds.includes("griz") || milestone.steps.length === 0) return milestone;
+  const lastIndex = milestone.steps.length - 1;
+  return {
+    ...milestone,
+    steps: milestone.steps.map((step, index) => ({
+      ...step,
+      sessionsByDog: {
+        ...step.sessionsByDog,
+        griz: index === lastIndex ? Math.max(0, step.sessionsRequired - 1) : step.sessionsRequired,
+      },
+    })),
+  };
+}
+
+const milestoneCatalogue: Milestone[] = [
   {
     id: "marker-word",
     title: "Marker word",
     track: "obedience",
-    dogIds: ["puppy"],
+    dogIds: ["puppy", "griz"],
     status: "current",
     dependencies: [],
     steps: [
-      { title: "Charge marker", successCriteria: "10 marker-treat reps with eager orientation", sessionsRequired: 2, completedSessions: 0 },
-      { title: "Use on eye contact", successCriteria: "Marks correct behavior within one second", sessionsRequired: 3, completedSessions: 0 },
+      { title: "Charge marker", successCriteria: "10 marker-treat reps with eager orientation", sessionsRequired: 2, sessionsByDog: {} },
+      { title: "Use on eye contact", successCriteria: "Marks correct behavior within one second", sessionsRequired: 3, sessionsByDog: {} },
     ],
     sources: [
       { title: "Clicker training basics", type: "article", url: "https://www.akc.org/expert-advice/training/clicker-training-your-dog-mark-and-reward/", publisher: "AKC" },
@@ -437,14 +466,14 @@ export const milestones: Milestone[] = [
     id: "sit",
     title: "Sit",
     track: "obedience",
-    dogIds: ["puppy"],
+    dogIds: ["puppy", "griz"],
     status: "locked",
     dependencies: ["marker-word", "name-recognition"],
     ageGateWeeks: 1,
     steps: [
-      { title: "Lure into sit", successCriteria: "Follows lure and sits 8 of 10 reps (beginner)", sessionsRequired: 2, completedSessions: 0 },
-      { title: "Fade food lure", successCriteria: "Lure with one hand, feed from the other, then responds to empty-hand cue 8 of 10 reps (medium)", sessionsRequired: 3, completedSessions: 0 },
-      { title: "Verbal cue only", successCriteria: "Sits on verbal cue alone with no hand signal, before bowl/door/leash clip (hard)", sessionsRequired: 4, completedSessions: 0 },
+      { title: "Lure into sit", successCriteria: "Follows lure and sits 8 of 10 reps (beginner)", sessionsRequired: 2, sessionsByDog: {} },
+      { title: "Fade food lure", successCriteria: "Lure with one hand, feed from the other, then responds to empty-hand cue 8 of 10 reps (medium)", sessionsRequired: 3, sessionsByDog: {} },
+      { title: "Verbal cue only", successCriteria: "Sits on verbal cue alone with no hand signal, before bowl/door/leash clip (hard)", sessionsRequired: 4, sessionsByDog: {} },
     ],
     sources: [
       { title: "Sit — Howcast", type: "video", url: "https://www.howcast.com/videos/499142-how-to-teach-your-dog-to-sit-dog-training", publisher: "Dog Rules reference" },
@@ -457,14 +486,14 @@ export const milestones: Milestone[] = [
     id: "down",
     title: "Lay",
     track: "obedience",
-    dogIds: ["puppy"],
+    dogIds: ["puppy", "griz"],
     status: "locked",
     dependencies: ["sit", "food-lure", "focus"],
     ageGateWeeks: 2,
     steps: [
-      { title: "Lure elbows down from sit", successCriteria: "Starts from the sit position and both elbows touch floor without pawing", sessionsRequired: 3, completedSessions: 0 },
-      { title: "Hold down", successCriteria: "Maintains down for 10 seconds across 3 sessions", sessionsRequired: 3, completedSessions: 0 },
-      { title: "Relaxed down", successCriteria: "Can down on mat after light play", sessionsRequired: 4, completedSessions: 0 },
+      { title: "Lure elbows down from sit", successCriteria: "Starts from the sit position and both elbows touch floor without pawing", sessionsRequired: 3, sessionsByDog: {} },
+      { title: "Hold down", successCriteria: "Maintains down for 10 seconds across 3 sessions", sessionsRequired: 3, sessionsByDog: {} },
+      { title: "Relaxed down", successCriteria: "Can down on mat after light play", sessionsRequired: 4, sessionsByDog: {} },
     ],
     sources: [
       { title: "Lay — reference video 1", type: "video", url: "https://www.youtube.com/watch?v=hHKtUp9-xbc", publisher: "Dog Rules reference" },
@@ -482,9 +511,9 @@ export const milestones: Milestone[] = [
     dependencies: ["marker-word", "impulse-control", "drop-it"],
     ageGateWeeks: 1,
     steps: [
-      { title: "Closed fist game", successCriteria: "Looks away from covered treat 8 of 10 reps (beginner)", sessionsRequired: 3, completedSessions: 0 },
-      { title: "Food on ground, hand covering", successCriteria: "Leaves visible item when cued (medium) — major rule: never reward speed over patience, never let the dog win by stealing", sessionsRequired: 4, completedSessions: 0 },
-      { title: "Real-world proofing", successCriteria: "Passes low-value sidewalk items, leaves, or trash on a walk (hard)", sessionsRequired: 5, completedSessions: 0 },
+      { title: "Closed fist game", successCriteria: "Looks away from covered treat 8 of 10 reps (beginner)", sessionsRequired: 3, sessionsByDog: {} },
+      { title: "Food on ground, hand covering", successCriteria: "Leaves visible item when cued (medium) — major rule: never reward speed over patience, never let the dog win by stealing", sessionsRequired: 4, sessionsByDog: {} },
+      { title: "Real-world proofing", successCriteria: "Passes low-value sidewalk items, leaves, or trash on a walk (hard)", sessionsRequired: 5, sessionsByDog: {} },
     ],
     sources: [
       { title: "It's Your Choice — impulse training", type: "video", url: "https://www.youtube.com/watch?v=QIuxm5r17nE", publisher: "Dog Rules reference" },
@@ -502,9 +531,9 @@ export const milestones: Milestone[] = [
     dependencies: ["sit", "recall-foundation", "outside-confidence"],
     ageGateWeeks: 1,
     steps: [
-      { title: "Circles indoors", successCriteria: "Stays near handler / makes eye contact walking circles indoors (beginner)", sessionsRequired: 3, completedSessions: 0 },
-      { title: "Change location and distance", successCriteria: "Maintains slack leash with more distractions present (medium)", sessionsRequired: 4, completedSessions: 0 },
-      { title: "Add other skills while leashed", successCriteria: "Holds other cues together in new environments; stop-and-redirect if pulling, never yell (hard)", sessionsRequired: 5, completedSessions: 0 },
+      { title: "Circles indoors", successCriteria: "Stays near handler / makes eye contact walking circles indoors (beginner)", sessionsRequired: 3, sessionsByDog: {} },
+      { title: "Change location and distance", successCriteria: "Maintains slack leash with more distractions present (medium)", sessionsRequired: 4, sessionsByDog: {} },
+      { title: "Add other skills while leashed", successCriteria: "Holds other cues together in new environments; stop-and-redirect if pulling, never yell (hard)", sessionsRequired: 5, sessionsByDog: {} },
     ],
     sources: [
       { title: "Leash — 8 min mark", type: "video", url: "https://www.youtube.com/watch?v=FG9xSgN86BM", publisher: "Dog Rules reference" },
@@ -517,14 +546,14 @@ export const milestones: Milestone[] = [
     id: "dog-park",
     title: "Dog park readiness",
     track: "socialization",
-    dogIds: ["puppy"],
+    dogIds: ["puppy", "griz"],
     status: "locked",
     dependencies: ["vaccines-complete", "recall-foundation", "loose-leash", "dog-body-language"],
     ageGateWeeks: 24,
     steps: [
-      { title: "Observe dogs at distance", successCriteria: "Relaxed body for 10 minutes at 50+ feet", sessionsRequired: 4, completedSessions: 0 },
-      { title: "One known dog parallel walk", successCriteria: "Loose body and recovery after greetings", sessionsRequired: 4, completedSessions: 0 },
-      { title: "Recall around dogs", successCriteria: "Responds 8 of 10 times around one calm dog", sessionsRequired: 6, completedSessions: 0 },
+      { title: "Observe dogs at distance", successCriteria: "Relaxed body for 10 minutes at 50+ feet", sessionsRequired: 4, sessionsByDog: {} },
+      { title: "One known dog parallel walk", successCriteria: "Loose body and recovery after greetings", sessionsRequired: 4, sessionsByDog: {} },
+      { title: "Recall around dogs", successCriteria: "Responds 8 of 10 times around one calm dog", sessionsRequired: 6, sessionsByDog: {} },
     ],
     sources: [
       { title: "Dog park safety", type: "article", url: "https://www.akc.org/expert-advice/lifestyle/dog-park-etiquette-tips/", publisher: "AKC" },
@@ -541,9 +570,9 @@ export const milestones: Milestone[] = [
       dependencies: [],
       ageGateWeeks: 1,
       steps: [
-        { title: "Lure eye contact", successCriteria: "Turns head toward handler on name/lure 8 of 10 reps in a quiet room (beginner)", sessionsRequired: 2, completedSessions: 0 },
-        { title: "Distance and unexpected timing", successCriteria: "Orients from across the room, mid-walk, or mid-play (medium)", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Different people, places, distractions", successCriteria: "Responds to name for different people in different places 8 of 10 reps (hard)", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Lure eye contact", successCriteria: "Turns head toward handler on name/lure 8 of 10 reps in a quiet room (beginner)", sessionsRequired: 2, sessionsByDog: {} },
+        { title: "Distance and unexpected timing", successCriteria: "Orients from across the room, mid-walk, or mid-play (medium)", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Different people, places, distractions", successCriteria: "Responds to name for different people in different places 8 of 10 reps (hard)", sessionsRequired: 3, sessionsByDog: {} },
       ],
       sources: [
         { title: "Look at Me — reference video", type: "video", url: "https://www.youtube.com/watch?v=FG9xSgN86BM", publisher: "Dog Rules reference" },
@@ -558,8 +587,8 @@ export const milestones: Milestone[] = [
       track: "obedience",
       dependencies: [],
       steps: [
-        { title: "Nose-follows-hand", successCriteria: "Tracks a treat in a closed fist through a simple path 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
-        { title: "Lure into basic position shifts", successCriteria: "Follows lure into a sit or a turn without freezing or jumping", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Nose-follows-hand", successCriteria: "Tracks a treat in a closed fist through a simple path 8 of 10 reps", sessionsRequired: 2, sessionsByDog: {} },
+        { title: "Lure into basic position shifts", successCriteria: "Follows lure into a sit or a turn without freezing or jumping", sessionsRequired: 3, sessionsByDog: {} },
       ],
       sources: [
         { title: "Lure-and-reward training plan", type: "plan", url: "https://www.akc.org/expert-advice/training/lure-reward-training/", publisher: "AKC" },
@@ -574,9 +603,9 @@ export const milestones: Milestone[] = [
       track: "obedience",
       dependencies: ["name-recognition"],
       steps: [
-        { title: "Eye contact for a treat", successCriteria: "Offers voluntary eye contact 8 of 10 reps indoors", sessionsRequired: 2, completedSessions: 0 },
-        { title: "Hold eye contact briefly", successCriteria: "Holds eye contact 3 seconds before reward", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Focus around mild distraction", successCriteria: "Re-engages with handler within 2 seconds of a mild distraction outdoors", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Eye contact for a treat", successCriteria: "Offers voluntary eye contact 8 of 10 reps indoors", sessionsRequired: 2, sessionsByDog: {} },
+        { title: "Hold eye contact briefly", successCriteria: "Holds eye contact 3 seconds before reward", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Focus around mild distraction", successCriteria: "Re-engages with handler within 2 seconds of a mild distraction outdoors", sessionsRequired: 4, sessionsByDog: {} },
       ],
       sources: [
         { title: "Grab & Hold Your Dog's Attention With the \"Watch Me\" Command", type: "article", url: "https://www.akc.org/expert-advice/training/watch-me-command-grab-dogs-attention/", publisher: "AKC" },
@@ -591,9 +620,9 @@ export const milestones: Milestone[] = [
       track: "obedience",
       dependencies: ["focus"],
       steps: [
-        { title: "It's Yer Choice / bowl game", successCriteria: "Waits without lunging while food bowl lowers 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Wait at doorway / crate", successCriteria: "Holds position while door opens until released", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Settle during play arousal", successCriteria: "Interrupts play and offers a sit within 3 seconds of cue", sessionsRequired: 4, completedSessions: 0 },
+        { title: "It's Yer Choice / bowl game", successCriteria: "Waits without lunging while food bowl lowers 8 of 10 reps", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Wait at doorway / crate", successCriteria: "Holds position while door opens until released", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Settle during play arousal", successCriteria: "Interrupts play and offers a sit within 3 seconds of cue", sessionsRequired: 4, sessionsByDog: {} },
       ],
       sources: [
         { title: "It's Your Choice — impulse training", type: "video", url: "https://www.youtube.com/watch?v=QIuxm5r17nE", publisher: "Dog Rules reference" },
@@ -608,9 +637,9 @@ export const milestones: Milestone[] = [
       track: "obedience",
       dependencies: ["marker-word", "food-lure"],
       steps: [
-        { title: "Trade for low-value toy", successCriteria: "Releases a low-value toy for a treat trade 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
-        { title: "Add verbal cue", successCriteria: "Drops item on verbal cue before treat is shown 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Proof with higher-value items", successCriteria: "Drops a favorite toy or found object on first cue without chase", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Trade for low-value toy", successCriteria: "Releases a low-value toy for a treat trade 8 of 10 reps", sessionsRequired: 2, sessionsByDog: {} },
+        { title: "Add verbal cue", successCriteria: "Drops item on verbal cue before treat is shown 8 of 10 reps", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Proof with higher-value items", successCriteria: "Drops a favorite toy or found object on first cue without chase", sessionsRequired: 4, sessionsByDog: {} },
       ],
       sources: [
         { title: "How to Teach Your Dog to Drop It", type: "article", url: "https://www.akc.org/expert-advice/training/teaching-your-dog-to-drop-it/", publisher: "AKC" },
@@ -626,9 +655,9 @@ export const milestones: Milestone[] = [
       dependencies: ["name-recognition", "marker-word"],
       ageGateWeeks: 4,
       steps: [
-        { title: "Hand at dog's face", successCriteria: "Comes to hand held right in front of face 8 of 10 reps (beginner) — 1 kibble for alerting attention, 1 treat for a nose-bump", sessionsRequired: 2, completedSessions: 0 },
-        { title: "Hand off to the side", successCriteria: "Comes with hand held off to the side of the dog's face (medium)", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Standing a few feet away, verbal only", successCriteria: "Recalls from a few feet away on verbal cue alone (hard/expert)", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Hand at dog's face", successCriteria: "Comes to hand held right in front of face 8 of 10 reps (beginner) — 1 kibble for alerting attention, 1 treat for a nose-bump", sessionsRequired: 2, sessionsByDog: {} },
+        { title: "Hand off to the side", successCriteria: "Comes with hand held off to the side of the dog's face (medium)", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Standing a few feet away, verbal only", successCriteria: "Recalls from a few feet away on verbal cue alone (hard/expert)", sessionsRequired: 4, sessionsByDog: {} },
       ],
       sources: [
         { title: "Target training — intro to hand signals", type: "video", url: "https://www.youtube.com/watch?v=QIuxm5r17nE", publisher: "Dog Rules reference" },
@@ -643,9 +672,9 @@ export const milestones: Milestone[] = [
       track: "confidence",
       dependencies: ["name-recognition"],
       steps: [
-        { title: "Front yard exposure", successCriteria: "Explores front yard with loose body language for 5 minutes", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Novel surfaces and sounds", successCriteria: "Recovers within 5 seconds after a mild startle outdoors", sessionsRequired: 4, completedSessions: 0 },
-        { title: "Quiet street exposure", successCriteria: "Walks past a passing car or jogger without freezing or bolting", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Front yard exposure", successCriteria: "Explores front yard with loose body language for 5 minutes", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Novel surfaces and sounds", successCriteria: "Recovers within 5 seconds after a mild startle outdoors", sessionsRequired: 4, sessionsByDog: {} },
+        { title: "Quiet street exposure", successCriteria: "Walks past a passing car or jogger without freezing or bolting", sessionsRequired: 4, sessionsByDog: {} },
       ],
       sources: [
         { title: "Confident Puppy: How Do You Raise a Secure Young Dog", type: "article", url: "https://www.akc.org/expert-advice/training/how-do-you-raise-a-confident-puppy/", publisher: "AKC" },
@@ -661,9 +690,9 @@ export const milestones: Milestone[] = [
       dependencies: [],
       ageGateWeeks: 16,
       steps: [
-        { title: "Puppy series 1 of 3", successCriteria: "First distemper/parvo combo vaccine given at 6-8 weeks, no adverse reaction", sessionsRequired: 1, completedSessions: 0 },
-        { title: "Puppy series 2 of 3", successCriteria: "Second combo booster given 3-4 weeks after the first, no adverse reaction", sessionsRequired: 1, completedSessions: 0 },
-        { title: "Puppy series 3 of 3 + vet clearance", successCriteria: "Final booster given at 16+ weeks and vet confirms full protection for public spaces", sessionsRequired: 1, completedSessions: 0 },
+        { title: "Puppy series 1 of 3", successCriteria: "First distemper/parvo combo vaccine given at 6-8 weeks, no adverse reaction", sessionsRequired: 1, sessionsByDog: {} },
+        { title: "Puppy series 2 of 3", successCriteria: "Second combo booster given 3-4 weeks after the first, no adverse reaction", sessionsRequired: 1, sessionsByDog: {} },
+        { title: "Puppy series 3 of 3 + vet clearance", successCriteria: "Final booster given at 16+ weeks and vet confirms full protection for public spaces", sessionsRequired: 1, sessionsByDog: {} },
       ],
       sources: [
         { title: "Puppy Vaccination Schedule: What Shots Do Puppies Need?", type: "article", url: "https://www.akc.org/expert-advice/health/puppy-shots-complete-guide/", publisher: "AKC" },
@@ -678,9 +707,9 @@ export const milestones: Milestone[] = [
       track: "socialization",
       dependencies: [],
       steps: [
-        { title: "Identify calm vs. stiff body signals", successCriteria: "Handler correctly labels loose vs. tense body language in 8 of 10 photos or clips", sessionsRequired: 2, completedSessions: 0 },
-        { title: "Live observation at distance", successCriteria: "Handler flags a stress signal in a real dog interaction within 3 seconds", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Apply during a supervised greeting", successCriteria: "Handler interrupts a greeting before escalation using body-language cues", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Identify calm vs. stiff body signals", successCriteria: "Handler correctly labels loose vs. tense body language in 8 of 10 photos or clips", sessionsRequired: 2, sessionsByDog: {} },
+        { title: "Live observation at distance", successCriteria: "Handler flags a stress signal in a real dog interaction within 3 seconds", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Apply during a supervised greeting", successCriteria: "Handler interrupts a greeting before escalation using body-language cues", sessionsRequired: 3, sessionsByDog: {} },
       ],
       sources: [
         { title: "Dog Body Language", type: "article", url: "https://www.akc.org/expert-advice/training/dog-body-language/", publisher: "AKC" },
@@ -696,9 +725,9 @@ export const milestones: Milestone[] = [
       dependencies: ["sit", "focus"],
       ageGateWeeks: 4,
       steps: [
-        { title: "Catch and reward 3 seconds", successCriteria: "Holds sit-stay 3 seconds with handler at arm's length 8 of 10 reps (beginner)", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Increase distance and duration", successCriteria: "Holds stay 15 seconds with handler 6 feet away, controlled environment (medium)", sessionsRequired: 4, completedSessions: 0 },
-        { title: "Surprise stay, uncontrolled environment", successCriteria: "Holds stay through a squeaky toy rolling by, other toys, or people (hard)", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Catch and reward 3 seconds", successCriteria: "Holds sit-stay 3 seconds with handler at arm's length 8 of 10 reps (beginner)", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Increase distance and duration", successCriteria: "Holds stay 15 seconds with handler 6 feet away, controlled environment (medium)", sessionsRequired: 4, sessionsByDog: {} },
+        { title: "Surprise stay, uncontrolled environment", successCriteria: "Holds stay through a squeaky toy rolling by, other toys, or people (hard)", sessionsRequired: 4, sessionsByDog: {} },
       ],
       sources: [
         { title: "Stay — 1:45 min mark", type: "video", url: "https://www.youtube.com/watch?v=GAziMECDxD0&t=313s", publisher: "Dog Rules reference" },
@@ -713,9 +742,9 @@ export const milestones: Milestone[] = [
       track: "obedience",
       dependencies: ["impulse-control", "sit"],
       steps: [
-        { title: "Wait at bowl", successCriteria: "Waits without breaking while bowl is set down, released on cue", sessionsRequired: 2, completedSessions: 0 },
-        { title: "Wait at door", successCriteria: "Waits at threshold while door opens fully, released on cue", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Wait at car / curb", successCriteria: "Waits before exiting car or crossing curb until released", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Wait at bowl", successCriteria: "Waits without breaking while bowl is set down, released on cue", sessionsRequired: 2, sessionsByDog: {} },
+        { title: "Wait at door", successCriteria: "Waits at threshold while door opens fully, released on cue", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Wait at car / curb", successCriteria: "Waits before exiting car or crossing curb until released", sessionsRequired: 3, sessionsByDog: {} },
       ],
       sources: [
         { title: "How to Teach Your Dog to Wait at Doorways", type: "article", url: "https://www.akc.org/expert-advice/training/teach-your-dog-to-wait-at-doorways/", publisher: "AKC" },
@@ -730,9 +759,9 @@ export const milestones: Milestone[] = [
       track: "obedience",
       dependencies: ["loose-leash", "focus"],
       steps: [
-        { title: "Position at the leg indoors", successCriteria: "Holds heel position for 10 steps indoors with lure", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Fade lure, add turns", successCriteria: "Maintains heel position through 2 turns without a lure", sessionsRequired: 4, completedSessions: 0 },
-        { title: "Proof outdoors with distraction", successCriteria: "Holds heel position for 30 feet past a mild distraction", sessionsRequired: 5, completedSessions: 0 },
+        { title: "Position at the leg indoors", successCriteria: "Holds heel position for 10 steps indoors with lure", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Fade lure, add turns", successCriteria: "Maintains heel position through 2 turns without a lure", sessionsRequired: 4, sessionsByDog: {} },
+        { title: "Proof outdoors with distraction", successCriteria: "Holds heel position for 30 feet past a mild distraction", sessionsRequired: 5, sessionsByDog: {} },
       ],
       sources: [
         { title: "Teach a Dog to Heel: How to Train a Dog to Walk Beside You", type: "article", url: "https://www.akc.org/expert-advice/training/heeling-teach-dog-walk/", publisher: "AKC" },
@@ -747,9 +776,9 @@ export const milestones: Milestone[] = [
       track: "obedience",
       dependencies: ["marker-word", "food-lure"],
       steps: [
-        { title: "Nose to palm", successCriteria: "Touches nose to open palm 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
-        { title: "Add verbal cue and distance", successCriteria: "Moves 3 feet to touch palm on cue alone", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Use touch to redirect", successCriteria: "Redirects away from a mild distraction using touch cue 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Nose to palm", successCriteria: "Touches nose to open palm 8 of 10 reps", sessionsRequired: 2, sessionsByDog: {} },
+        { title: "Add verbal cue and distance", successCriteria: "Moves 3 feet to touch palm on cue alone", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Use touch to redirect", successCriteria: "Redirects away from a mild distraction using touch cue 8 of 10 reps", sessionsRequired: 3, sessionsByDog: {} },
       ],
       sources: [
         { title: "How to Teach Your Dog to Nose Target or 'Touch'", type: "article", url: "https://www.akc.org/expert-advice/training/teach-dog-nose-target-touch/", publisher: "AKC" },
@@ -765,9 +794,9 @@ export const milestones: Milestone[] = [
       dependencies: ["down", "stay"],
       ageGateWeeks: 6,
       steps: [
-        { title: "Settle on the mat", successCriteria: "Reaches a relaxed one-hip position on the mat and gets kibble; if the dog leaves the mat, pick it up and restart from the last spot", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Send from a short distance", successCriteria: "Runs to mat and settles from 6 feet away on cue", sessionsRequired: 4, completedSessions: 0 },
-        { title: "Hold place through household activity", successCriteria: "Stays on mat through doorbell or meal prep until released", sessionsRequired: 5, completedSessions: 0 },
+        { title: "Settle on the mat", successCriteria: "Reaches a relaxed one-hip position on the mat and gets kibble; if the dog leaves the mat, pick it up and restart from the last spot", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Send from a short distance", successCriteria: "Runs to mat and settles from 6 feet away on cue", sessionsRequired: 4, sessionsByDog: {} },
+        { title: "Hold place through household activity", successCriteria: "Stays on mat through doorbell or meal prep until released", sessionsRequired: 5, sessionsByDog: {} },
       ],
       sources: [
         { title: "Dr. Karen Overall Protocol for Relaxation (PDF)", type: "plan", url: "https://journeydogtraining.com/wp-content/uploads/2017/07/ProtocolforRelaxation.pdf", publisher: "Journey Dog Training" },
@@ -782,8 +811,8 @@ export const milestones: Milestone[] = [
       track: "obedience",
       dependencies: ["marker-word"],
       steps: [
-        { title: "Capture and mark a bark", successCriteria: "Marks and rewards a spontaneous single bark 5 times in a session", sessionsRequired: 2, completedSessions: 0 },
-        { title: "Add verbal cue", successCriteria: "Barks once within 3 seconds of cue 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Capture and mark a bark", successCriteria: "Marks and rewards a spontaneous single bark 5 times in a session", sessionsRequired: 2, sessionsByDog: {} },
+        { title: "Add verbal cue", successCriteria: "Barks once within 3 seconds of cue 8 of 10 reps", sessionsRequired: 3, sessionsByDog: {} },
       ],
       sources: [
         { title: "Bark training scenarios (Zak George)", type: "video", url: "https://www.youtube.com/watch?v=s0A9SpCdRZg", publisher: "Dog Rules reference" },
@@ -798,8 +827,8 @@ export const milestones: Milestone[] = [
       track: "obedience",
       dependencies: ["speak"],
       steps: [
-        { title: "Mark silence after a bark", successCriteria: "Rewards 2 seconds of silence immediately following a cued bark 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
-        { title: "Add verbal cue and extend duration", successCriteria: "Stops barking within 3 seconds of cue and holds silence 10 seconds", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Mark silence after a bark", successCriteria: "Rewards 2 seconds of silence immediately following a cued bark 8 of 10 reps", sessionsRequired: 2, sessionsByDog: {} },
+        { title: "Add verbal cue and extend duration", successCriteria: "Stops barking within 3 seconds of cue and holds silence 10 seconds", sessionsRequired: 4, sessionsByDog: {} },
       ],
       sources: [
         { title: "How to get your dog to stop barking", type: "article", url: "https://www.humanesociety.org/resources/how-get-your-dog-stop-barking", publisher: "Humane Society" },
@@ -815,8 +844,8 @@ export const milestones: Milestone[] = [
       dependencies: ["marker-word", "food-lure"],
       ageGateWeeks: 6,
       steps: [
-        { title: "Capture the paw lift", successCriteria: "Paws at closed hand and gets marked/rewarded 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
-        { title: "Add verbal cue", successCriteria: "Offers paw on cue alone without hand presented first", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Capture the paw lift", successCriteria: "Paws at closed hand and gets marked/rewarded 8 of 10 reps", sessionsRequired: 2, sessionsByDog: {} },
+        { title: "Add verbal cue", successCriteria: "Offers paw on cue alone without hand presented first", sessionsRequired: 3, sessionsByDog: {} },
       ],
       sources: [
         { title: "How To Teach a Dog to Shake Hands", type: "article", url: "https://www.akc.org/expert-advice/training/how-to-teach-your-dog-to-shake-hands/", publisher: "AKC" },
@@ -831,8 +860,8 @@ export const milestones: Milestone[] = [
       track: "obedience",
       dependencies: ["food-lure", "focus"],
       steps: [
-        { title: "Lure a full circle", successCriteria: "Follows lure through a 360-degree turn 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
-        { title: "Fade lure, add cue, both directions", successCriteria: "Spins in either direction on verbal cue without a visible lure", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Lure a full circle", successCriteria: "Follows lure through a 360-degree turn 8 of 10 reps", sessionsRequired: 2, sessionsByDog: {} },
+        { title: "Fade lure, add cue, both directions", successCriteria: "Spins in either direction on verbal cue without a visible lure", sessionsRequired: 3, sessionsByDog: {} },
       ],
       sources: [
         { title: "How to Teach Your Dog to Spin Around", type: "article", url: "https://www.akc.org/expert-advice/training/teach-your-dog-to-spin-around/", publisher: "AKC" },
@@ -848,9 +877,9 @@ export const milestones: Milestone[] = [
       dependencies: ["down", "food-lure"],
       ageGateWeeks: 6,
       steps: [
-        { title: "Lure from down to side", successCriteria: "Follows lure from down into a side-lie 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Complete the roll", successCriteria: "Completes a full roll from lure with verbal cue paired", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Fade lure", successCriteria: "Rolls over on verbal cue alone 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Lure from down to side", successCriteria: "Follows lure from down into a side-lie 8 of 10 reps", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Complete the roll", successCriteria: "Completes a full roll from lure with verbal cue paired", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Fade lure", successCriteria: "Rolls over on verbal cue alone 8 of 10 reps", sessionsRequired: 3, sessionsByDog: {} },
       ],
       sources: [
         { title: "How to Teach a Dog to Roll Over", type: "article", url: "https://www.akc.org/expert-advice/training/how-to-teach-a-dog-to-roll-over/", publisher: "AKC" },
@@ -865,8 +894,8 @@ export const milestones: Milestone[] = [
       track: "obedience",
       dependencies: ["down"],
       steps: [
-        { title: "Lure onto side from down", successCriteria: "Falls onto side from a down position 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Add cue and hold briefly", successCriteria: "Holds the side-lie 3 seconds on verbal cue before release word", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Lure onto side from down", successCriteria: "Falls onto side from a down position 8 of 10 reps", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Add cue and hold briefly", successCriteria: "Holds the side-lie 3 seconds on verbal cue before release word", sessionsRequired: 3, sessionsByDog: {} },
       ],
       sources: [
         { title: "How to Teach Your Dog to Play Dead", type: "article", url: "https://www.akc.org/expert-advice/training/teach-your-dog-to-play-dead/", publisher: "AKC" },
@@ -882,9 +911,9 @@ export const milestones: Milestone[] = [
       dependencies: ["touch", "impulse-control"],
       ageGateWeeks: 6,
       steps: [
-        { title: "Chase and grab a tossed toy", successCriteria: "Chases and picks up a tossed toy 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
-        { title: "Bring toy back toward handler", successCriteria: "Returns toy to within arm's reach of handler 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Full fetch loop with release", successCriteria: "Completes toss-chase-return-release loop 5 times in a row without chasing", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Chase and grab a tossed toy", successCriteria: "Chases and picks up a tossed toy 8 of 10 reps", sessionsRequired: 2, sessionsByDog: {} },
+        { title: "Bring toy back toward handler", successCriteria: "Returns toy to within arm's reach of handler 8 of 10 reps", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Full fetch loop with release", successCriteria: "Completes toss-chase-return-release loop 5 times in a row without chasing", sessionsRequired: 4, sessionsByDog: {} },
       ],
       sources: [
         { title: "How to Teach Your Dog to Fetch", type: "article", url: "https://www.akc.org/expert-advice/training/teach-your-dog-to-fetch/", publisher: "AKC" },
@@ -899,9 +928,9 @@ export const milestones: Milestone[] = [
       track: "obedience",
       dependencies: ["fetch", "drop-it"],
       steps: [
-        { title: "Hold and carry", successCriteria: "Holds a toy in mouth for 5 seconds while walking beside handler", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Deliver to hand", successCriteria: "Releases toy directly into handler's hand on cue 8 of 10 reps", sessionsRequired: 4, completedSessions: 0 },
-        { title: "Retrieve a dropped item on request", successCriteria: "Picks up and delivers a named household item to hand 7 of 10 reps", sessionsRequired: 5, completedSessions: 0 },
+        { title: "Hold and carry", successCriteria: "Holds a toy in mouth for 5 seconds while walking beside handler", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Deliver to hand", successCriteria: "Releases toy directly into handler's hand on cue 8 of 10 reps", sessionsRequired: 4, sessionsByDog: {} },
+        { title: "Retrieve a dropped item on request", successCriteria: "Picks up and delivers a named household item to hand 7 of 10 reps", sessionsRequired: 5, sessionsByDog: {} },
       ],
       sources: [
         { title: "How to Teach Your Dog to Fetch", type: "article", url: "https://www.akc.org/expert-advice/training/teach-your-dog-to-fetch/", publisher: "AKC" },
@@ -916,9 +945,9 @@ export const milestones: Milestone[] = [
       track: "obedience",
       dependencies: ["recall-foundation", "stay"],
       steps: [
-        { title: "Recall away from a stay", successCriteria: "Breaks a stay and recalls immediately on cue 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Recall with moderate distraction", successCriteria: "Recalls past a person, toy, or food distraction at 10 feet", sessionsRequired: 4, completedSessions: 0 },
-        { title: "Long-line recall outdoors", successCriteria: "Recalls from 30+ feet on a long line in a new outdoor location 8 of 10 reps", sessionsRequired: 5, completedSessions: 0 },
+        { title: "Recall away from a stay", successCriteria: "Breaks a stay and recalls immediately on cue 8 of 10 reps", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Recall with moderate distraction", successCriteria: "Recalls past a person, toy, or food distraction at 10 feet", sessionsRequired: 4, sessionsByDog: {} },
+        { title: "Long-line recall outdoors", successCriteria: "Recalls from 30+ feet on a long line in a new outdoor location 8 of 10 reps", sessionsRequired: 5, sessionsByDog: {} },
       ],
       sources: [
         { title: "How to Train Your Dog to Come When Called: Step-by-Step Recall", type: "article", url: "https://www.akc.org/expert-advice/training/reliable-recalls-how-to-train-your-dog-to-come-when-called/", publisher: "AKC" },
@@ -933,9 +962,9 @@ export const milestones: Milestone[] = [
       track: "obedience",
       dependencies: ["recall-foundation", "advanced-recall"],
       steps: [
-        { title: "Condition a unique emergency cue", successCriteria: "Orients and sprints to handler on the special cue paired with a jackpot reward 8 of 10 reps", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Proof under high distraction", successCriteria: "Responds to emergency cue within 2 seconds during active play or around another dog", sessionsRequired: 4, completedSessions: 0 },
-        { title: "Randomized real-world tests", successCriteria: "Responds successfully to 5 unannounced real-world tests across different locations", sessionsRequired: 5, completedSessions: 0 },
+        { title: "Condition a unique emergency cue", successCriteria: "Orients and sprints to handler on the special cue paired with a jackpot reward 8 of 10 reps", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Proof under high distraction", successCriteria: "Responds to emergency cue within 2 seconds during active play or around another dog", sessionsRequired: 4, sessionsByDog: {} },
+        { title: "Randomized real-world tests", successCriteria: "Responds successfully to 5 unannounced real-world tests across different locations", sessionsRequired: 5, sessionsByDog: {} },
       ],
       sources: [
         { title: "How to Teach Your Dog the Emergency Recall", type: "article", url: "https://www.preventivevet.com/dogs/teach-your-dog-the-emergency-recall-come", publisher: "Preventive Vet" },
@@ -951,9 +980,9 @@ export const milestones: Milestone[] = [
       dependencies: [],
       ageGateWeeks: 1,
       steps: [
-        { title: "Positive introduction", successCriteria: "Sniffs and explores the open crate with treats/toys inside, no door closing yet", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Close the door briefly", successCriteria: "Accepts the door slowly closed (not locked) while treats feed through, 15 min or less", sessionsRequired: 4, completedSessions: 0 },
-        { title: "Build duration", successCriteria: "Settles calmly in crate for 15 min - 1 hr after exercise, low frequency of longer stretches", sessionsRequired: 5, completedSessions: 0 },
+        { title: "Positive introduction", successCriteria: "Sniffs and explores the open crate with treats/toys inside, no door closing yet", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Close the door briefly", successCriteria: "Accepts the door slowly closed (not locked) while treats feed through, 15 min or less", sessionsRequired: 4, sessionsByDog: {} },
+        { title: "Build duration", successCriteria: "Settles calmly in crate for 15 min - 1 hr after exercise, low frequency of longer stretches", sessionsRequired: 5, sessionsByDog: {} },
       ],
       sources: [
         { title: "Crate Training (Zak George)", type: "video", url: "https://www.youtube.com/watch?v=hesi8WxLWVE", publisher: "Dog Rules reference" },
@@ -969,9 +998,9 @@ export const milestones: Milestone[] = [
       dependencies: ["crate-training"],
       ageGateWeeks: 8,
       steps: [
-        { title: "Short departures", successCriteria: "Settles calmly for 15-30 min departures with no crying at the door", sessionsRequired: 4, completedSessions: 0 },
-        { title: "1-2 hour stretch", successCriteria: "Handles a 1-2 hour departure (e.g. a gym class) calmly, logged in the alone-time tracker", sessionsRequired: 3, completedSessions: 0 },
-        { title: "3-4 hour stretch", successCriteria: "Handles a 3-4 hour departure calmly ahead of the BYU/Notre Dame tailgate (10/17) target", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Short departures", successCriteria: "Settles calmly for 15-30 min departures with no crying at the door", sessionsRequired: 4, sessionsByDog: {} },
+        { title: "1-2 hour stretch", successCriteria: "Handles a 1-2 hour departure (e.g. a gym class) calmly, logged in the alone-time tracker", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "3-4 hour stretch", successCriteria: "Handles a 3-4 hour departure calmly ahead of the BYU/Notre Dame tailgate (10/17) target", sessionsRequired: 3, sessionsByDog: {} },
       ],
       sources: [
         { title: "Puppy Training Timeline (alone-time conditioning)", type: "article", url: "https://www.akc.org/expert-advice/training/puppy-training-timeline-teaching-good-behavior-before-its-too-late/", publisher: "AKC" },
@@ -986,9 +1015,9 @@ export const milestones: Milestone[] = [
       dependencies: ["impulse-control"],
       ageGateWeeks: 8,
       steps: [
-        { title: "Withhold attention", successCriteria: "Handler withholds all petting/attention until all four paws are on the ground", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Proof with greetings", successCriteria: "Greets a familiar person without jumping 8 of 10 times", sessionsRequired: 4, completedSessions: 0 },
-        { title: "Proof with strangers", successCriteria: "Does not jump on an unfamiliar person during a greeting", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Withhold attention", successCriteria: "Handler withholds all petting/attention until all four paws are on the ground", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Proof with greetings", successCriteria: "Greets a familiar person without jumping 8 of 10 times", sessionsRequired: 4, sessionsByDog: {} },
+        { title: "Proof with strangers", successCriteria: "Does not jump on an unfamiliar person during a greeting", sessionsRequired: 4, sessionsByDog: {} },
       ],
       sources: [
         { title: "Dog Should Not Jump on People (Zak George)", type: "video", url: "https://www.youtube.com/watch?v=49A12LPsE8M", publisher: "Dog Rules reference" },
@@ -1003,8 +1032,8 @@ export const milestones: Milestone[] = [
       dependencies: [],
       ageGateWeeks: 1,
       steps: [
-        { title: "Intro to grooming tools", successCriteria: "Calm around brush, nail grinder/clippers, and dryer without handling yet", sessionsRequired: 3, completedSessions: 0 },
-        { title: "First grooming session", successCriteria: "Accepts a full brush-out and nail check calmly", sessionsRequired: 3, completedSessions: 0 },
+        { title: "Intro to grooming tools", successCriteria: "Calm around brush, nail grinder/clippers, and dryer without handling yet", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "First grooming session", successCriteria: "Accepts a full brush-out and nail check calmly", sessionsRequired: 3, sessionsByDog: {} },
       ],
       sources: [
         { title: "Intro to grooming — 9 min mark", type: "video", url: "https://www.youtube.com/watch?v=0c-IjjzmS0E&list=PLMssKIjsDxXl_ZXQgcHlEY_fC-yL5P76N&index=3", publisher: "Dog Rules reference" },
@@ -1019,8 +1048,8 @@ export const milestones: Milestone[] = [
       dependencies: ["fetch"],
       ageGateWeeks: 6,
       steps: [
-        { title: "Chase a rolled disc", successCriteria: "Chases and grabs a rolled (not thrown) frisbee 8 of 10 reps", sessionsRequired: 2, completedSessions: 0 },
-        { title: "Short thrown catches", successCriteria: "Catches a short, low throw and returns it", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Chase a rolled disc", successCriteria: "Chases and grabs a rolled (not thrown) frisbee 8 of 10 reps", sessionsRequired: 2, sessionsByDog: {} },
+        { title: "Short thrown catches", successCriteria: "Catches a short, low throw and returns it", sessionsRequired: 4, sessionsByDog: {} },
       ],
       sources: [
         { title: "How to Teach Your Dog to Fetch", type: "article", url: "https://www.akc.org/expert-advice/training/teach-your-dog-to-fetch/", publisher: "AKC" },
@@ -1034,16 +1063,26 @@ export const milestones: Milestone[] = [
       dependencies: ["no-jumping", "impulse-control"],
       ageGateWeeks: 6,
       steps: [
-        { title: "Greet a calm familiar person", successCriteria: "Sits or stands calmly for a greeting from a known person, no jumping", sessionsRequired: 3, completedSessions: 0 },
-        { title: "Greet a new person", successCriteria: "Meets a new person calmly with all four paws down", sessionsRequired: 4, completedSessions: 0 },
+        { title: "Greet a calm familiar person", successCriteria: "Sits or stands calmly for a greeting from a known person, no jumping", sessionsRequired: 3, sessionsByDog: {} },
+        { title: "Greet a new person", successCriteria: "Meets a new person calmly with all four paws down", sessionsRequired: 4, sessionsByDog: {} },
       ],
       sources: [
         { title: "Puppy Socialization: Why, When, and How to Do It Right", type: "article", url: "https://www.akc.org/expert-advice/training/puppy-socialization/", publisher: "AKC" },
       ],
       why: "Week 6-8 command per the real training schedule. Combines the no-jumping rule with impulse control specifically for the moment guests or strangers approach.",
     },
-  ] as Array<Omit<Milestone, "dogIds" | "status">>).map((milestone) => ({ ...milestone, dogIds: ["puppy"], status: "locked" as const })),
+  ] as Array<Omit<Milestone, "dogIds" | "status">>).map((milestone) => ({
+    ...milestone,
+    // Both dogs run the same training catalogue — an adult learns Sit, Place, Heel
+    // and the tricks just as a puppy does, and each dog's progress is tracked
+    // separately (MilestoneStep.sessionsByDog). Only genuinely puppy-scoped
+    // milestones stay single-dog.
+    dogIds: PUPPY_ONLY_MILESTONES.has(milestone.id) ? ["puppy"] : ["puppy", "griz"],
+    status: "locked" as const,
+  })),
 ];
+
+export const milestones: Milestone[] = milestoneCatalogue.map(withStartingProgress);
 
 const healthEvents: HealthEventSeed[] = [
   {
