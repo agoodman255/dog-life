@@ -234,9 +234,10 @@ export type ReminderOffsetUnit = "minutes" | "hours" | "days";
 /** One scheduled email reminder, expressed relative to the item's next occurrence
  * (its wall-clock startTime — items without a startTime can't compute "before" and
  * are skipped by the sender). An item can stack several (e.g. 1 day before AND 1
- * hour before). Sent to the household member(s) resolved from `assignedTo`, or
- * everyone in the household when unassigned — there's no separate email field to
- * fill in, since login email is already captured by Supabase Auth. */
+ * hour before). Every reminder lands in one fixed inbox (the sender's REMINDER_TO
+ * secret) rather than per-person addresses — the subject line is tagged with
+ * whoever the item is `assignedTo` (or "Household") so a mail filter can forward
+ * the relevant ones on. */
 export type ItemReminder = {
   id: string;
   amount: number;

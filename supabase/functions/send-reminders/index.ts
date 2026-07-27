@@ -6,7 +6,14 @@
 //   2. Expands each item's occurrences over a lookahead window (recurrence rules,
 //      one-off dates, exclusions — same rules the app's calendar uses).
 //   3. For any occurrence + reminder offset whose due time has passed and hasn't
-//      been sent yet, emails the assigned person (or the whole household) via Resend.
+//      been sent yet, emails REMINDER_TO via Resend, tagged with who it's for.
+//
+// Every reminder goes to one fixed inbox (REMINDER_TO) rather than resolving a
+// per-person address — Andrew's call: simpler than requiring every household
+// member to have their own login, and works with Resend's free sandbox sender
+// (which can only send to the Resend account's own email anyway). The subject
+// line is tagged "[Name]" / "[Household]" so a Gmail filter can forward the
+// ones relevant to someone else.
 //
 // Deliberately self-contained: this runs in Deno, not the Vite/React bundle, so
 // the date/recurrence helpers below are a small, faithful port of the same logic
@@ -15,9 +22,10 @@
 //
 // Required secrets (Supabase dashboard: Edge Functions > send-reminders > Secrets,
 // or `supabase secrets set NAME=value`):
-//   RESEND_API_KEY   — from resend.com (needs a verified sending domain to email
-//                      addresses other than the Resend account's own).
-//   REMINDER_FROM    — e.g. "Dog Life OS <reminders@yourdomain.com>"
+//   RESEND_API_KEY   — from resend.com.
+//   REMINDER_FROM    — e.g. "Dog Life OS <onboarding@resend.dev>" (Resend's
+//                      sandbox sender) or your own verified domain.
+//   REMINDER_TO      — the one inbox every reminder is sent to.
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically by the
 // platform — no need to set those.
 
@@ -220,6 +228,9 @@ async function sendEmail(to: string[], subject: string, html: string, text: stri
 }
 
 Deno.serve(async () => {
+  const reminderTo = Deno.env.get("REMINDER_TO");
+  if (!reminderTo) return new Response("REMINDER_TO not configured", { status: 500 });
+
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
@@ -250,17 +261,11 @@ Deno.serve(async () => {
     const itemsWithReminders = (items ?? []).filter((item: ItemRow) => (item.reminders ?? []).length > 0);
     if (itemsWithReminders.length === 0) continue;
 
-    const { data: people } = await supabase.from("people").select("id, auth_user_id").eq("household_id", household.id);
+    const { data: people } = await supabase.from("people").select("id, name").eq("household_id", household.id);
 
-    async function emailsForPersonId(personId: string | null): Promise<string[]> {
-      const targets = personId ? (people ?? []).filter((p: { id: string }) => p.id === personId) : people ?? [];
-      const results: string[] = [];
-      for (const person of targets) {
-        if (!person.auth_user_id) continue;
-        const { data } = await supabase.auth.admin.getUserById(person.auth_user_id);
-        if (data?.user?.email) results.push(data.user.email);
-      }
-      return results;
+    function nameForPersonId(personId: string | null): string {
+      if (!personId) return "Household";
+      return (people ?? []).find((p: { id: string; name: string }) => p.id === personId)?.name ?? "Household";
     }
 
     for (const item of itemsWithReminders) {
@@ -308,12 +313,6 @@ Deno.serve(async () => {
             .maybeSingle();
           if (alreadySent) continue;
 
-          const recipients = await emailsForPersonId(effectiveAssignedTo || null);
-          if (recipients.length === 0) {
-            skipped += 1;
-            continue;
-          }
-
           const whenLabel = new Intl.DateTimeFormat("en-US", {
             timeZone: zoneId,
             weekday: "long",
@@ -322,13 +321,14 @@ Deno.serve(async () => {
             hour: "numeric",
             minute: "2-digit",
           }).format(startInstant);
+          const tag = nameForPersonId(effectiveAssignedTo || null);
 
           try {
             await sendEmail(
-              recipients,
-              `Reminder: ${item.title} — ${whenLabel}`,
-              `<p><strong>${item.title}</strong></p><p>${whenLabel}</p><p>${offsetLabel(reminder.amount, reminder.unit)}.</p>`,
-              `${item.title}\n${whenLabel}\n${offsetLabel(reminder.amount, reminder.unit)}.`,
+              [reminderTo],
+              `[${tag}] ${item.title} — ${whenLabel}`,
+              `<p><strong>${item.title}</strong></p><p>${whenLabel}</p><p>${offsetLabel(reminder.amount, reminder.unit)}. For: ${tag}.</p>`,
+              `${item.title}\n${whenLabel}\n${offsetLabel(reminder.amount, reminder.unit)}. For: ${tag}.`,
             );
             await supabase.from("sent_item_reminders").insert({ item_id: item.id, occurrence_date: originalDate, reminder_id: reminder.id });
             sent += 1;

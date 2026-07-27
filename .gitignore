@@ -1,6 +1,10 @@
 node_modules
 dist
 .DS_Store
+
+# Supabase CLI's local project-link cache (created by `supabase login`/
+# `functions deploy`) — machine-local, not shared state.
+supabase/.temp/
 *.local
 .env
 .env.*

@@ -1455,7 +1455,7 @@ export function ItemForm({
           <input type="checkbox" {...register("remindersEnabled")} />
           <span>
             <strong>Send an email reminder</strong>
-            <small>Emailed to whoever&apos;s assigned (or the whole household) ahead of when this is scheduled. Sent to your login email — nothing else to set up.</small>
+            <small>Emailed ahead of when this is scheduled, tagged with who it&apos;s assigned to (or &quot;Household&quot; if no one&apos;s assigned).</small>
           </span>
         </label>
         {remindersEnabled && (
