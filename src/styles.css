@@ -364,8 +364,34 @@ main {
   background: var(--tint);
 }
 
+.task-card.is-collapsed {
+  opacity: 0.55;
+  filter: grayscale(0.7);
+}
+
 .task-card.is-collapsed .task-main {
   padding-bottom: 16px;
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--muted) 25%, transparent),
+    color-mix(in srgb, var(--muted) 25%, transparent) 1px,
+    transparent 1px,
+    transparent 7px
+  );
+}
+
+.task-card.is-collapsed .task-time {
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--muted) 25%, transparent),
+    color-mix(in srgb, var(--muted) 25%, transparent) 1px,
+    transparent 1px,
+    transparent 7px
+  );
+}
+
+.task-card.is-collapsed h3 {
+  text-decoration: line-through;
 }
 
 .task-collapsed-rating {
