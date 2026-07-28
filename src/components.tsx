@@ -1,4 +1,4 @@
-import { Activity, Check, ChevronDown, ChevronRight, Droplet, Dumbbell, GlassWater, GraduationCap, Lock, Play, Trophy, Unlock, Utensils, X } from "lucide-react";
+import { Activity, Check, ChevronDown, ChevronRight, Droplet, Dumbbell, GlassWater, GraduationCap, Lock, Play, Plus, Trophy, Unlock, Utensils, X } from "lucide-react";
 import { FormEvent, ReactNode, useState } from "react";
 import { useSession } from "./auth";
 import { useNavigation } from "./navigation";
@@ -20,6 +20,7 @@ import {
 } from "./types";
 import { MilestonePicker } from "./milestonePicker";
 import { formatInZone, isoToZonedParts, searchTimezones, zonedTimeToUtcIso, zoneLabel } from "./timezones";
+
 import {
   ALONE_TIME_TRAINING_ID,
   buildDefaultChecklist,
@@ -33,7 +34,10 @@ import {
   stepSessions,
   QUICK_LOG_SPECS,
   quickLogFieldVisible,
+  quickLogKindForCategory,
+  summarizeQuickLog,
   quickLogSpec,
+  scheduledSlotCandidates,
   resolveChecklistDefs,
   isHealthItem,
   resolveDependencies,
@@ -238,26 +242,53 @@ function dogsInvolvedLabel(dogIds: string[], allDogs: Dog[]): string {
     .join(", ");
 }
 
+/** Real names, always. `dogsInvolvedLabel` says "Puppy" by design (Andrew's call, so
+ * the label survives the puppy being renamed), which is fine for a meta line but wrong
+ * when the whole point is *which dog* still needs taking out — and it would read as a
+ * different dog from the "Mara" in the log row directly above it. */
+function dogNamesLabel(dogIds: string[], allDogs: Dog[]): string {
+  return dogIds.map((id) => allDogs.find((dog) => dog.id === id)?.name ?? id).join(" & ");
+}
+
 export function TaskCard({
   task,
   occurrence,
+  logs = [],
   dogs,
   onComplete,
   onDelete,
   onOpenDetail,
+  onQuickLog,
 }: {
   task: Item;
   /** This item's state for the day being shown. Replaces the old `feedback` prop,
    * which carried no date and so reported an item as done forever after one tap. */
   occurrence?: ItemOccurrence;
+  /** What's been logged against this slot today. A slot with logs but no completion is
+   * the partial-coverage case — one dog recorded, the other still expected. */
+  logs?: ItemLog[];
   dogs: Dog[];
   onComplete: (task: Item, rating: number) => Promise<boolean> | boolean | void;
   onDelete?: (task: Item) => void;
   onOpenDetail?: (task: Item) => void;
+  /** Opens the Quick log for this item. Only offered for categories Quick log already
+   * captures properly — a potty break, a meal, a training rep. Sits alongside the score
+   * rather than replacing it, because right now a log and a completion are still two
+   * separate records; that collapses into one once a log can satisfy the slot. */
+  onQuickLog?: (task: Item) => void;
 }) {
+  const quickLogKind = quickLogKindForCategory(task.category);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [failed, setFailed] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const isDone = occurrence?.state === "completed";
+  const collapsed = isDone && !expanded;
+  // Which of this item's dogs still have nothing logged. Non-empty while some but not
+  // all are covered — the state that keeps the slot deliberately open rather than
+  // claiming a dog went out on another dog's evidence.
+  const loggedDogs = new Set(logs.flatMap((log) => log.dogIds));
+  const awaitingDogs = isDone ? [] : (task.dogIds ?? []).filter((id) => !loggedDogs.has(id));
+  const partiallyLogged = logs.length > 0 && awaitingDogs.length > 0;
 
   function toggleItem(item: string) {
     setChecked((prev) => ({ ...prev, [item]: !prev[item] }));
@@ -270,7 +301,7 @@ export function TaskCard({
   }
 
   return (
-    <article className={`task-card ${isDone ? "is-done" : ""}`}>
+    <article className={`task-card ${isDone ? "is-done" : ""} ${collapsed ? "is-collapsed" : ""}`}>
       <div className="task-time">{task.startTime ?? "—"}</div>
       <div className="task-main">
         <div className="row between">
@@ -279,60 +310,93 @@ export function TaskCard({
             <h3>{task.title}</h3>
           </div>
           <div className="row" style={{ gap: 8 }}>
-            <span className={`priority ${task.priority}`}>{task.priority}</span>
-            {onOpenDetail && (
+            {isDone && occurrence?.rating && (
+              <strong className="task-collapsed-rating">
+                <Check size={14} aria-hidden /> {occurrence.rating}/5
+              </strong>
+            )}
+            {!collapsed && <span className={`priority ${task.priority}`}>{task.priority}</span>}
+            {isDone && (
+              <button className="text-button" type="button" onClick={() => setExpanded((prev) => !prev)}>
+                {collapsed ? "Details" : "Collapse"}
+              </button>
+            )}
+            {!collapsed && onOpenDetail && (
               <button className="text-button" type="button" onClick={() => onOpenDetail(task)}>
                 Manage
               </button>
             )}
-            {onDelete && (
+            {!collapsed && onDelete && (
               <button className="text-button" type="button" onClick={() => onDelete(task)} aria-label={`Delete ${task.title}`}>
                 Remove
               </button>
             )}
           </div>
         </div>
-        <p>{task.notes}</p>
-        <div className="task-meta">
-          <span>{itemDurationMinutes(task)} min</span>
-          <span>{task.setting}</span>
-          <span>Dogs: {dogsInvolvedLabel(task.dogIds ?? [], dogs)}</span>
-          {task.assignedTo && (
-            <span>
-              <PersonName id={task.assignedTo} />
-            </span>
-          )}
-        </div>
-        <div className="checklist">
-          {task.checklist.map((item) => (
-            <label key={item.itemName} className={checked[item.itemName] ? "checked" : ""}>
-              <input type="checkbox" checked={!!checked[item.itemName]} onChange={() => toggleItem(item.itemName)} />
-              {item.itemName}
-            </label>
-          ))}
-        </div>
-        <div className="rating-label">
-          <span>{isDone ? "Logged — how did it go?" : "How did it go?"}</span>
-          {isDone && occurrence?.rating && (
-            <strong>
-              <Check size={14} aria-hidden /> Rated {occurrence.rating}/5
-            </strong>
-          )}
-        </div>
-        {failed && <p className="form-error">That didn't save — check the browser console and try again.</p>}
-        <div className="rating-row" aria-label={`Complete ${task.title}`}>
-          {[1, 2, 3, 4, 5].map((rating) => (
-            <button
-              key={rating}
-              type="button"
-              className={occurrence?.rating === rating ? "selected" : ""}
-              aria-pressed={occurrence?.rating === rating}
-              onClick={() => handleRate(rating)}
-            >
-              {rating}
-            </button>
-          ))}
-        </div>
+        {logs.length > 0 && (
+          <ul className="task-card-logs">
+            {logs.map((log) => (
+              <li key={log.id}>
+                {summarizeQuickLog(log) || "Logged"}
+                {log.dogIds.length > 0 && ` — ${dogNamesLabel(log.dogIds, dogs)}`}
+                {log.rating ? ` · ${log.rating}/5` : ""}
+              </li>
+            ))}
+          </ul>
+        )}
+        {partiallyLogged && (
+          <p className="small task-card-awaiting">Still expected: {dogNamesLabel(awaitingDogs, dogs)}</p>
+        )}
+        {!collapsed && (
+          <>
+            <p>{task.notes}</p>
+            <div className="task-meta">
+              <span>{itemDurationMinutes(task)} min</span>
+              <span>{task.setting}</span>
+              <span>Dogs: {dogsInvolvedLabel(task.dogIds ?? [], dogs)}</span>
+              {task.assignedTo && (
+                <span>
+                  <PersonName id={task.assignedTo} />
+                </span>
+              )}
+            </div>
+            <div className="checklist">
+              {task.checklist.map((item) => (
+                <label key={item.itemName} className={checked[item.itemName] ? "checked" : ""}>
+                  <input type="checkbox" checked={!!checked[item.itemName]} onChange={() => toggleItem(item.itemName)} />
+                  {item.itemName}
+                </label>
+              ))}
+            </div>
+            <div className="rating-label">
+              <span>{isDone ? "Logged — how did it go?" : "How did it go?"}</span>
+              {isDone && occurrence?.rating && (
+                <strong>
+                  <Check size={14} aria-hidden /> Rated {occurrence.rating}/5
+                </strong>
+              )}
+            </div>
+            {failed && <p className="form-error">That didn't save — check the browser console and try again.</p>}
+            <div className="rating-row" aria-label={`Complete ${task.title}`}>
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <button
+                  key={rating}
+                  type="button"
+                  className={occurrence?.rating === rating ? "selected" : ""}
+                  aria-pressed={occurrence?.rating === rating}
+                  onClick={() => handleRate(rating)}
+                >
+                  {rating}
+                </button>
+              ))}
+            </div>
+            {quickLogKind && onQuickLog && (
+              <button className="text-button" type="button" onClick={() => onQuickLog(task)}>
+                <Plus size={14} aria-hidden /> Log {quickLogSpec(quickLogKind).label.toLowerCase()} details
+              </button>
+            )}
+          </>
+        )}
       </div>
     </article>
   );
@@ -553,6 +617,7 @@ export function QuickLogForm({
   initialKind = "potty",
   initialTrainingType,
   initialDogIds,
+  attachTo,
   editingLog,
   onClose,
 }: {
@@ -564,6 +629,11 @@ export function QuickLogForm({
   /** Pre-selects which dog(s) the entry is for. Set when arriving from a per-dog
    * recommendation, where the dog is already unambiguous. */
   initialDogIds?: string[];
+  /** Present = this entry is being recorded against a scheduled item, so the kind is
+   * already decided by that item's category and the strip would only offer ways to
+   * contradict it. Purely presentational for now; the stored link lands with the
+   * schema change. */
+  attachTo?: { itemId: string; occurrenceDate: string; itemTitle: string };
   /** Present = editing this entry instead of creating a new one. Kind and (for
    * training) which milestone it's against are fixed once an entry exists — those
    * aren't mistakes an edit fixes, they're what delete-and-relog is for. Everything
@@ -571,7 +641,8 @@ export function QuickLogForm({
   editingLog?: ItemLog;
   onClose: () => void;
 }) {
-  const { dogs, milestones, addQuickLog, editQuickLog } = useStore();
+  const { dogs, milestones, items, itemOccurrences, addQuickLog, editQuickLog } = useStore();
+  const { timezone } = useNavigation();
   const [kind, setKind] = useState<QuickLogKind>(editingLog?.quickLogKind ?? initialKind);
   const [dogIds, setDogIds] = useState<string[]>(() => editingLog?.dogIds ?? initialDogIds ?? []);
   const [selections, setSelections] = useState<Record<string, string | number | null>>(() =>
@@ -588,6 +659,17 @@ export function QuickLogForm({
   const [stepTitles, setStepTitles] = useState<string[]>(() => editingLog?.advancedStepTitles ?? []);
   const [rating, setRating] = useState<number | undefined>(editingLog?.rating);
   const [notes, setNotes] = useState(editingLog?.text ?? "");
+  // When it actually happened, defaulted to now. Separate from when the row gets
+  // written: you log the 7:18 break when you get back inside, or at 9pm catching up.
+  const [happenedClock, setHappenedClock] = useState(() =>
+    isoToZonedParts(editingLog?.happenedAt ?? editingLog?.loggedAt ?? new Date().toISOString(), timezone).time,
+  );
+  // Which scheduled slot this entry says happened. `undefined` = not answered yet,
+  // `null` = explicitly unscheduled. Never inferred silently: the app proposes and the
+  // person confirms, because with breaks every couple of hours something is always
+  // "nearest" and being confidently wrong is worse than asking.
+  const [slotChoice, setSlotChoice] = useState<string | null | undefined>(editingLog?.itemId ?? undefined);
+  const [changingSlot, setChangingSlot] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<QuickLogResult | null>(null);
@@ -634,6 +716,22 @@ export function QuickLogForm({
 
   const visibleFields = spec.fields.filter((field) => quickLogFieldVisible(field, selections));
 
+  // Arriving from an item already decides the slot, so there's nothing to ask about.
+  const [clockHours, clockMinutes] = happenedClock.split(":").map(Number);
+  const candidates = attachTo
+    ? []
+    : scheduledSlotCandidates(
+        kind,
+        date,
+        (clockHours || 0) * 60 + (clockMinutes || 0),
+        dogIds,
+        items.items,
+        itemOccurrences.items,
+      );
+  const chosenSlot = slotChoice ? (candidates.find((entry) => entry.item.id === slotChoice) ?? null) : null;
+  const chosenSlotTitle = chosenSlot?.item.title ?? (slotChoice ? items.items.find((item) => item.id === slotChoice)?.title : undefined);
+  const slotAnswered = slotChoice !== undefined;
+
   async function submit() {
     if (submitting) return;
     if (dogIds.length === 0) return setError("Pick at least one dog.");
@@ -666,6 +764,12 @@ export function QuickLogForm({
     const input = {
       kind,
       date,
+      // Arriving from an item decides the slot outright; otherwise it's whatever was
+      // confirmed below, and an unanswered prompt means unscheduled — the safe reading,
+      // since the expectation stays open and can be attached from the timeline later.
+      itemId: attachTo?.itemId ?? slotChoice ?? undefined,
+      occurrenceDate: attachTo?.occurrenceDate ?? chosenSlot?.occurrenceDate ?? (slotChoice ? editingLog?.occurrenceDate : undefined),
+      happenedAt: zonedTimeToUtcIso(date, happenedClock, timezone),
       dogIds,
       values,
       rating,
@@ -787,6 +891,10 @@ export function QuickLogForm({
         <p className="eyebrow quick-log-editing-label">
           <Icon size={16} aria-hidden /> Editing this {spec.label.toLowerCase()} entry
         </p>
+      ) : attachTo ? (
+        <p className="eyebrow quick-log-editing-label">
+          <Icon size={16} aria-hidden /> {attachTo.itemTitle}
+        </p>
       ) : (
         <div className="quick-log-kinds" role="tablist" aria-label="What are you logging?">
           {QUICK_LOG_SPECS.map((entry) => {
@@ -817,6 +925,17 @@ export function QuickLogForm({
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="form-field">
+        When did it happen?
+        <input
+          className="quick-log-time"
+          type="time"
+          value={happenedClock}
+          onChange={(event) => setHappenedClock(event.target.value)}
+          aria-label="When did it happen?"
+        />
       </div>
 
       {kind === "training" ? (
@@ -967,6 +1086,71 @@ export function QuickLogForm({
         <textarea rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={spec.notesPlaceholder} />
       </div>
 
+      {/* Propose, then ask. Sits inline right above Save so it reads as the last thing
+          to confirm, never as a modal you have to clear before you can carry on — and
+          leaving it alone is a valid answer (see `itemId` in submit). */}
+      {!attachTo && (candidates.length > 0 || slotAnswered) && (
+        <div className="quick-log-slot">
+          {slotAnswered && !changingSlot ? (
+            <div className="row between">
+              <p className="small">
+                {slotChoice && chosenSlotTitle ? (
+                  <>
+                    Counts as <strong>{chosenSlotTitle}</strong>
+                    {chosenSlot?.timeLabel ? ` (${chosenSlot.timeLabel})` : ""}.
+                  </>
+                ) : (
+                  "Logging this on its own — nothing scheduled."
+                )}
+              </p>
+              {candidates.length > 0 && (
+                <button className="text-button" type="button" onClick={() => setChangingSlot(true)}>
+                  Change
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              <p className="small">
+                {candidates.length === 1 ? (
+                  <>
+                    Looks like this is <strong>{candidates[0].item.title}</strong>
+                    {candidates[0].timeLabel ? ` (${candidates[0].timeLabel})` : ""}, which hasn't been completed yet. Is it?
+                  </>
+                ) : (
+                  `Is this one of these scheduled ${spec.label.toLowerCase()} items?`
+                )}
+              </p>
+              <div className="subtabs" role="group" aria-label="Which scheduled item is this?">
+                {candidates.map((entry) => (
+                  <button
+                    key={entry.item.id}
+                    type="button"
+                    className={slotChoice === entry.item.id ? "active" : ""}
+                    onClick={() => {
+                      setSlotChoice(entry.item.id);
+                      setChangingSlot(false);
+                    }}
+                  >
+                    {candidates.length === 1 ? "Yes" : entry.timeLabel ? `${entry.item.title} · ${entry.timeLabel}` : entry.item.title}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className={slotChoice === null ? "active" : ""}
+                  onClick={() => {
+                    setSlotChoice(null);
+                    setChangingSlot(false);
+                  }}
+                >
+                  No, log separately
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {error && <p className="form-error">{error}</p>}
       <div className="form-actions">
         <button className="text-button" type="button" onClick={onClose} disabled={submitting}>
@@ -1009,6 +1193,9 @@ export function ItemDetailModal({
   const dogName = (id: string) => dogs.items.find((dog) => dog.id === id)?.name ?? id;
   const location = locations.find((loc) => loc.id === task.location);
   const relatedMilestone = task.relatedMilestoneId ? milestones.items.find((item) => item.id === task.relatedMilestoneId) : undefined;
+  // Set = this item is one of the five things Quick log already captures properly, so
+  // it gets that form instead of the generic text-and-fields panel.
+  const quickLogKind = quickLogKindForCategory(task.category);
 
   const [startManual, setStartManual] = useState(false);
   const [startDate, setStartDate] = useState(date);
@@ -1319,16 +1506,35 @@ export function ItemDetailModal({
         {error && <p className="form-error">That didn't save — check any required fields (and the browser console) and try again.</p>}
 
         {/* Logging is available regardless of completion state — a vet visit gets
-            logged after the fact, and a routine can accumulate several entries. */}
-        {activePanel === null && task.requiresLog && (
+            logged after the fact, and a routine can accumulate several entries.
+
+            A mapped category offers logging even when `requiresLog` is off. For a potty
+            break or a meal, recording what happened isn't an extra capability you opt
+            into — it *is* how you say the thing happened, and the seeds ship those
+            routines with the flag false. Unmapped categories still respect the toggle. */}
+        {activePanel === null && (task.requiresLog || quickLogKind) && (
           <div className="task-lifecycle-actions">
             <button className="primary-button" type="button" onClick={() => setActivePanel("log")}>
-              Log an entry
+              {quickLogKind ? `Log ${quickLogSpec(quickLogKind).label.toLowerCase()}` : "Log an entry"}
             </button>
           </div>
         )}
 
-        {activePanel === "log" && <LogEntryPanel item={task} occurrenceDate={date} onClose={() => setActivePanel(null)} />}
+        {activePanel === "log" &&
+          (quickLogKind ? (
+            <QuickLogForm
+              date={date}
+              initialKind={quickLogKind}
+              initialDogIds={task.dogIds}
+              // A training item usually already names the milestone it's for; making you
+              // re-pick it in the form would be asking a question the item answered.
+              initialTrainingType={task.checklistSourceMilestoneId ?? task.relatedMilestoneId}
+              attachTo={{ itemId: task.id, occurrenceDate: date, itemTitle: task.title }}
+              onClose={() => setActivePanel(null)}
+            />
+          ) : (
+            <LogEntryPanel item={task} occurrenceDate={date} onClose={() => setActivePanel(null)} />
+          ))}
 
         {activePanel === null && task.requiresCompletion && (state === "not_started" || state === "reassigned" || state === "rescheduled") && (
           <div className="task-lifecycle-actions">

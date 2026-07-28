@@ -34,6 +34,7 @@ import {
   defaultLogFieldsFor,
   dogsNeedingCoverage,
   ITEM_INTENT_PRESETS,
+  quickLogKindForCategory,
   to12Hour,
   to24Hour,
 } from "./utils";
@@ -773,6 +774,7 @@ const itemSchema = z
     formation: z.string(),
     relatedMilestoneId: z.string(),
     documentUrl: z.string(),
+    calendarVisibility: z.enum(["calendar", "checklist-only"]),
     status: z.enum(["confirmed", "placeholder"]),
     notes: z.string(),
   })
@@ -792,7 +794,15 @@ const itemSchema = z
         message: "Fill in at least 2 of start time, end time, duration — or leave all three blank",
       });
     }
-    if (values.requiresCompletion && values.checklist.length === 0 && !values.checklistSourceMilestoneId) {
+    // Exempt for categories Quick log covers: a potty break or a meal gets completed by
+    // logging what happened, and demanding a hand-typed checklist first is what produced
+    // the Peed/Pooped/Treats duplication of the potty spec in the first place.
+    if (
+      values.requiresCompletion &&
+      values.checklist.length === 0 &&
+      !values.checklistSourceMilestoneId &&
+      !quickLogKindForCategory(values.category)
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["checklist"],
@@ -865,6 +875,7 @@ export function itemFormValuesToItem(
     formation: (values.formation || undefined) as Item["formation"],
     relatedMilestoneId: values.relatedMilestoneId || undefined,
     documentUrl: values.documentUrl || undefined,
+    calendarVisibility: values.calendarVisibility,
     notes: values.notes,
     ...extra,
   };
@@ -965,6 +976,7 @@ export function ItemForm({
       formation: initial?.formation ?? "",
       relatedMilestoneId: initial?.relatedMilestoneId ?? "",
       documentUrl: initial?.documentUrl ?? "",
+      calendarVisibility: initial?.calendarVisibility ?? "calendar",
       status: initial?.status ?? "confirmed",
       notes: initial?.notes ?? "",
     },
@@ -1160,6 +1172,17 @@ export function ItemForm({
           </p>
         )}
       </fieldset>
+
+      {/* Separate from the capability toggles above: those say what the item asks of
+          you, this says where it shows up. A potty break every two hours has to be
+          tracked and has no business on a calendar someone else is reading. */}
+      <div className="form-field">
+        Where should this show up?
+        <select {...register("calendarVisibility")}>
+          <option value="calendar">On the calendar, like everything else</option>
+          <option value="checklist-only">Dashboard only — too frequent for the calendar</option>
+        </select>
+      </div>
 
       {requiresCompletion && (
         <fieldset className="capability-detail">

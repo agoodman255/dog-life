@@ -331,6 +331,22 @@ function useDataStore() {
   // rest of the series intact. Deleting "the series" (or a one-off item) removes
   // the row outright. Either way a required note gets logged for the record.
   async function deleteItem(item: Item, scope: ItemDeletionScope, occurrenceDate: string | undefined, note: string) {
+    // Detach observations before the item goes. `item_logs.item_id` is `on delete
+    // cascade`, which is right for a log *of* an item — a vet visit's weights die with
+    // the visit — but a potty Quick log that merely satisfied this slot is a record
+    // about the dog. Deleting the "Morning potty" routine must not take months of
+    // stool-consistency history with it. Excluding one date is the same problem in
+    // miniature: the log would survive pointing at a day the item no longer occurs.
+    const orphaned = itemLogs.items.filter(
+      (log) =>
+        log.itemId === item.id &&
+        log.quickLogKind &&
+        (scope === "series" || !occurrenceDate || log.occurrenceDate === occurrenceDate),
+    );
+    // `occurrenceDate` deliberately survives: on an unattached Quick log it just means
+    // the day the thing happened, which is still true and still what the feed reads.
+    await Promise.all(orphaned.map((log) => itemLogs.update(log.id, { itemId: undefined })));
+
     const ok =
       scope === "instance" && occurrenceDate
         ? await items.update(item.id, { excludedDates: [...(item.excludedDates ?? []), occurrenceDate] })
@@ -487,6 +503,10 @@ function useDataStore() {
       endTime: undefined,
       endTimeZone: undefined,
       milestoneAdvanced: false,
+      // Dropped along with the completion: a hand-reopened slot is open on the person's
+      // say-so, and leaving the claims would mean the next log deletion tried to reopen
+      // something that's already open, or a stale claim silently re-closed it.
+      satisfiedByLogIds: [],
       history: withHistory(instance, { type: "reopen", oldValue: "completed", newValue: "not_started", reason }),
     });
   }
@@ -591,6 +611,116 @@ function useDataStore() {
     return rolledBack;
   }
 
+  /** Claims a scheduled slot on behalf of a Quick log: the entry is the observation
+   * that the expected thing happened.
+   *
+   * Completion is gated on dog coverage. An occurrence carries one `state` for every
+   * dog it involves, so flipping it on a log that only covers Mara would be asserting
+   * Griz went out too — the same fabricated data the completion rework exists to
+   * prevent. Until the logs claiming this slot span its dogs it stays open, and the
+   * second log closes it naturally.
+   *
+   * The occurrence rating takes the *lowest* score across the claiming logs, so one
+   * bad break isn't averaged out of existence by a good one. */
+  async function satisfyOccurrence(log: ItemLog): Promise<void> {
+    if (!log.itemId || !log.occurrenceDate) return;
+    const item = items.items.find((entry) => entry.id === log.itemId);
+    if (!item || !item.requiresCompletion) return;
+
+    const instance = ensureInstance(item, log.occurrenceDate);
+    const claimIds = Array.from(new Set([...(instance.satisfiedByLogIds ?? []), log.id]));
+    // Include this log explicitly: `itemLogs.items` hasn't flushed the insert yet
+    // within the same call, so reading it back would miss the entry we're claiming for.
+    const claimingLogs = [log, ...itemLogs.items.filter((entry) => claimIds.includes(entry.id) && entry.id !== log.id)];
+
+    const covered = new Set(claimingLogs.flatMap((entry) => entry.dogIds));
+    const required = item.dogIds ?? [];
+    const fullyCovered = required.length === 0 || required.every((id) => covered.has(id));
+
+    const ratings = claimingLogs.map((entry) => entry.rating).filter((value): value is number => typeof value === "number");
+    const rating = ratings.length > 0 ? Math.min(...ratings) : undefined;
+
+    if (!fullyCovered) {
+      // Recorded but not closed. Persisting the claim now is what lets the next log
+      // for the other dog see it and finish the job. If an edit narrowed the dogs on a
+      // log that had closed this slot, coverage is gone and the slot has to reopen —
+      // this function decides the occurrence's state purely from its claims, so it
+      // handles that case rather than needing a separate release pass.
+      const wasClosedByClaims = instance.state === "completed" && (instance.satisfiedByLogIds ?? []).length > 0;
+      await persistInstance({
+        ...instance,
+        satisfiedByLogIds: claimIds,
+        ...(wasClosedByClaims
+          ? {
+              state: "not_started" as const,
+              endTime: undefined,
+              endTimeZone: undefined,
+              rating: undefined,
+              milestoneAdvanced: false,
+              history: withHistory(instance, {
+                type: "reopen" as const,
+                oldValue: "completed",
+                newValue: "not_started",
+                reason: "Log no longer covers every dog",
+              }),
+            }
+          : {}),
+      });
+      return;
+    }
+
+    // A training Quick log already advanced its milestone through `advancedStepTitles`.
+    // Marking the occurrence as advanced stops `advanceLinkedMilestone` counting the
+    // same session a second time if this item is later completed or reopened.
+    const milestoneAdvanced = instance.milestoneAdvanced || (log.quickLogKind === "training" && !!log.milestoneId);
+
+    await persistInstance({
+      ...instance,
+      state: "completed",
+      endTime: log.happenedAt ?? log.loggedAt,
+      satisfiedByLogIds: claimIds,
+      rating,
+      milestoneAdvanced,
+      history: withHistory(instance, { type: "end", oldValue: instance.state, newValue: "completed", reason: "Logged" }),
+    });
+  }
+
+  /** Releases whatever `satisfyOccurrence` claimed, when the log is deleted or edited
+   * to point somewhere else. Reopens the slot only if this log's removal actually
+   * breaks it: no claims left, or the remaining ones no longer cover every dog. A slot
+   * completed by hand is never touched, since it carries no claim. */
+  async function releaseSatisfiedOccurrence(log: ItemLog): Promise<void> {
+    if (!log.itemId || !log.occurrenceDate) return;
+    const instance = getInstance(log.itemId, log.occurrenceDate);
+    if (!instance || !(instance.satisfiedByLogIds ?? []).includes(log.id)) return;
+
+    const item = items.items.find((entry) => entry.id === log.itemId);
+    const claimIds = (instance.satisfiedByLogIds ?? []).filter((id) => id !== log.id);
+    const claimingLogs = itemLogs.items.filter((entry) => claimIds.includes(entry.id));
+
+    const covered = new Set(claimingLogs.flatMap((entry) => entry.dogIds));
+    const required = item?.dogIds ?? [];
+    const stillCovered = claimIds.length > 0 && (required.length === 0 || required.every((id) => covered.has(id)));
+
+    const ratings = claimingLogs.map((entry) => entry.rating).filter((value): value is number => typeof value === "number");
+
+    if (stillCovered) {
+      await persistInstance({ ...instance, satisfiedByLogIds: claimIds, rating: ratings.length > 0 ? Math.min(...ratings) : undefined });
+      return;
+    }
+
+    await persistInstance({
+      ...instance,
+      state: "not_started",
+      endTime: undefined,
+      endTimeZone: undefined,
+      rating: undefined,
+      satisfiedByLogIds: claimIds,
+      milestoneAdvanced: false,
+      history: withHistory(instance, { type: "reopen", oldValue: instance.state, newValue: "not_started", reason: "Log removed" }),
+    });
+  }
+
   /** Removes the `alone_time_logs` row a Quick log's alone-time entry wrote, so a
    * deleted or edited-away session isn't still counted by the readiness math. No
    * stored link between the two rows — `alone_time_logs` ids are DB-generated and
@@ -680,9 +810,19 @@ function useDataStore() {
     const milestone = entry.milestoneId ? milestones.items.find((item) => item.id === entry.milestoneId) : undefined;
     const advancing = !!milestone && entry.completedStepTitles.length > 0;
 
-    const ok = await addItemLog({
+    // Built here rather than through addItemLog so the row can be handed straight to
+    // satisfyOccurrence — `itemLogs.items` hasn't flushed the insert yet at that point,
+    // so reading it back would find nothing to claim the slot with.
+    const log: ItemLog = {
+      id: makeId("log"),
+      loggedAt: new Date().toISOString(),
       quickLogKind: entry.kind,
-      occurrenceDate: dateKey,
+      // Both set when this entry says a scheduled slot actually happened. The date key
+      // doubles as the occurrence key, so an attached entry points at the right day of
+      // a recurring item rather than at the series.
+      itemId: entry.itemId,
+      occurrenceDate: entry.itemId ? (entry.occurrenceDate ?? dateKey) : dateKey,
+      happenedAt: entry.happenedAt,
       loggedBy: people.items[0]?.id ?? "",
       text: entry.notes,
       values: entry.values,
@@ -690,8 +830,11 @@ function useDataStore() {
       rating: entry.rating,
       milestoneId: entry.milestoneId,
       advancedStepTitles: advancing ? entry.completedStepTitles : undefined,
-    });
+    };
+    const ok = await itemLogs.add(log);
     if (!ok) return null;
+
+    await satisfyOccurrence(log);
 
     // Alone time is a training type like any other in the Quick log, but it also
     // feeds `computeDogAloneTimeReadiness`, which only reads `alone_time_logs`. Writing
@@ -729,15 +872,30 @@ function useDataStore() {
     const baseMilestones = rolledBack ? milestones.items.map((item) => (item.id === rolledBack.id ? rolledBack : item)) : milestones.items;
     const advancing = !!targetMilestone && entry.completedStepTitles.length > 0;
 
-    const ok = await itemLogs.update(logId, {
+    const patch = {
       text: entry.notes,
       values: entry.values,
       dogIds: entry.dogIds,
       rating: entry.rating,
       milestoneId: entry.milestoneId,
       advancedStepTitles: advancing ? entry.completedStepTitles : undefined,
-    });
+      // Which slot the entry counts toward is editable — that's how you correct a
+      // wrongly-confirmed match, or attach an entry you'd first logged as unscheduled.
+      itemId: entry.itemId,
+      occurrenceDate: entry.itemId ? (entry.occurrenceDate ?? entry.date) : entry.date,
+      happenedAt: entry.happenedAt ?? existing.happenedAt,
+    };
+    const ok = await itemLogs.update(logId, patch);
     if (!ok) return null;
+
+    // Release only when the entry moved to a different slot (or off one entirely) —
+    // the old occurrence has to be told it lost a claim. Staying on the same slot goes
+    // straight to satisfy, which recomputes that occurrence's state from its claims
+    // and reopens it by itself if the edit dropped a dog.
+    const updated: ItemLog = { ...existing, ...patch };
+    const slotChanged = existing.itemId !== updated.itemId || existing.occurrenceDate !== updated.occurrenceDate;
+    if (slotChanged) await releaseSatisfiedOccurrence(existing);
+    await satisfyOccurrence(updated);
 
     if (entry.aloneTimeMinutes && entry.aloneTimeMinutes > 0) {
       await aloneTimeLogs.add({
@@ -760,6 +918,7 @@ function useDataStore() {
 
     await rollbackMilestoneAdvance(log);
     await removeMatchedAloneTimeLog(log);
+    await releaseSatisfiedOccurrence(log);
 
     return itemLogs.remove(logId);
   }

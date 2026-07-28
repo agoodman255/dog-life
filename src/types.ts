@@ -150,16 +150,28 @@ export type QuickLogKind = "potty" | "play" | "training" | "food" | "water";
  * from the item's logFields, or from the Quick log kind's field spec. */
 export type ItemLog = {
   id: string;
-  /** Absent on a Quick log: potty breaks and meals aren't scheduled items, they just
-   * happen. Present when logged from an item's detail modal. */
+  /** The scheduled item this entry belongs to, when there is one. Absent on an
+   * unplanned Quick log — a potty break that just happened, with nothing on the
+   * calendar expecting it. */
   itemId?: string;
-  /** Set only on Quick logs — which of the five this is. Makes the row self-describing
-   * so the ingest pass doesn't have to join to `items` to know what it's reading. */
+  /** Set on Quick logs — which of the five this is. Makes the row self-describing so
+   * the ingest pass doesn't have to join to `items` to know what it's reading.
+   *
+   * Can coexist with `itemId`: a scheduled routine is the *expectation* that a potty
+   * break happens around 7:15, and a Quick log is the *observation* that one did at
+   * 7:18. When the second satisfies the first, one row carries both. */
   quickLogKind?: QuickLogKind;
   /** YYYY-MM-DD of the occurrence this log belongs to, when the item recurs. For a
    * Quick log this is simply the day it happened. */
   occurrenceDate?: string;
+  /** When the row was written. */
   loggedAt: string;
+  /** When the thing being recorded actually happened. Usually the same as `loggedAt`,
+   * but a break at 7:18 entered at 9pm is a 7:18 event — and treating it as 9pm would
+   * match it to the wrong scheduled slot, sort it wrongly in the day, and land it in
+   * the wrong bucket of every interval calculation. Falls back to `loggedAt` for rows
+   * written before this field existed. */
+  happenedAt?: string;
   loggedBy: string;
   text: string;
   values: LogFieldValue[];
@@ -186,6 +198,15 @@ export type QuickLogInput = {
   kind: QuickLogKind;
   /** YYYY-MM-DD the entry is recorded against. */
   date: string;
+  /** The scheduled item this entry says happened, when it's one the calendar was
+   * expecting. Set either by logging from that item directly, or by confirming the
+   * form's "looks like this is Morning potty" prompt. */
+  itemId?: string;
+  /** The occurrence key on `itemId` — always its `originalDate`, since that's what
+   * occurrences are looked up by, and it doesn't move when one gets rescheduled. */
+  occurrenceDate?: string;
+  /** ISO timestamp of when it actually happened. Defaults to now. */
+  happenedAt?: string;
   dogIds: string[];
   values: LogFieldValue[];
   rating?: number;
@@ -305,6 +326,17 @@ export type Item = {
   requiresLog: boolean;
   logFields: LogFieldDef[];
 
+  // --- calendar presence ---
+  /** `"checklist-only"` marks a routine that happens too often to belong on a shared
+   * calendar — an every-two-hours potty break, every meal. It still recurs, still needs
+   * completing, and still shows on the Dashboard; it's only kept out of the day/week/
+   * month grids. Whether that actually happens is a per-viewer preference in the
+   * Calendar, so nothing is ever hidden from the person who wants to see it.
+   *
+   * Undefined = `"calendar"`, which is also what every item created before this field
+   * existed means. */
+  calendarVisibility?: "calendar" | "checklist-only";
+
   // --- dog coverage (unchanged from CalendarEvent) ---
   aloneTimeRequired: "all" | "partial" | "no";
   aloneTimeRequiredAmount?: number;
@@ -394,6 +426,16 @@ export type ItemOccurrence = {
    * completion") or reopening and finishing again would otherwise advance the
    * milestone every time. Cleared on reopen, which also rolls the advance back. */
   milestoneAdvanced?: boolean;
+  /** `ItemLog` ids that claim this occurrence — the logs that say "this is the thing
+   * that was scheduled, and here's what actually happened". Stored rather than
+   * re-derived so deleting a log releases exactly the occurrence it satisfied; the
+   * alone-time rows next door are matched heuristically for want of this and get it
+   * wrong when two identical entries land on one day.
+   *
+   * The occurrence only flips to `completed` once the union of these logs' `dogIds`
+   * covers the item's dogs — an occurrence has one state for every dog, so completing
+   * on a single dog's log would be claiming the other one went out too. */
+  satisfiedByLogIds?: string[];
   history: ItemHistoryEntry[];
 };
 

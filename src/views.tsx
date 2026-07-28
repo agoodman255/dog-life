@@ -56,6 +56,7 @@ import {
 } from "./forms";
 import { makeId, useStore } from "./store";
 import { useNavigation } from "./navigation";
+import { formatInZone, isoToZonedParts } from "./timezones";
 import { setPassword as setAccountPassword, signOut, useSession } from "./auth";
 import { isBackendConfigured } from "./supabaseClient";
 import {
@@ -82,8 +83,18 @@ import {
 import {
   ALONE_TIME_TRAINING_ID,
   QUICK_LOG_SPECS,
+  accidentTrend,
+  buildTodayTimeline,
+  dateKeysBetween,
+  fieldDistribution,
+  formatDuration,
+  isAccident,
+  logsForHistory,
+  pottyIntervals,
+  routineAdherence,
   TrainingFocus,
   nextTrainingFocus,
+  quickLogKindForCategory,
   quickLogSpec,
   quickLogsOn,
   summarizeQuickLog,
@@ -109,13 +120,13 @@ import {
   monthGridDays,
   parseLocalDate,
   parseTimeLabel,
+  isBackgroundRoutine,
   isHealthItem,
   itemDurationMinutes,
   itemStateLabels,
   ITEM_INTENT_PRESETS,
   readinessScore,
   toDateKey,
-  useAdaptivePlan,
   weekDays,
   weekStart as weekStartKey,
   weekStartDate,
@@ -229,7 +240,19 @@ function AloneTimeReadinessPanel({
  * but a mis-ticked training step would otherwise inflate a milestone permanently. The
  * confirm step names what will be rolled back, since that consequence isn't obvious
  * from a feed row. */
-function QuickLogRow({ log, dogs }: { log: ItemLog; dogs: Dog[] }) {
+function QuickLogRow({
+  log,
+  dogs,
+  timezone,
+  unscheduled,
+}: {
+  log: ItemLog;
+  dogs: Dog[];
+  timezone: string;
+  /** Marks an entry nothing on the calendar was expecting, so the merged Today list
+   * distinguishes "the 7:15 break happened" from "they also went out at 10:40". */
+  unscheduled?: boolean;
+}) {
   const { deleteQuickLog, milestones } = useStore();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -240,7 +263,10 @@ function QuickLogRow({ log, dogs }: { log: ItemLog; dogs: Dog[] }) {
     .map((id) => dogs.find((dog) => dog.id === id)?.name)
     .filter(Boolean)
     .join(" & ");
-  const time = new Date(log.loggedAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  // When it happened, in the household's zone — not when the row was written, and not
+  // in whatever zone the browser happens to be in. Both mattered once this list started
+  // sharing an ordering with scheduled slots.
+  const time = formatInZone(log.happenedAt ?? log.loggedAt, timezone);
   const summary = summarizeQuickLog(log);
   const milestoneTitle = milestones.items.find((entry) => entry.id === log.milestoneId)?.title;
   const rollback = log.advancedStepTitles ?? [];
@@ -252,7 +278,7 @@ function QuickLogRow({ log, dogs }: { log: ItemLog; dogs: Dog[] }) {
   }
 
   return (
-    <article className="quick-log-row">
+    <article className={`quick-log-row ${unscheduled ? "is-unscheduled" : ""}`}>
       <span className="quick-log-row-icon">
         <Icon size={16} aria-hidden />
       </span>
@@ -264,6 +290,7 @@ function QuickLogRow({ log, dogs }: { log: ItemLog; dogs: Dog[] }) {
         <p className="small">
           {names}
           {log.rating ? ` · ${log.rating}/5` : ""}
+          {unscheduled ? " · not scheduled" : ""}
         </p>
         {log.text && <p className="quick-log-row-note">{log.text}</p>}
         {confirming && (
@@ -305,6 +332,7 @@ function QuickLogRow({ log, dogs }: { log: ItemLog; dogs: Dog[] }) {
       {editing && (
         <Modal title="Edit entry" onClose={() => setEditing(false)}>
           <QuickLogForm date={log.occurrenceDate ?? ""} editingLog={log} onClose={() => setEditing(false)} />
+
         </Modal>
       )}
     </article>
@@ -312,12 +340,26 @@ function QuickLogRow({ log, dogs }: { log: ItemLog; dogs: Dog[] }) {
 }
 
 export function DashboardView() {
-  const { items, itemOccurrences, milestones, dogs, completeTask, occurrenceFor, aloneTimeLogs, itemLogs } = useStore();
+  const { items, itemOccurrences, milestones, dogs, completeTask, aloneTimeLogs, itemLogs } = useStore();
   const todayKey = toDateKey(new Date());
-  const adaptive = useAdaptivePlan(items.items, itemOccurrences.items, todayKey);
+  const { timezone } = useNavigation();
   const [detailTask, setDetailTask] = useState<Item | null>(null);
-  const [quickLog, setQuickLog] = useState<null | { kind: QuickLogKind; trainingType?: string; dogId?: string }>(null);
+  const [quickLog, setQuickLog] = useState<null | {
+    kind: QuickLogKind;
+    trainingType?: string;
+    dogIds?: string[];
+    attachTo?: { itemId: string; occurrenceDate: string; itemTitle: string };
+  }>(null);
   const todayLogs = quickLogsOn(itemLogs.items, todayKey);
+  // Both halves of the day in one ordered list — what was expected and what actually
+  // happened. Sorting is done in the household's zone so a break logged at 9pm for
+  // 7:18 that morning lands at 7:18.
+  const timeline = buildTodayTimeline(todayKey, items.items, itemOccurrences.items, itemLogs.items, (iso) => {
+    const [hours, minutes] = isoToZonedParts(iso, timezone).time.split(":").map(Number);
+    return (hours || 0) * 60 + (minutes || 0);
+  });
+  const expectedRows = timeline.filter((row) => row.kind === "expected");
+  const remainingCount = expectedRows.filter((row) => row.kind === "expected" && row.occurrence?.state !== "completed").length;
   // One recommendation per dog — they're on different steps, so a single "next" would
   // be wrong for at least one of them.
   const nextFocuses = dogs.items
@@ -371,23 +413,41 @@ export function DashboardView() {
           <div className="section-heading">
             <div>
               <p className="eyebrow">Today</p>
-              <h2>Agenda</h2>
+              <h2>What's expected, and what happened</h2>
             </div>
           </div>
-          <div className="task-list">
-            {adaptive.visibleTasks.length === 0 && (
-              <p className="small">Nothing scheduled to complete today. Anything you add for today shows up here.</p>
+          <p className="small">
+            {todayLogs.length} logged · {remainingCount} still expected
+          </p>
+          <div className="today-timeline">
+            {timeline.length === 0 && (
+              <p className="small">Nothing scheduled and nothing logged yet. Anything you add for today shows up here.</p>
             )}
-            {adaptive.visibleTasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                occurrence={occurrenceFor(task.id, todayKey)}
-                dogs={dogs.items}
-                onComplete={(target, rating) => completeTask(target, rating, todayKey)}
-                onOpenDetail={setDetailTask}
-              />
-            ))}
+            {timeline.map((row) =>
+              row.kind === "log" ? (
+                <QuickLogRow key={row.key} log={row.log} dogs={dogs.items} timezone={timezone} unscheduled />
+              ) : (
+                <TaskCard
+                  key={row.key}
+                  task={row.item}
+                  occurrence={row.occurrence}
+                  logs={row.logs}
+                  dogs={dogs.items}
+                  onComplete={(target, rating) => completeTask(target, rating, todayKey)}
+                  onOpenDetail={setDetailTask}
+                  onQuickLog={(target) => {
+                    const kind = quickLogKindForCategory(target.category);
+                    if (!kind) return;
+                    setQuickLog({
+                      kind,
+                      trainingType: target.checklistSourceMilestoneId ?? target.relatedMilestoneId,
+                      dogIds: target.dogIds,
+                      attachTo: { itemId: target.id, occurrenceDate: todayKey, itemTitle: target.title },
+                    });
+                  }}
+                />
+              ),
+            )}
           </div>
           {detailTask && <ItemDetailModal task={detailTask} date={todayKey} onClose={() => setDetailTask(null)} />}
         </div>
@@ -397,11 +457,8 @@ export function DashboardView() {
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Log</p>
-                <h2 style={{ fontSize: "1.1rem" }}>What happened today</h2>
+                <h2 style={{ fontSize: "1.1rem" }}>Record something</h2>
               </div>
-              <button className="text-button" type="button" onClick={() => setQuickLog({ kind: "potty" })}>
-                <Plus size={16} aria-hidden /> Quick log
-              </button>
             </div>
             <div className="quick-log-tallies">
               {QUICK_LOG_SPECS.map((spec) => {
@@ -435,24 +492,15 @@ export function DashboardView() {
                 <button
                   className="text-button"
                   type="button"
-                  onClick={() => setQuickLog({ kind: "training", trainingType: focus.milestoneId, dogId: dog.id })}
+                  onClick={() => setQuickLog({ kind: "training", trainingType: focus.milestoneId, dogIds: [dog.id] })}
                 >
                   Log it
                 </button>
               </div>
             ))}
-            {todayLogs.length === 0 ? (
-              <p className="small">
-                Nothing logged yet today. Tap any of the five above to record a potty break, play session, training rep,
-                meal, or water check.
-              </p>
-            ) : (
-              <div className="quick-log-feed">
-                {todayLogs.map((log) => (
-                  <QuickLogRow key={log.id} log={log} dogs={dogs.items} />
-                ))}
-              </div>
-            )}
+            {/* No feed here any more — every entry appears in Today above, in its slot
+                if it satisfied one and on its own if it didn't. This panel is now purely
+                the way in. */}
           </section>
 
           {focusMilestones.length > 0 && (
@@ -507,7 +555,8 @@ export function DashboardView() {
             date={todayKey}
             initialKind={quickLog.kind}
             initialTrainingType={quickLog.trainingType}
-            initialDogIds={quickLog.dogId ? [quickLog.dogId] : undefined}
+            initialDogIds={quickLog.dogIds}
+            attachTo={quickLog.attachTo}
             onClose={() => setQuickLog(null)}
           />
         </Modal>
@@ -612,19 +661,21 @@ function buildAgendaForDate(
 function monthDaySummary(
   day: Date,
   items: Item[],
+  occurrences: ItemOccurrence[],
   heavyWeekSet: Set<string>,
   allDogIds: string[],
   aloneTimeLogs: AloneTimeLog[],
-): { count: number; heavy: boolean; needsCoverage: boolean } {
+): { count: number; heavy: boolean; needsCoverage: boolean; dots: { done: boolean }[] } {
   const key = toDateKey(day);
-  let count = 0;
   let needsCoverage = false;
+  const dots: { done: boolean }[] = [];
   items.forEach((item) => {
     if (generateOccurrences(item, day, day).length === 0) return;
-    count++;
     if (computeEventCoverageNeeded(item, allDogIds, aloneTimeLogs) && !item.coverageConfirmed) needsCoverage = true;
+    const occurrence = occurrences.find((entry) => entry.itemId === item.id && entry.date === key);
+    dots.push({ done: item.requiresCompletion && occurrence?.state === "completed" });
   });
-  return { count, heavy: heavyWeekSet.has(weekStartKey(key)), needsCoverage };
+  return { count: dots.length, heavy: heavyWeekSet.has(weekStartKey(key)), needsCoverage, dots };
 }
 
 // Assigns each item a track (column) and a trackCount scoped to its own cluster
@@ -688,6 +739,7 @@ function CalendarMonthGrid({
   cursor,
   today,
   items,
+  occurrences,
   heavyWeekSet,
   allDogIds,
   aloneTimeLogs,
@@ -696,6 +748,7 @@ function CalendarMonthGrid({
   cursor: Date;
   today: Date;
   items: Item[];
+  occurrences: ItemOccurrence[];
   heavyWeekSet: Set<string>;
   allDogIds: string[];
   aloneTimeLogs: AloneTimeLog[];
@@ -710,7 +763,7 @@ function CalendarMonthGrid({
         </div>
       ))}
       {days.map((day, index) => {
-        const info = monthDaySummary(day, items, heavyWeekSet, allDogIds, aloneTimeLogs);
+        const info = monthDaySummary(day, items, occurrences, heavyWeekSet, allDogIds, aloneTimeLogs);
         const inMonth = day.getMonth() === cursor.getMonth();
         return (
           <button
@@ -722,8 +775,8 @@ function CalendarMonthGrid({
             <span className="month-cell-date">{day.getDate()}</span>
             {info.count > 0 && (
               <span className="month-cell-dots">
-                {Array.from({ length: Math.min(info.count, 5) }).map((_, dotIndex) => (
-                  <span key={dotIndex} className="month-dot" />
+                {info.dots.slice(0, 5).map((dot, dotIndex) => (
+                  <span key={dotIndex} className={`month-dot ${dot.done ? "done" : ""}`} />
                 ))}
                 {info.needsCoverage && <span className="month-dot coverage-dot" aria-label="Needs coverage arranged" />}
               </span>
@@ -771,7 +824,7 @@ function CalendarWeekStrip({
                 <button
                   key={item.id}
                   type="button"
-                  className={`week-day-item ${item.placeholder ? "placeholder" : ""} ${item.coverageNeeded ? "needs-coverage" : ""}`}
+                  className={`week-day-item ${item.placeholder ? "placeholder" : ""} ${item.coverageNeeded ? "needs-coverage" : ""} state-${item.state ?? ""}`}
                   onClick={() => openItem(item)}
                 >
                   {formatMinutes(item.startMinutes!)} · {item.title}
@@ -824,7 +877,7 @@ function CalendarDayAgenda({
                 <button
                   key={item.id}
                   type="button"
-                  className={`day-allday-row ${item.item.requiresCompletion ? "completable" : "informational"} ${item.placeholder ? "placeholder" : ""} ${shouldDim(item) ? "dimmed" : ""} ${item.coverageNeeded ? "needs-coverage" : ""}`}
+                  className={`day-allday-row ${item.item.requiresCompletion ? "completable" : "informational"} ${item.placeholder ? "placeholder" : ""} ${shouldDim(item) ? "dimmed" : ""} ${item.coverageNeeded ? "needs-coverage" : ""} state-${item.state ?? ""}`}
                   onClick={() => openItem(item)}
                 >
                   <strong>{item.title}</strong>
@@ -1130,6 +1183,7 @@ function CategoryFilterPicker({ selected, onChange }: { selected: Set<Category>;
 
 const viewerStorageKey = "dog-life-os-viewer";
 const dayDisplayStorageKey = "dog-life-os-day-display";
+const hideRoutinesStorageKey = "dog-life-os-hide-routines";
 
 function loadViewerId(fallback: string): string {
   try {
@@ -1147,6 +1201,16 @@ function loadDayDisplay(): "full" | "condensed" {
   }
 }
 
+/** Defaults to hidden — the calendar is more useful with the every-two-hours routines
+ * out of the way, and they're one tap from coming back. */
+function loadHideRoutines(): boolean {
+  try {
+    return localStorage.getItem(hideRoutinesStorageKey) !== "false";
+  } catch {
+    return true;
+  }
+}
+
 export function CalendarView() {
   const { items, milestones, dogs, itemOccurrences, people, aloneTimeLogs, deleteItem, locations } = useStore();
   const { navigate } = useNavigation();
@@ -1160,6 +1224,7 @@ export function CalendarView() {
   const [cursorDate, setCursorDate] = useState<Date>(() => new Date());
   const [viewerId, setViewerId] = useState<string>(() => loadViewerId(people.items[0]?.id ?? ""));
   const [dayDisplay, setDayDisplay] = useState<"full" | "condensed">(loadDayDisplay);
+  const [hideRoutines, setHideRoutines] = useState<boolean>(loadHideRoutines);
   const [filterMode, setFilterMode] = useState<"all" | "mine" | "other">("all");
   const [categoryFilter, setCategoryFilter] = useState<Set<Category>>(new Set());
   const [detailTask, setDetailTask] = useState<{ task: Item; date: string } | null>(null);
@@ -1181,6 +1246,14 @@ export function CalendarView() {
       // ignore
     }
   }, [dayDisplay]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(hideRoutinesStorageKey, String(hideRoutines));
+    } catch {
+      // ignore
+    }
+  }, [hideRoutines]);
 
   function shouldDim(item: AgendaItem): boolean {
     if (filterMode === "all" || !item.assignedTo) return false;
@@ -1222,12 +1295,19 @@ export function CalendarView() {
   // case where health rows ignored the filter because they lived on another type.
   const filteredItems = categoryFilter.size === 0 ? items.items : items.items.filter((item) => categoryFilter.has(item.category));
 
+  // Only the day/week/month grids drop background routines. `recurring` and `upcoming`
+  // below deliberately keep reading `filteredItems`, so hiding a routine never makes it
+  // unreachable — that's still where you go to open and edit one, and it's where global
+  // search lands when it routes an Item to this page.
+  const gridItems = hideRoutines ? filteredItems.filter((item) => !isBackgroundRoutine(item)) : filteredItems;
+  const hiddenRoutineCount = hideRoutines ? filteredItems.length - gridItems.length : 0;
+
   const allDogIds = dogs.items.map((dog) => dog.id);
   const dogName = (id: string) => dogs.items.find((dog) => dog.id === id)?.name ?? id;
-  const dayAgenda = buildAgendaForDate(cursorDate, filteredItems, dogs.items, itemOccurrences.items, aloneTimeLogs.items);
+  const dayAgenda = buildAgendaForDate(cursorDate, gridItems, dogs.items, itemOccurrences.items, aloneTimeLogs.items);
   const weekAgenda = weekDays(cursorDate).map((day) => ({
     day,
-    items: buildAgendaForDate(day, filteredItems, dogs.items, itemOccurrences.items, aloneTimeLogs.items),
+    items: buildAgendaForDate(day, gridItems, dogs.items, itemOccurrences.items, aloneTimeLogs.items),
   }));
 
   const isGridMode = viewMode === "day" || viewMode === "week" || viewMode === "month";
@@ -1337,6 +1417,25 @@ export function CalendarView() {
               ))}
             </div>
           )}
+          {/* Hiding is a display choice, not a delete: routines keep running, keep
+              needing to be completed, and stay listed under Recurring. */}
+          <div className="subtabs" role="group" aria-label="Daily routines">
+            {([false, true] as const).map((hide) => (
+              <button
+                key={String(hide)}
+                className={hideRoutines === hide ? "active" : ""}
+                type="button"
+                onClick={() => setHideRoutines(hide)}
+              >
+                {hide ? "Hide routines" : "Show routines"}
+              </button>
+            ))}
+          </div>
+          {hiddenRoutineCount > 0 && (
+            <p className="small calendar-routines-hidden">
+              {hiddenRoutineCount} daily {hiddenRoutineCount === 1 ? "routine" : "routines"} hidden — still listed under Recurring.
+            </p>
+          )}
         </div>
       )}
 
@@ -1371,7 +1470,8 @@ export function CalendarView() {
             <CalendarMonthGrid
               cursor={cursorDate}
               today={today}
-              items={filteredItems}
+              items={gridItems}
+              occurrences={itemOccurrences.items}
               heavyWeekSet={weeks}
               allDogIds={allDogIds}
               aloneTimeLogs={aloneTimeLogs.items}
@@ -2027,6 +2127,131 @@ export function JournalView() {
   );
 }
 
+/** What the day-to-day logging is for, per dog: the potty/food/water record over time,
+ * which is both the housetraining progress view and the thing you hand a vet when
+ * they ask what her stool has been like. Lives in Health rather than the Dashboard
+ * because it's a record, not a to-do — and because nothing looked past today until now.
+ *
+ * Every number here is a plain count or mean over the raw rows, so it can be checked
+ * by hand. Nothing is modelled or smoothed. */
+function DailyLogHistory({ dogs, logs }: { dogs: Dog[]; logs: ItemLog[] }) {
+  const [dogId, setDogId] = useState(() => dogs[0]?.id ?? "");
+  const [days, setDays] = useState(30);
+  const todayKey = toDateKey(new Date());
+  const rangeKeys = dateKeysBetween(toDateKey(addDays(new Date(), -(days - 1))), todayKey);
+
+  const intervals = pottyIntervals(logs, dogId, rangeKeys);
+  const accidents = accidentTrend(logs, dogId, rangeKeys);
+  const stool = fieldDistribution(logs, "potty", "Consistency", rangeKeys, dogId);
+  const urine = fieldDistribution(logs, "potty", "Color", rangeKeys, dogId);
+  const appetite = fieldDistribution(logs, "food", "Amount eaten", rangeKeys, dogId);
+  const water = fieldDistribution(logs, "water", "Intake", rangeKeys, dogId);
+  const totalPotty = intervals.byDay.reduce((sum, day) => sum + day.breaks, 0);
+
+  const distributions = [
+    { title: "Stool consistency", rows: stool },
+    { title: "Urine colour", rows: urine },
+    { title: "Appetite", rows: appetite },
+    { title: "Water intake", rows: water },
+  ].filter((group) => group.rows.some((row) => row.count > 0));
+
+  if (dogs.length === 0) return null;
+
+  return (
+    <section className="panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Daily record</p>
+          <h2>Potty, food and water over time</h2>
+        </div>
+      </div>
+      <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
+        {dogs.length > 1 && (
+          <div className="subtabs" role="group" aria-label="Which dog">
+            {dogs.map((dog) => (
+              <button key={dog.id} type="button" className={dogId === dog.id ? "active" : ""} onClick={() => setDogId(dog.id)}>
+                {dog.name}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="subtabs" role="group" aria-label="How far back">
+          {[7, 30, 90].map((option) => (
+            <button key={option} type="button" className={days === option ? "active" : ""} onClick={() => setDays(option)}>
+              {option} days
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {totalPotty === 0 && accidents.total === 0 ? (
+        <p className="small">Nothing logged for this dog in the last {days} days.</p>
+      ) : (
+        <>
+          <div className="metric-grid">
+            <AppMetric
+              label="Between breaks"
+              value={intervals.averageMinutes === null ? "—" : formatDuration(intervals.averageMinutes)}
+              icon={Clock}
+            />
+            <AppMetric
+              label="Longest gap"
+              value={intervals.longestMinutes === null ? "—" : formatDuration(intervals.longestMinutes)}
+              icon={Clock}
+            />
+            <AppMetric
+              label="Days since accident"
+              value={accidents.daysSinceLast === null ? "None logged" : `${accidents.daysSinceLast}`}
+              icon={Check}
+            />
+            <AppMetric label="Best clean run" value={`${accidents.longestCleanStreak} days`} icon={Sparkles} />
+          </div>
+          <div className="chart-row">
+            <div>
+              <p className="eyebrow">Average gap between breaks</p>
+              {/* Days with fewer than two breaks have no gap to report; carrying the
+                  previous day's value keeps the line continuous without inventing a
+                  number that would read as a real measurement. */}
+              <Sparkline values={carryForward(intervals.byDay.map((day) => day.averageMinutes))} />
+            </div>
+            <div>
+              <p className="eyebrow">Accidents per day</p>
+              <Sparkline values={accidents.byDay.map((day) => day.accidents)} />
+            </div>
+          </div>
+          {distributions.map((group) => (
+            <div key={group.title}>
+              <p className="eyebrow">{group.title}</p>
+              <div className="analytics-list">
+                {group.rows.map((row) => (
+                  <div key={row.value}>
+                    <span>
+                      {row.label} <span className="small">({row.count})</span>
+                    </span>
+                    <ProgressBar
+                      value={Math.round((row.count / Math.max(1, group.rows.reduce((sum, entry) => sum + entry.count, 0))) * 100)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+    </section>
+  );
+}
+
+/** Replaces gaps with the last real value, leaving leading gaps at zero. Lets a
+ * sparkline stay continuous across days that genuinely had nothing to measure. */
+function carryForward(values: (number | null)[]): number[] {
+  let last = 0;
+  return values.map((value) => {
+    if (value !== null) last = value;
+    return last;
+  });
+}
+
 // Health is now a lens over items rather than its own type: everything in a health
 // category, newest first, with its logged entries inline. Same data the calendar
 // shows, filtered — so a vet visit added from the calendar shows up here for free.
@@ -2061,6 +2286,7 @@ export function HealthView() {
           ))}
         </div>
       </section>
+      <DailyLogHistory dogs={dogs.items} logs={itemLogs.items} />
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -2130,9 +2356,11 @@ export function HealthView() {
 // it was created. Items that only log data, or only sit on the calendar, don't
 // belong here — that filter is the whole definition of the view now.
 export function TasksView() {
-  const { items, people, dogs, milestones, aloneTimeLogs, completeTask, occurrenceFor } = useStore();
+  const { items, people, dogs, milestones, aloneTimeLogs, completeTask, occurrenceFor, deleteItem } = useStore();
   const [formTarget, setFormTarget] = useState<"new" | Item | null>(null);
   const [detailTask, setDetailTask] = useState<Item | null>(null);
+  const [quickLogTarget, setQuickLogTarget] = useState<{ item: Item; kind: QuickLogKind } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Item | null>(null);
   const todayKey = toDateKey(new Date());
   const completable = items.items.filter((item) => item.requiresCompletion);
   return (
@@ -2155,11 +2383,39 @@ export function TasksView() {
             occurrence={occurrenceFor(task.id, todayKey)}
             dogs={dogs.items}
             onComplete={(target, rating) => completeTask(target, rating, todayKey)}
-            onDelete={(target) => items.remove(target.id)}
+            // Was a bare `items.remove`, which skipped both the required deletion note
+            // every other surface captures and — since a Quick log can now point at an
+            // item — the detach that keeps a potty history from being cascaded away
+            // with the routine that happened to schedule it.
+            onDelete={setDeleteTarget}
             onOpenDetail={setDetailTask}
+            onQuickLog={(target) => {
+              const kind = quickLogKindForCategory(target.category);
+              if (kind) setQuickLogTarget({ item: target, kind });
+            }}
           />
         ))}
       </div>
+      {deleteTarget && (
+        <DeleteEventModal
+          event={deleteTarget}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={(scope, note) => deleteItem(deleteTarget, scope, undefined, note)}
+          onDone={() => setDeleteTarget(null)}
+        />
+      )}
+      {quickLogTarget && (
+        <Modal title="Quick log" onClose={() => setQuickLogTarget(null)}>
+          <QuickLogForm
+            date={todayKey}
+            initialKind={quickLogTarget.kind}
+            initialTrainingType={quickLogTarget.item.checklistSourceMilestoneId ?? quickLogTarget.item.relatedMilestoneId}
+            initialDogIds={quickLogTarget.item.dogIds}
+            attachTo={{ itemId: quickLogTarget.item.id, occurrenceDate: todayKey, itemTitle: quickLogTarget.item.title }}
+            onClose={() => setQuickLogTarget(null)}
+          />
+        </Modal>
+      )}
       {formTarget && (
         <Modal title={formTarget === "new" ? "Add — Routine or to-do" : "Edit item"} onClose={() => setFormTarget(null)}>
           <ItemForm
@@ -2353,7 +2609,7 @@ export function RelationshipTracker() {
 }
 
 export function AnalyticsView() {
-  const { itemOccurrences, journalEntries, itemLogs, dogs } = useStore();
+  const { items, itemOccurrences, journalEntries, itemLogs, dogs } = useStore();
   // Sourced from real completions now. The old version read DailyFeedback, whose
   // `accident` flag was never observed — it was derived as
   // `category === "potty" && rating <= 2`, i.e. a low score on a potty break got
@@ -2366,12 +2622,20 @@ export function AnalyticsView() {
   // journal entry tagged "accident". Counting both keeps entries made before that
   // change in the total instead of silently dropping them off the chart.
   const legacyAccidents = journalEntries.items.filter((entry) => entry.tags.includes("accident")).length;
-  const loggedAccidents = itemLogs.items.filter(
-    (log) =>
-      log.quickLogKind === "potty" &&
-      log.values.some((value) => value.fieldName === "Where" && (value.value === "inside" || value.value === "crate")),
-  ).length;
+  const loggedAccidents = itemLogs.items.filter(isAccident).length;
   const accidents = legacyAccidents + loggedAccidents;
+
+  // Last 30 days. Everything below reads the same window so the numbers can be
+  // compared against each other without checking which range each one used.
+  const todayKey = toDateKey(new Date());
+  const rangeKeys = dateKeysBetween(toDateKey(addDays(new Date(), -29)), todayKey);
+  const adherence = routineAdherence(items.items, itemOccurrences.items, rangeKeys, todayKey);
+  // Real training minutes, replacing a hardcoded "26/day" string that had been on this
+  // tile since before any of this was logged.
+  const trainingMinutes = logsForHistory(itemLogs.items, "training", rangeKeys)
+    .flatMap((log) => log.values.filter((value) => value.fieldName === "Duration"))
+    .reduce((sum, value) => sum + (typeof value.value === "number" ? value.value : 0), 0);
+  const trainingPerDay = Math.round(trainingMinutes / rangeKeys.length);
   const avgRating = rated.length ? (rated.reduce((sum, entry) => sum + (entry.rating ?? 0), 0) / rated.length).toFixed(1) : "0.0";
   const ratingTrend = rated
     .slice()
@@ -2394,7 +2658,7 @@ export function AnalyticsView() {
           <AppMetric label="Completed logs" value={`${completed}`} icon={Check} />
           <AppMetric label="Average rating" value={avgRating} icon={Sparkles} />
           <AppMetric label="Potty accidents" value={`${accidents}`} icon={AlertTriangle} />
-          <AppMetric label="Training minutes" value="26/day" icon={Activity} />
+          <AppMetric label="Training minutes" value={`${trainingPerDay}/day`} icon={Activity} />
         </div>
         <div className="chart-row">
           <div>
@@ -2429,6 +2693,33 @@ export function AnalyticsView() {
           </div>
         )}
       </section>
+      {adherence.length > 0 && (
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Last 30 days</p>
+              <h2>Which routines actually happen</h2>
+            </div>
+          </div>
+          <p className="small">
+            Worst first. A routine sitting low is usually telling you the slot is wrong, not that you need to try harder —
+            it&apos;s fine to delete one.
+          </p>
+          <div className="analytics-list">
+            {adherence.map((entry) => (
+              <div key={entry.item.id}>
+                <span>
+                  {entry.item.title}{" "}
+                  <span className="small">
+                    ({entry.completed}/{entry.expected})
+                  </span>
+                </span>
+                <ProgressBar value={entry.rate} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       <RelationshipTracker />
       <FeedbackLoopView />
     </div>

@@ -212,10 +212,10 @@ lines.push("");
 // without it every re-run silently duplicated the whole seed.
 items.forEach((item) => {
   lines.push(
-    `insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (`,
+    `insert into items (household_id, title, category, intent, kind, recurrence, excluded_dates, date, window_label, start_time, end_time, duration_hours, status, assigned_to, attendees, dog_ids, requires_completion, checklist, checklist_source_milestone_id, requires_log, log_fields, calendar_visibility, alone_time_required, alone_time_required_amount, coverage_confirmed, coverage_notes, priority, supplies, setting, difficulty, location, formation, related_milestone_id, document_url, rover_visits, prep_steps, rover_instructions, post_steps, notes) values (`,
     `  ${str(HOUSEHOLD_ID)}, ${str(item.title)}, ${str(item.category)}, ${str(item.intent)}, ${str(item.kind)}, ${item.recurrence ? jsonb(item.recurrence) : "NULL"}, ${dateArray(item.excludedDates ?? [])}, ${item.date ? str(item.date) : "NULL"},`,
     `  ${str(item.windowLabel)}, ${item.startTime ? str(item.startTime) : "NULL"}, ${item.endTime ? str(item.endTime) : "NULL"}, ${num(item.durationHours ?? null)}, ${str(item.status)}, ${item.assignedTo ? str(personRef(item.assignedTo)) : "NULL"},`,
-    `  ${uuidArray((item.attendees ?? []).map(personRef))}, ${uuidArray((item.dogIds ?? []).map(dogRef))}, ${item.requiresCompletion ? "true" : "false"}, ${jsonb(item.checklist)}, ${item.checklistSourceMilestoneId ? str(item.checklistSourceMilestoneId) : "NULL"}, ${item.requiresLog ? "true" : "false"}, ${jsonb(item.logFields)},`,
+    `  ${uuidArray((item.attendees ?? []).map(personRef))}, ${uuidArray((item.dogIds ?? []).map(dogRef))}, ${item.requiresCompletion ? "true" : "false"}, ${jsonb(item.checklist)}, ${item.checklistSourceMilestoneId ? str(item.checklistSourceMilestoneId) : "NULL"}, ${item.requiresLog ? "true" : "false"}, ${jsonb(item.logFields)}, ${str(item.calendarVisibility ?? "calendar")},`,
     `  ${str(item.aloneTimeRequired)}, ${num(item.aloneTimeRequiredAmount ?? null)}, ${item.coverageConfirmed ? "true" : "false"}, ${str(item.coverageNotes ?? "")}, ${str(item.priority)}, ${textArray(item.supplies)}, ${str(item.setting)}, ${num(item.difficulty)},`,
     `  ${item.location ? str(item.location) : "NULL"}, ${item.formation ? str(item.formation) : "NULL"}, ${item.relatedMilestoneId ? str(item.relatedMilestoneId) : "NULL"}, ${item.documentUrl ? str(item.documentUrl) : "NULL"},`,
     `  ${num(item.roverVisits ?? null)}, ${textArray(item.prepSteps ?? [])}, ${textArray(item.roverInstructions ?? [])}, ${textArray(item.postSteps ?? [])}, ${str(item.notes)}`,
@@ -228,6 +228,7 @@ items.forEach((item) => {
     "  requires_completion = excluded.requires_completion, checklist = excluded.checklist,",
     "  checklist_source_milestone_id = excluded.checklist_source_milestone_id,",
     "  requires_log = excluded.requires_log, log_fields = excluded.log_fields,",
+    "  calendar_visibility = excluded.calendar_visibility,",
     "  alone_time_required = excluded.alone_time_required, alone_time_required_amount = excluded.alone_time_required_amount,",
     "  coverage_confirmed = excluded.coverage_confirmed, coverage_notes = excluded.coverage_notes,",
     "  priority = excluded.priority, supplies = excluded.supplies, setting = excluded.setting, difficulty = excluded.difficulty,",

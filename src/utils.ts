@@ -311,10 +311,344 @@ export function quickLogSpec(kind: QuickLogKind): QuickLogSpec {
   return QUICK_LOG_SPECS.find((spec) => spec.kind === kind)!;
 }
 
+/** Which scheduled items are the same thing as one of the five Quick logs. A "Morning
+ * potty" on the calendar is the *expectation* that a break happens; a potty Quick log is
+ * the *observation* that one did. Same event, two moments — so they should be captured
+ * with the same fields, not a hand-typed checklist on one side and a structured spec on
+ * the other.
+ *
+ * Only four categories map. The rest are unmapped on purpose:
+ * - handling / socialization / relationship are treated as training by the seeds, but
+ *   the training spec's primary selection *is* the milestone picker, and a cooperative
+ *   handling mini shouldn't force you to name a milestone before you can record it.
+ * - health / vet / vaccine / medication / grooming keep `DEFAULT_LOG_FIELDS` below —
+ *   weight, temperature, cost, next due have no chip-shaped equivalent.
+ * - `water` has no `Category` at all; see the note on `QuickLogKind`. */
+export const CATEGORY_QUICK_LOG_KIND: Partial<Record<Category, QuickLogKind>> = {
+  potty: "potty",
+  meals: "food",
+  training: "training",
+  exercise: "play",
+};
+
+export function quickLogKindForCategory(category: Category): QuickLogKind | undefined {
+  return CATEGORY_QUICK_LOG_KIND[category];
+}
+
 /** The special training type that isn't a milestone. Alone time was its own Dashboard
  * panel with its own Log button until 2026-07-26; it's a training type like any other,
  * it just also feeds the alone-time readiness math via its own `alone_time_logs` row. */
 export const ALONE_TIME_TRAINING_ID = "alone-time";
+
+/** A scheduled slot a Quick log might be the observation of. */
+export type ScheduledSlotCandidate = {
+  item: Item;
+  /** The occurrence key — always `originalDate`, which is what occurrences are looked
+   * up by and doesn't move when one gets rescheduled. */
+  occurrenceDate: string;
+  /** Wall-clock label for display, e.g. "7:15 AM". Empty for an untimed item. */
+  timeLabel: string;
+  /** How far the log sits from the slot, for ordering. `Infinity` when untimed. */
+  distanceMinutes: number;
+};
+
+/** How far either side of a slot's start time a log can land and still be plausibly
+ * that slot. The densest realistic routine is a potty break roughly every two hours,
+ * so 90 minutes stays under half the gap between consecutive expectations — wide
+ * enough for real life, narrow enough that two candidates means it genuinely is
+ * ambiguous rather than that the window was greedy. */
+export const SLOT_MATCH_WINDOW_MINUTES = 90;
+
+/** Scheduled slots on `dateKey` that this log could be reporting on, nearest first.
+ *
+ * Deliberately says "here are the possibilities" rather than "here is the answer":
+ * with breaks every two hours something is always nearest, and being confidently
+ * wrong at 8:40am is worse than asking. The caller pre-fills only when exactly one
+ * comes back, and otherwise offers the list.
+ *
+ * `minutesIntoDay` is when the thing happened, in the household's zone, so a log
+ * entered at 9pm for a 7:18 break matches against 7:18. */
+export function scheduledSlotCandidates(
+  kind: QuickLogKind,
+  dateKey: string,
+  minutesIntoDay: number,
+  dogIds: string[],
+  items: Item[],
+  occurrences: ItemOccurrence[],
+): ScheduledSlotCandidate[] {
+  const day = parseLocalDate(dateKey);
+  const claimed: ItemState[] = ["completed", "skipped", "rescheduled"];
+
+  return items
+    .filter((item) => quickLogKindForCategory(item.category) === kind && item.requiresCompletion)
+    // A slot only exists on days the item actually recurs — same expansion every other
+    // consumer uses, so a candidate here is a row you'd see on the calendar.
+    .filter((item) => generateOccurrences(item, day, day).length > 0)
+    // An item naming no dogs is household-wide and always applies; one that names dogs
+    // has to share at least one with the entry, or it's somebody else's slot.
+    .filter((item) => !item.dogIds || item.dogIds.length === 0 || item.dogIds.some((id) => dogIds.includes(id)))
+    .filter((item) => {
+      const occurrence = occurrences.find((entry) => entry.itemId === item.id && entry.originalDate === dateKey);
+      return !occurrence || !claimed.includes(occurrence.state);
+    })
+    .map((item) => {
+      const slotMinutes = item.startTime ? parseTimeLabel(item.startTime) : null;
+      return {
+        item,
+        occurrenceDate: dateKey,
+        timeLabel: item.startTime ?? "",
+        distanceMinutes: slotMinutes === null ? Infinity : Math.abs(slotMinutes - minutesIntoDay),
+      };
+    })
+    // An untimed item is a candidate all day — there's no start time to be far from.
+    .filter((entry) => entry.distanceMinutes === Infinity || entry.distanceMinutes <= SLOT_MATCH_WINDOW_MINUTES)
+    .sort((a, b) => a.distanceMinutes - b.distanceMinutes);
+}
+
+// --- Log history -------------------------------------------------------------
+//
+// What the structured capture is *for*. Until now the Dashboard showed one day and
+// nothing looked further back, so a potty spec with a stool scale and a urine colour
+// scale was collecting data no one could read. Everything below is a pure function of
+// the logs, so the numbers can be checked by hand against the raw rows.
+
+/** Inclusive list of YYYY-MM-DD keys, oldest first. */
+export function dateKeysBetween(startKey: string, endKey: string): string[] {
+  const keys: string[] = [];
+  let cursor = parseLocalDate(startKey);
+  const end = parseLocalDate(endKey);
+  for (let i = 0; i < 1000 && cursor <= end; i++) {
+    keys.push(toDateKey(cursor));
+    cursor = addDays(cursor, 1);
+  }
+  return keys;
+}
+
+/** Quick logs of one kind for one dog (or every dog) across a set of days, oldest
+ * first by when they actually happened. */
+export function logsForHistory(
+  logs: ItemLog[],
+  kind: QuickLogKind,
+  dateKeys: string[],
+  dogId?: string,
+): ItemLog[] {
+  const days = new Set(dateKeys);
+  return logs
+    .filter((log) => log.quickLogKind === kind)
+    .filter((log) => !!log.occurrenceDate && days.has(log.occurrenceDate))
+    .filter((log) => !dogId || log.dogIds.includes(dogId))
+    .sort((a, b) => (a.happenedAt ?? a.loggedAt).localeCompare(b.happenedAt ?? b.loggedAt));
+}
+
+function logValue(log: ItemLog, fieldName: string): string | null {
+  const match = log.values.find((value) => value.fieldName === fieldName);
+  return typeof match?.value === "string" ? match.value : null;
+}
+
+/** An accident is a potty logged somewhere it shouldn't have happened. Same rule the
+ * Analytics tile has used since Quick log v2 — kept in one place now that more than
+ * one consumer asks the question. */
+export function isAccident(log: ItemLog): boolean {
+  if (log.quickLogKind !== "potty") return false;
+  const where = logValue(log, "Where");
+  return where === "inside" || where === "crate";
+}
+
+export type PottyIntervalStats = {
+  /** Average gap between consecutive breaks, within a day. Null until there are two
+   * breaks on at least one day — a gap needs two points. */
+  averageMinutes: number | null;
+  longestMinutes: number | null;
+  /** Per-day averages, oldest first. The housetraining trend: the gap should widen. */
+  byDay: { dateKey: string; averageMinutes: number | null; breaks: number }[];
+};
+
+/** How long the dog goes between potty breaks.
+ *
+ * The real housetraining metric, and the one that only became computable once logs
+ * carry `happenedAt` and the day knows what it expected. Gaps are measured *within* a
+ * day only — the overnight gap says how long someone slept, not how long the dog can
+ * hold it, and averaging it in would swamp everything else. */
+export function pottyIntervals(logs: ItemLog[], dogId: string, dateKeys: string[]): PottyIntervalStats {
+  const byDay = dateKeys.map((dateKey) => {
+    const dayLogs = logsForHistory(logs, "potty", [dateKey], dogId).filter((log) => logValue(log, "Type") !== "nothing");
+    const gaps: number[] = [];
+    for (let i = 1; i < dayLogs.length; i++) {
+      const previous = new Date(dayLogs[i - 1].happenedAt ?? dayLogs[i - 1].loggedAt).getTime();
+      const current = new Date(dayLogs[i].happenedAt ?? dayLogs[i].loggedAt).getTime();
+      gaps.push(Math.round((current - previous) / 60000));
+    }
+    return {
+      dateKey,
+      averageMinutes: gaps.length > 0 ? Math.round(gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length) : null,
+      breaks: dayLogs.length,
+      gaps,
+    };
+  });
+
+  const allGaps = byDay.flatMap((day) => day.gaps);
+  return {
+    averageMinutes: allGaps.length > 0 ? Math.round(allGaps.reduce((sum, gap) => sum + gap, 0) / allGaps.length) : null,
+    longestMinutes: allGaps.length > 0 ? Math.max(...allGaps) : null,
+    byDay: byDay.map(({ dateKey, averageMinutes, breaks }) => ({ dateKey, averageMinutes, breaks })),
+  };
+}
+
+export type AccidentTrend = {
+  total: number;
+  /** Whole days since the last accident. Null when there's never been one logged. */
+  daysSinceLast: number | null;
+  longestCleanStreak: number;
+  byDay: { dateKey: string; accidents: number }[];
+};
+
+/** Accidents over time, plus the two numbers people actually want on a bad week:
+ * how long since the last one, and what the best run has been. */
+export function accidentTrend(logs: ItemLog[], dogId: string, dateKeys: string[]): AccidentTrend {
+  const byDay = dateKeys.map((dateKey) => ({
+    dateKey,
+    accidents: logsForHistory(logs, "potty", [dateKey], dogId).filter(isAccident).length,
+  }));
+
+  let longestCleanStreak = 0;
+  let running = 0;
+  byDay.forEach((day) => {
+    running = day.accidents > 0 ? 0 : running + 1;
+    longestCleanStreak = Math.max(longestCleanStreak, running);
+  });
+
+  const lastAccidentIndex = byDay.map((day) => day.accidents > 0).lastIndexOf(true);
+  return {
+    total: byDay.reduce((sum, day) => sum + day.accidents, 0),
+    daysSinceLast: lastAccidentIndex === -1 ? null : byDay.length - 1 - lastAccidentIndex,
+    longestCleanStreak,
+    byDay,
+  };
+}
+
+/** Counts of each option picked for one Quick log field, in the spec's own order and
+ * using its own labels — the vet-facing view of "what has her stool been like". */
+export function fieldDistribution(
+  logs: ItemLog[],
+  kind: QuickLogKind,
+  fieldName: string,
+  dateKeys: string[],
+  dogId?: string,
+): { value: string; label: string; count: number }[] {
+  const spec = quickLogSpec(kind);
+  const field = [spec.primary, ...spec.fields].find((entry) => entry.name === fieldName);
+  if (!field?.options) return [];
+  const relevant = logsForHistory(logs, kind, dateKeys, dogId);
+  return field.options.map((option) => ({
+    value: option.value,
+    label: option.label,
+    count: relevant.filter((log) => logValue(log, fieldName) === option.value).length,
+  }));
+}
+
+export type RoutineAdherence = {
+  item: Item;
+  /** Occurrences the schedule called for across the range. */
+  expected: number;
+  completed: number;
+  /** 0-100. */
+  rate: number;
+};
+
+/** How often each recurring routine actually gets done.
+ *
+ * Answers the question nobody could ask before: which of these are real, and which are
+ * calendar decoration? A routine sitting at 20% is usually telling you to delete the
+ * slot rather than to try harder. Only counts days that have already happened —
+ * tomorrow's breakfast isn't a miss. */
+export function routineAdherence(
+  items: Item[],
+  occurrences: ItemOccurrence[],
+  dateKeys: string[],
+  todayKey: string,
+): RoutineAdherence[] {
+  const past = dateKeys.filter((key) => key <= todayKey);
+  if (past.length === 0) return [];
+  const rangeStart = parseLocalDate(past[0]);
+  const rangeEnd = parseLocalDate(past[past.length - 1]);
+
+  return items
+    .filter((item) => item.requiresCompletion)
+    .map((item) => {
+      const days = generateOccurrences(item, rangeStart, rangeEnd);
+      const completed = days.filter((day) =>
+        occurrences.some(
+          (entry) => entry.itemId === item.id && entry.originalDate === day && entry.state === "completed",
+        ),
+      ).length;
+      return { item, expected: days.length, completed, rate: days.length === 0 ? 0 : Math.round((completed / days.length) * 100) };
+    })
+    .filter((entry) => entry.expected > 0)
+    .sort((a, b) => a.rate - b.rate);
+}
+
+/** One row of the Dashboard's day: something the day expected, or something that
+ * happened without being expected. Splitting these into two panels was the original
+ * complaint — the calendar knew what should happen, the Log knew what did, and neither
+ * could see the other. */
+export type TimelineEntry =
+  | {
+      kind: "expected";
+      key: string;
+      item: Item;
+      occurrence?: ItemOccurrence;
+      /** Everything logged against this slot, whether or not it closed it. */
+      logs: ItemLog[];
+      /** Minutes into the day, for sorting. `Infinity` for an untimed item. */
+      minutes: number;
+      timeLabel: string;
+    }
+  | { kind: "log"; key: string; log: ItemLog; minutes: number; timeLabel: string };
+
+/** Everything about `dateKey`, in the order it was expected or happened.
+ *
+ * Deliberately does *not* reuse `useAdaptivePlan`'s visible set: that one hides
+ * `optional` items on busy weeks, which is a defensible coaching move but a lie in a
+ * list claiming to be the whole day. Everything scheduled shows up here.
+ *
+ * `minutesInZone` converts a stored instant into minutes past midnight in the
+ * household's zone, so a log entered at 9pm for a 7:18 break sorts at 7:18 rather
+ * than at the bottom. */
+export function buildTodayTimeline(
+  dateKey: string,
+  items: Item[],
+  occurrences: ItemOccurrence[],
+  logs: ItemLog[],
+  minutesInZone: (isoInstant: string) => number,
+): TimelineEntry[] {
+  const day = parseLocalDate(dateKey);
+
+  const expected: TimelineEntry[] = items
+    .filter((item) => item.requiresCompletion && generateOccurrences(item, day, day).length > 0)
+    .map((item) => {
+      const occurrence = occurrences.find((entry) => entry.itemId === item.id && entry.originalDate === dateKey);
+      return {
+        kind: "expected" as const,
+        key: `expected-${item.id}`,
+        item,
+        occurrence,
+        logs: logs.filter((log) => log.itemId === item.id && log.occurrenceDate === dateKey),
+        minutes: item.startTime ? (parseTimeLabel(item.startTime) ?? Infinity) : Infinity,
+        timeLabel: item.startTime ?? "",
+      };
+    });
+
+  // Only logs with nowhere to belong. An attached one is already shown inside its slot,
+  // and listing it twice would double-count the day.
+  const free: TimelineEntry[] = logs
+    .filter((log) => !log.itemId && log.occurrenceDate === dateKey)
+    .map((log) => {
+      const instant = log.happenedAt ?? log.loggedAt;
+      return { kind: "log" as const, key: `log-${log.id}`, log, minutes: minutesInZone(instant), timeLabel: "" };
+    });
+
+  return [...expected, ...free].sort((a, b) => a.minutes - b.minutes);
+}
 
 /** Whether a Quick log field should render, given what's been picked so far. */
 export function quickLogFieldVisible(field: QuickLogField, values: Record<string, string | number | null>): boolean {
@@ -432,8 +766,9 @@ export const DEFAULT_LOG_FIELDS: Partial<Record<Category, LogFieldDef[]>> = {
     { fieldName: "Weight", dataType: "number", unit: "lbs" },
     { fieldName: "Cost", dataType: "number", unit: "$" },
   ],
-  training: [{ fieldName: "Reps", dataType: "number" }],
-  meals: [{ fieldName: "Amount eaten", dataType: "text" }],
+  // training and meals are gone: both categories now log through the Quick log spec,
+  // which already asks for duration/distractions and amount-eaten in a better shape.
+  // `alone-time` stays — it's what `aloneTimeMinutes` reads to write the readiness row.
   "alone-time": [{ fieldName: "Duration", dataType: "number", unit: "min" }],
 };
 
@@ -950,12 +1285,22 @@ export function parseTimeLabel(label: string): number | null {
   return hours * 60 + minutes;
 }
 
+/** Minutes past midnight as a wall-clock label — "435" becomes "7:15 AM". For a
+ * *length* of time use `formatDuration`; this one would call three hours "3:00 AM". */
 export function formatMinutes(totalMinutes: number): string {
   const hours24 = Math.floor(totalMinutes / 60) % 24;
   const minutes = totalMinutes % 60;
   const meridiem = hours24 >= 12 ? "PM" : "AM";
   const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
   return `${hours12}:${String(minutes).padStart(2, "0")} ${meridiem}`;
+}
+
+/** A span of time — "132" becomes "2h 12m". */
+export function formatDuration(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = Math.round(totalMinutes % 60);
+  if (hours === 0) return `${minutes}m`;
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
 }
 
 /** Native `<input type="time">` gives "HH:MM" 24-hour values — convert to the
@@ -1010,6 +1355,22 @@ export const HEALTH_CATEGORIES: Category[] = ["health", "vet", "vaccine", "medic
 
 export function isHealthItem(item: Pick<Item, "category">): boolean {
   return HEALTH_CATEGORIES.includes(item.category);
+}
+
+/** A routine that happens so often it's noise on a shared calendar — hourly potty
+ * breaks, every meal. Andrew's household still wants them tracked and completed;
+ * Bree just doesn't want them burying the things she's actually looking for
+ * (Feedback, 2026-07-12). Drives the Calendar's "Hide routines" toggle, which is a
+ * per-viewer preference rather than a property of the item, so nothing is ever
+ * hidden from the person who wants to see it.
+ *
+ * Reads the stored field, which is the only thing that gets this right: "Parallel
+ * decompression walk" at 6:15pm belongs on a calendar and "Morning potty" doesn't, and
+ * both are daily routines with the same intent. Items predating the field fall back to
+ * the original guess so nothing that was hidden yesterday reappears today. */
+export function isBackgroundRoutine(item: Pick<Item, "intent" | "recurrence" | "calendarVisibility">): boolean {
+  if (item.calendarVisibility) return item.calendarVisibility === "checklist-only";
+  return item.intent === "routine" && item.recurrence?.frequency === "daily";
 }
 
 export function computeNotifications(
@@ -1123,10 +1484,16 @@ export function isExpired(item: InventoryItem): boolean {
 }
 
 /** Rough total-scheduled-minutes for a day, used to warn when assigning a meal
- * with a long combined prep+cook time to an already-packed evening. */
+ * with a long combined prep+cook time to an already-packed evening.
+ *
+ * Background routines are excluded. Five-minute potty breaks every couple of hours
+ * would make every day read as packed, which is the opposite of the signal this is
+ * for — the question is whether there's room for a long recipe, and the potty breaks
+ * happen either way. */
 export function dayLoadMinutes(dateKey: string, items: Item[]): number {
   const day = parseLocalDate(dateKey);
   return items
+    .filter((item) => !isBackgroundRoutine(item))
     .filter((item) => generateOccurrences(item, day, day).length > 0)
     .reduce((sum, item) => sum + itemDurationMinutes(item), 0);
 }

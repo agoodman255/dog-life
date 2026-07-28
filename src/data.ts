@@ -51,6 +51,9 @@ type TaskSeed = {
   location?: string;
   formation?: DogFormation;
   relatedMilestoneId?: string;
+  /** Omitted = shows on the calendar. Set to "checklist-only" for the routines that
+   * happen so often they bury everything else on a shared calendar. */
+  calendarVisibility?: Item["calendarVisibility"];
 };
 
 type HealthEventSeed = {
@@ -303,15 +306,12 @@ const todayTasks: TaskSeed[] = [
     setting: "outdoor",
     difficulty: 1,
     dogIds: ["puppy", "griz"],
-    checklist: ["Outside", "Reward", "Pee", "Poop", "No accidents"],
-    checklistSchema: [
-      { itemName: "Peed", dataType: "counter" },
-      { itemName: "Pooped", dataType: "counter" },
-      { itemName: "Playtime occurred", dataType: "boolean" },
-      { itemName: "Playtime duration (min)", dataType: "duration_minutes" },
-      { itemName: "Treats given", dataType: "counter" },
-      { itemName: "Notes", dataType: "free_text" },
-    ],
+    // No checklist. This used to hand-type Peed/Pooped counters, playtime, treats and
+    // notes — a worse copy of the potty Quick log spec, which asks the same questions
+    // with conditional fields and a stool/urine scale. Logging the break is how this
+    // gets completed now.
+    checklist: [],
+    calendarVisibility: "checklist-only",
     grizParticipation: "yes",
     location: "home-fenced-yard",
     formation: "together",
@@ -331,6 +331,7 @@ const todayTasks: TaskSeed[] = [
     difficulty: 2,
     dogIds: ["puppy", "griz"],
     checklist: ["Separate meals", "Water refreshed", "Calm release", "Two-minute settle"],
+    calendarVisibility: "checklist-only",
     grizParticipation: "separate",
     location: "home-indoor",
     formation: "separate-rooms",
@@ -350,6 +351,7 @@ const todayTasks: TaskSeed[] = [
     difficulty: 1,
     dogIds: ["puppy", "griz"],
     checklist: ["Separate meals", "Griz's evening meds + FortiFlora given", "Water refreshed", "Calm release"],
+    calendarVisibility: "checklist-only",
     grizParticipation: "separate",
     location: "home-indoor",
     formation: "separate-rooms",
@@ -1671,6 +1673,7 @@ function taskSeedToItem(seed: TaskSeed): Item {
       seed.checklistSchema && seed.checklistSchema.length > 0
         ? seed.checklistSchema
         : seed.checklist.map((name) => ({ itemName: name, dataType: "boolean" as const })),
+    calendarVisibility: seed.calendarVisibility ?? "calendar",
     requiresLog: isTraining,
     logFields: isTraining ? defaultLogFieldsFor(seed.category) : [],
     aloneTimeRequired: "no",

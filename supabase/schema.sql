@@ -461,6 +461,12 @@ begin
 end $$;
 
 alter table items add column if not exists reminders jsonb not null default '[]';
+-- 'calendar' (the default) or 'checklist-only'. Checklist-only items still recur, still
+-- need completing, and still show on the Dashboard — they're just kept out of the
+-- day/week/month grids, where an every-two-hours potty routine buries everything the
+-- calendar is actually being consulted for. Whether to honour it is a per-viewer
+-- preference in the Calendar; this column only says which items it applies to.
+alter table items add column if not exists calendar_visibility text not null default 'calendar';
 
 -- Per-date state for an item. A recurring item needs independent completion state
 -- per occurrence — finishing Monday's must not finish Tuesday's — which is exactly
@@ -489,16 +495,25 @@ create table if not exists item_occurrences (
 );
 
 alter table item_occurrences add column if not exists milestone_advanced boolean not null default false;
+-- Which `item_logs` rows claim this occurrence. Stored rather than re-derived, so
+-- deleting a log releases exactly the occurrence it satisfied — the same reason
+-- `milestone_advanced` is stored, and the opposite of the (date, duration, dogs)
+-- guesswork that alone-time rows are matched by.
+alter table item_occurrences add column if not exists satisfied_by_log_ids text[] not null default '{}';
 
 -- Timestamped log entries. Usually against an item — multiple per item (and per
 -- occurrence) is the point: weight over time, symptoms across days. `processed_at`
 -- is stamped by the review-logs skill so its next run only reads what is new.
 --
 -- `item_id` is nullable because a Quick log (Dashboard → Quick log, added 2026-07-26)
--- has no item behind it: potty breaks, meals and water aren't scheduled, they just
--- happen. Those rows carry `quick_log_kind` instead, which makes them self-describing
--- so the ingest pass never has to join to `items` to know what it's reading. Exactly
--- one of the two is always set — see the check constraint below.
+-- has no item behind it: an unplanned potty break just happens. Those rows carry
+-- `quick_log_kind` instead, which makes them self-describing so the ingest pass never
+-- has to join to `items` to know what it's reading.
+--
+-- Both can be set at once (2026-07-27): a Quick log that satisfied a scheduled slot is
+-- one row that is simultaneously "a potty break, poo, outside, firm" and "this is the
+-- 7:15 Morning potty happening". At least one of the two is always set — see the check
+-- constraint below.
 create table if not exists item_logs (
   id text primary key,
   household_id uuid not null references households (id) on delete cascade,
@@ -520,13 +535,21 @@ alter table item_logs add column if not exists rating int;
 alter table item_logs add column if not exists milestone_id text references milestones (id) on delete set null;
 -- Which milestone steps the entry advanced. Deleting the log rolls exactly these back.
 alter table item_logs add column if not exists advanced_step_titles text[] not null default '{}';
+-- When the thing actually happened, as opposed to when the row was written. A 7:18
+-- potty break entered at 9pm is a 7:18 event; `logged_at` says 9pm and would sort it,
+-- match it, and chart it wrong. Backfilled from logged_at so old rows stay orderable.
+alter table item_logs add column if not exists happened_at timestamptz;
+update item_logs set happened_at = logged_at where happened_at is null;
+
+-- Dropped and recreated rather than added-if-missing: this constraint changed meaning
+-- on 2026-07-27 (was XOR, now "at least one"), so a database that already has the old
+-- version needs the new one, not a skip. Widening only — every existing row passes.
+alter table item_logs drop constraint if exists item_logs_source_check;
+alter table item_logs add constraint item_logs_source_check
+  check (item_id is not null or quick_log_kind is not null);
 
 do $$
 begin
-  if not exists (select 1 from pg_constraint where conname = 'item_logs_source_check') then
-    alter table item_logs add constraint item_logs_source_check
-      check ((item_id is not null) <> (quick_log_kind is not null));
-  end if;
   if not exists (select 1 from pg_constraint where conname = 'item_logs_rating_check') then
     alter table item_logs add constraint item_logs_rating_check
       check (rating is null or rating between 1 and 5);
@@ -535,6 +558,31 @@ end $$;
 
 create index if not exists item_logs_unprocessed_idx on item_logs (processed_at) where processed_at is null;
 create index if not exists item_logs_quick_idx on item_logs (quick_log_kind, occurrence_date) where quick_log_kind is not null;
+
+-- Detaches a Quick log from its item before the item's `on delete cascade` fires,
+-- so deleting a routine can't silently take an observation about a dog down with it.
+-- A row with quick_log_kind set is a potty/food/water/etc. entry that happened to
+-- satisfy a scheduled slot — not a record that only makes sense in the context of the
+-- item, the way a vet visit's weight reading does. A plain item log (quick_log_kind
+-- null) has no such life outside the item, so it's left alone and cascades normally.
+--
+-- store.tsx's deleteItem already does this same detach from the app before calling
+-- items.remove — this trigger exists so a delete issued directly against the database
+-- (the Supabase table editor, a manual `delete from items`) can't bypass it.
+create or replace function detach_quick_logs_before_item_delete() returns trigger as $$
+begin
+  update item_logs
+  set item_id = null
+  where item_id = old.id and quick_log_kind is not null;
+  return old;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_detach_quick_logs_before_item_delete on items;
+create trigger trg_detach_quick_logs_before_item_delete
+  before delete on items
+  for each row
+  execute function detach_quick_logs_before_item_delete();
 
 -- Idempotency guard for the send-reminders edge function (supabase/functions/
 -- send-reminders): one row per reminder actually emailed, so a cron run that

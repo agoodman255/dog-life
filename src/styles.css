@@ -364,6 +364,19 @@ main {
   background: var(--tint);
 }
 
+.task-card.is-collapsed .task-main {
+  padding-bottom: 16px;
+}
+
+.task-collapsed-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--teal);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
 .task-time {
   background: var(--soft);
   color: var(--green);
@@ -1449,6 +1462,37 @@ textarea:focus-visible,
   margin-bottom: 16px;
 }
 
+/* The "counts as" prompt. Set apart from the fields above so it reads as a question
+   about the entry as a whole rather than one more thing to fill in. */
+.quick-log-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: var(--surface-muted, transparent);
+}
+
+.quick-log-slot p {
+  margin: 0;
+}
+
+/* Sized to its content — a full-width time field would read as the form's main
+   question, and it's the one field you almost never touch. */
+.quick-log-time {
+  width: auto;
+  align-self: flex-start;
+}
+
+/* Takes the full row so it reads as a note about the grid below rather than as
+   another control sitting in the filter group. */
+.calendar-routines-hidden {
+  flex-basis: 100%;
+  margin: 0;
+  opacity: 0.75;
+}
+
 .viewer-select {
   display: flex;
   align-items: center;
@@ -1549,6 +1593,11 @@ textarea:focus-visible,
   height: 6px;
   border-radius: 999px;
   background: var(--teal);
+}
+
+.month-dot.done {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--muted);
 }
 
 /* Week view */
@@ -2531,8 +2580,26 @@ textarea:focus-visible,
   box-shadow: inset 0 0 0 2px var(--teal);
 }
 
-.day-block.state-completed {
-  opacity: 0.75;
+.day-block.state-completed,
+.day-condensed-row.state-completed,
+.day-allday-row.state-completed,
+.week-day-item.state-completed {
+  opacity: 0.55;
+  filter: grayscale(0.7);
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--muted) 25%, transparent),
+    color-mix(in srgb, var(--muted) 25%, transparent) 1px,
+    transparent 1px,
+    transparent 7px
+  );
+}
+
+.day-block.state-completed strong,
+.day-condensed-row.state-completed strong,
+.day-allday-row.state-completed strong,
+.week-day-item.state-completed {
+  text-decoration: line-through;
 }
 
 .task-history {
@@ -3072,6 +3139,35 @@ textarea:focus-visible,
   gap: 8px;
   max-height: 340px;
   overflow-y: auto;
+}
+
+/* Expectations and observations in one column. Uniform spacing on purpose: the point
+   of merging the two panels is that a scheduled potty break and an unplanned one are
+   the same kind of thing, an hour apart. */
+.today-timeline {
+  display: grid;
+  gap: 10px;
+}
+
+/* Indented under the row it belongs to, so a log reads as evidence for the slot above
+   rather than as another item on the list. */
+.task-card-logs {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 0.85rem;
+  color: var(--muted, inherit);
+}
+
+.task-card-awaiting {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+
+/* A log nothing was expecting. Dashed rather than dimmed — it's not lesser, it just
+   didn't come from the calendar. */
+.today-timeline .quick-log-row.is-unscheduled {
+  border: 1px dashed var(--line);
+  background: transparent;
 }
 
 .quick-log-row {
