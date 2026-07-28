@@ -35,6 +35,7 @@ import {
   QUICK_LOG_SPECS,
   quickLogFieldVisible,
   quickLogKindForCategory,
+  quickLogKindsForCategory,
   summarizeQuickLog,
   quickLogSpec,
   scheduledSlotCandidates,
@@ -716,6 +717,12 @@ export function QuickLogForm({
 
   const visibleFields = spec.fields.filter((field) => quickLogFieldVisible(field, selections));
 
+  // The attached item's category may cover more than one kind (a meal is a candidate
+  // for both Food and Water) — when it does, the kind strip stays live instead of
+  // collapsing to a locked label, restricted to just those kinds.
+  const attachedItem = attachTo ? items.items.find((entry) => entry.id === attachTo.itemId) : undefined;
+  const attachedKinds = attachedItem ? quickLogKindsForCategory(attachedItem.category) : [];
+
   // Arriving from an item already decides the slot, so there's nothing to ask about.
   const [clockHours, clockMinutes] = happenedClock.split(":").map(Number);
   const candidates = attachTo
@@ -891,6 +898,36 @@ export function QuickLogForm({
         <p className="eyebrow quick-log-editing-label">
           <Icon size={16} aria-hidden /> Editing this {spec.label.toLowerCase()} entry
         </p>
+      ) : attachTo && attachedKinds.length > 1 ? (
+        // A meal's Log button opens here defaulted to Food (its primary kind), but the
+        // slot itself is a candidate for more than one kind — so unlike a single-kind
+        // attachment, the kind choice stays live rather than collapsing to a locked
+        // label. `.subtabs` (the same pattern the dog toggles below use), not the
+        // 5-column `.quick-log-kinds` grid — that one's sized for exactly 5 buttons and
+        // would leave empty columns here. Switching still clears sub-fields via the
+        // existing `resetKind`.
+        <div>
+          <p className="eyebrow quick-log-editing-label">
+            <Icon size={16} aria-hidden /> {attachTo.itemTitle}
+          </p>
+          <div className="subtabs" role="group" aria-label="What are you logging?">
+            {QUICK_LOG_SPECS.filter((entry) => attachedKinds.includes(entry.kind)).map((entry) => {
+              const KindIcon = QUICK_LOG_ICONS[entry.kind];
+              return (
+                <button
+                  key={entry.kind}
+                  type="button"
+                  className={kind === entry.kind ? "active" : ""}
+                  onClick={() => resetKind(entry.kind)}
+                >
+                  <span className="row" style={{ gap: 6 }}>
+                    <KindIcon size={14} aria-hidden /> {entry.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       ) : attachTo ? (
         <p className="eyebrow quick-log-editing-label">
           <Icon size={16} aria-hidden /> {attachTo.itemTitle}

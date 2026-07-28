@@ -317,22 +317,44 @@ export function quickLogSpec(kind: QuickLogKind): QuickLogSpec {
  * with the same fields, not a hand-typed checklist on one side and a structured spec on
  * the other.
  *
- * Only four categories map. The rest are unmapped on purpose:
- * - handling / socialization / relationship are treated as training by the seeds, but
- *   the training spec's primary selection *is* the milestone picker, and a cooperative
- *   handling mini shouldn't force you to name a milestone before you can record it.
+ * A category can map to more than one kind — the two aren't the same vocabulary, and
+ * forcing a 1:1 correspondence would mean inventing a calendar category (or a second
+ * routine) for every distinct thing that happens to occur at the same moment as
+ * something else already scheduled. `meals` is the concrete case: one calendar slot,
+ * but you feed *and* top up water at the same visit, so it's a candidate for both a
+ * Food log and a Water log (2026-07-27). `exercise` and `relationship` both map to
+ * `play` for a different reason — no seed item actually carries `exercise` as a
+ * *completable* routine (the one that does is a one-off calendar event, which is
+ * never completable), so without `relationship` the walk that's actually there
+ * ("Parallel decompression walk") would have nothing to match Play logs against.
+ *
+ * The rest are unmapped on purpose:
+ * - handling / socialization are treated as training by the seeds, but the training
+ *   spec's primary selection *is* the milestone picker, and a cooperative handling
+ *   mini shouldn't force you to name a milestone before you can record it. (This is
+ *   a different call than `relationship`, which — despite also being training-
+ *   adjacent — is deliberately included for `play`, not `training`.)
  * - health / vet / vaccine / medication / grooming keep `DEFAULT_LOG_FIELDS` below —
- *   weight, temperature, cost, next due have no chip-shaped equivalent.
- * - `water` has no `Category` at all; see the note on `QuickLogKind`. */
-export const CATEGORY_QUICK_LOG_KIND: Partial<Record<Category, QuickLogKind>> = {
-  potty: "potty",
-  meals: "food",
-  training: "training",
-  exercise: "play",
+ *   weight, temperature, cost, next due have no chip-shaped equivalent. */
+export const CATEGORY_QUICK_LOG_KIND: Partial<Record<Category, QuickLogKind[]>> = {
+  potty: ["potty"],
+  meals: ["food", "water"],
+  training: ["training"],
+  exercise: ["play"],
+  relationship: ["play"],
 };
 
+export function quickLogKindsForCategory(category: Category): QuickLogKind[] {
+  return CATEGORY_QUICK_LOG_KIND[category] ?? [];
+}
+
+/** The one kind a direct "Log X" button opens to, when a category maps to several —
+ * first in the list wins (meals → food, not water). Every existing call site wants
+ * exactly one kind to default into; only the reverse direction (does *this* Quick log
+ * match *that* scheduled item — `scheduledSlotCandidates` below) needs the full set,
+ * via `quickLogKindsForCategory`. */
 export function quickLogKindForCategory(category: Category): QuickLogKind | undefined {
-  return CATEGORY_QUICK_LOG_KIND[category];
+  return quickLogKindsForCategory(category)[0];
 }
 
 /** The special training type that isn't a milestone. Alone time was its own Dashboard
@@ -380,7 +402,7 @@ export function scheduledSlotCandidates(
   const claimed: ItemState[] = ["completed", "skipped", "rescheduled"];
 
   return items
-    .filter((item) => quickLogKindForCategory(item.category) === kind && item.requiresCompletion)
+    .filter((item) => quickLogKindsForCategory(item.category).includes(kind) && item.requiresCompletion)
     // A slot only exists on days the item actually recurs — same expansion every other
     // consumer uses, so a candidate here is a row you'd see on the calendar.
     .filter((item) => generateOccurrences(item, day, day).length > 0)

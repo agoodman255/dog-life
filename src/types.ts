@@ -140,8 +140,10 @@ export type LogFieldValue = {
 /** The five things that get logged constantly during a day, independent of anything
  * on the calendar. A Quick log entry is one of these; an item-attached log is none of
  * them. Distinct from `Category` on purpose — this is the Quick log taxonomy the
- * Dashboard's Log section groups by, and it has no meaningful `Category` equivalents
- * for "play" or "water". */
+ * Dashboard's Log section groups by, not the calendar's. Several categories do map
+ * into it (a calendar item's category can decide which of these it satisfies when
+ * logged) — see `CATEGORY_QUICK_LOG_KIND` in `utils.ts` for exactly which, and why
+ * some map to more than one kind. */
 export type QuickLogKind = "potty" | "play" | "training" | "food" | "water";
 
 /** One timestamped log. Usually against an item (weight over time, symptoms across
