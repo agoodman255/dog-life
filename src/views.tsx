@@ -55,6 +55,7 @@ import {
   relationshipLogFormValuesToLog,
 } from "./forms";
 import { makeId, useStore } from "./store";
+import { TRACK_LABELS, TRACK_ORDER } from "./milestonePicker";
 import { useNavigation } from "./navigation";
 import { formatInZone, isoToZonedParts } from "./timezones";
 import { setPassword as setAccountPassword, signOut, useSession } from "./auth";
@@ -117,6 +118,10 @@ import {
   isHeavyWeek,
   isSameDay,
   milestoneProgress,
+  milestoneWorkState,
+  MilestoneSortMode,
+  MilestoneWorkState,
+  sortMilestonesForDog,
   monthGridDays,
   parseLocalDate,
   parseTimeLabel,
@@ -339,6 +344,38 @@ function QuickLogRow({
   );
 }
 
+/** The Quick log modal a milestone card opens, plus the opener to hand it. Every place
+ * that renders a `MilestoneCard` needs this now: advancing a step used to be a bare +1
+ * on the card itself, and once that's gone a card without this hook is a card you can't
+ * record anything from. Bundling the state and the modal together is what keeps wiring
+ * a new call site to two lines instead of a state field, a modal and four props.
+ *
+ * `defaultDogId` is who the log is for unless a call site overrides it — the roadmap
+ * panels show one dog at a time, but the Dashboard's focus section shows a card per dog. */
+function useMilestoneQuickLog(defaultDogId: string) {
+  const [target, setTarget] = useState<{ milestoneId?: string; stepTitle?: string; dogId?: string } | null>(null);
+
+  function openQuickLog(milestoneId?: string, stepTitle?: string, dogId?: string) {
+    setTarget({ milestoneId, stepTitle, dogId });
+  }
+
+  const dogId = target?.dogId ?? defaultDogId;
+  const quickLogModal = target ? (
+    <Modal title="Quick log" onClose={() => setTarget(null)}>
+      <QuickLogForm
+        date={toDateKey(new Date())}
+        initialKind="training"
+        initialTrainingType={target.milestoneId}
+        initialDogIds={dogId ? [dogId] : undefined}
+        initialStepTitles={target.stepTitle ? [target.stepTitle] : undefined}
+        onClose={() => setTarget(null)}
+      />
+    </Modal>
+  ) : null;
+
+  return { openQuickLog, quickLogModal };
+}
+
 export function DashboardView() {
   const { items, itemOccurrences, milestones, dogs, completeTask, aloneTimeLogs, itemLogs } = useStore();
   const todayKey = toDateKey(new Date());
@@ -348,6 +385,7 @@ export function DashboardView() {
     kind: QuickLogKind;
     trainingType?: string;
     dogIds?: string[];
+    stepTitles?: string[];
     attachTo?: { itemId: string; occurrenceDate: string; itemTitle: string };
   }>(null);
   const todayLogs = quickLogsOn(itemLogs.items, todayKey);
@@ -513,7 +551,19 @@ export function DashboardView() {
               </div>
               <div className="stack">
                 {focusMilestones.map(({ dog, milestone }) => (
-                  <MilestoneCard key={dog.id} milestone={milestone} dogId={dog.id} />
+                  <MilestoneCard
+                    key={dog.id}
+                    milestone={milestone}
+                    dogId={dog.id}
+                    onQuickLog={(stepTitle) =>
+                      setQuickLog({
+                        kind: "training",
+                        trainingType: milestone.id,
+                        dogIds: [dog.id],
+                        stepTitles: stepTitle ? [stepTitle] : undefined,
+                      })
+                    }
+                  />
                 ))}
               </div>
             </section>
@@ -556,6 +606,7 @@ export function DashboardView() {
             initialKind={quickLog.kind}
             initialTrainingType={quickLog.trainingType}
             initialDogIds={quickLog.dogIds}
+            initialStepTitles={quickLog.stepTitles}
             attachTo={quickLog.attachTo}
             onClose={() => setQuickLog(null)}
           />
@@ -1663,6 +1714,7 @@ function CalendarMilestonesPanel({
   dogId: string;
   onNavigate: () => void;
 }) {
+  const { openQuickLog, quickLogModal } = useMilestoneQuickLog(dogId);
   const current = milestonesList.filter((item) => item.status === "current");
   const delayed = milestonesList.filter((item) => item.status === "delayed");
   const upNext = milestonesList.filter((item) => item.status === "locked");
@@ -1671,12 +1723,18 @@ function CalendarMilestonesPanel({
 
   return (
     <div>
+      {quickLogModal}
       {current.length > 0 && (
         <>
           <p className="eyebrow">Current focus</p>
           <div className="stack" style={{ marginBottom: 24 }}>
             {current.map((item) => (
-              <MilestoneCard key={item.id} milestone={item} dogId={dogId} />
+              <MilestoneCard
+                key={item.id}
+                milestone={item}
+                dogId={dogId}
+                onQuickLog={(stepTitle) => openQuickLog(item.id, stepTitle)}
+              />
             ))}
           </div>
         </>
@@ -1898,51 +1956,69 @@ function DogSwitcher({ dogs, value, onChange }: { dogs: Dog[]; value: string; on
 
 type TrainingTab = "obedience" | ExposureCategory | "health" | "alone-time";
 
+/** "Open" deliberately bundles underway with not-yet-started: in Andrew's words the
+ * split that matters is locked vs. open — things you could work on today — and the
+ * sort already floats the underway ones to the top of that group. Completed gets its
+ * own option because it's the group that only ever grows. */
+type StatusFilter = "all" | "open" | "locked" | "done";
+
+const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
+  all: "All",
+  open: "Open",
+  locked: "Locked",
+  done: "Done",
+};
+
+function matchesStatusFilter(state: MilestoneWorkState, filter: StatusFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "open") return state === "in-progress" || state === "ready";
+  if (filter === "locked") return state === "locked";
+  return state === "completed";
+}
+
 export function TrainingView() {
   const { milestones, dogs, aloneTimeLogs, items } = useStore();
   const [tab, setTab] = useState<TrainingTab>("obedience");
   const [dogId, setDogId] = useState("");
   const [query, setQuery] = useState("");
-  const [aloneTimeModal, setAloneTimeModal] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sortMode, setSortMode] = useState<MilestoneSortMode>("next-up");
   const [jumpOpen, setJumpOpen] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
-  // "top" = generic Quick log launched from the page header, with no milestone
-  // preselected. A milestone id = the per-card button, which locks Quick log straight
-  // to that milestone so logging a rated session never requires the type picker.
-  const [quickLogTarget, setQuickLogTarget] = useState<"top" | string | null>(null);
   const allDogIds = dogs.items.map((dog) => dog.id);
   // Falls back rather than seeding state from `dogs.items`, which is empty on the
   // first render when the collection loads from Supabase.
   const activeDogId = dogId || dogs.items[0]?.id || "";
-  const tabs: { id: TrainingTab; label: string }[] = [
-    { id: "obedience", label: "Obedience" },
-    { id: "socialization", label: "Socialization" },
-    { id: "confidence", label: "Confidence" },
-    { id: "handling", label: "Handling" },
-    { id: "health", label: "Health" },
-    { id: "alone-time", label: "Alone Time" },
-  ];
+  const { openQuickLog, quickLogModal } = useMilestoneQuickLog(activeDogId);
+  const isAloneTime = tab === "alone-time";
 
-  // Every milestone in the current track for this dog, regardless of the search box —
-  // this is what the jump-to dropdown lists, since it's a browse-everything-here
-  // shortcut rather than a filter.
-  const tabMilestones = milestones.items.filter(
-    (milestone) => milestone.track === tab && (milestone.dogIds.length === 0 || milestone.dogIds.includes(activeDogId)),
+  // Sorted once, up front, so the jump dropdown and the card grid can never disagree
+  // about what order this track is in.
+  const tabMilestones = sortMilestonesForDog(
+    milestones.items.filter(
+      (milestone) => milestone.track === tab && (milestone.dogIds.length === 0 || milestone.dogIds.includes(activeDogId)),
+    ),
+    milestones.items,
+    activeDogId,
+    sortMode,
   );
 
-  // Only this dog's milestones, in the current track. Every track now renders its
-  // milestones — before, only obedience did, which left the socialization, confidence,
-  // handling and health milestones reachable from the Quick log picker but nowhere on
-  // the page they belong to.
-  const trackMilestones = tabMilestones.filter(
-    (milestone) => query.trim() === "" || milestone.title.toLowerCase().includes(query.trim().toLowerCase()),
+  // Search and status narrow the grid; the jump dropdown stays on the full list, since
+  // it's a browse-everything-here shortcut rather than a second filter.
+  const search = query.trim().toLowerCase();
+  const visibleMilestones = tabMilestones.filter(
+    (milestone) =>
+      (search === "" || milestone.title.toLowerCase().includes(search)) &&
+      matchesStatusFilter(milestoneWorkState(milestone, milestones.items, activeDogId), statusFilter),
   );
 
-  // Clears the search first so the target is guaranteed to be in the DOM — a filtered
-  // search could otherwise hide the very card being jumped to.
+  // Clears search *and* the status filter first, so the target is guaranteed to be in
+  // the DOM — either one could otherwise hide the very card being jumped to, and a jump
+  // that silently does nothing is worse than no jump at all.
   function jumpToMilestone(id: string) {
     setJumpOpen(false);
     setQuery("");
+    setStatusFilter("all");
     requestAnimationFrame(() => {
       document.getElementById(`milestone-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
@@ -1952,108 +2028,143 @@ export function TrainingView() {
 
   return (
     <div className="stack">
-      <div className="subtabs" role="tablist">
-        {tabs.map((item) => (
-          <button key={item.id} role="tab" aria-selected={tab === item.id} className={tab === item.id ? "active" : ""} type="button" onClick={() => setTab(item.id)}>
-            {item.label}
-          </button>
-        ))}
-      </div>
-      {tab !== "alone-time" && (
-        <div className="training-toolbar">
+      {/* Everything that decides *which* milestones you're looking at stays on screen
+          while you scroll them — otherwise re-filtering means scrolling back to the top
+          of 36 cards to reach the control. */}
+      <div className="training-header">
+        <div className="training-header-row training-header-identity">
           <DogSwitcher dogs={dogs.items} value={activeDogId} onChange={setDogId} />
-          <div className="training-search-group">
-            <input
-              className="training-search"
-              type="search"
-              placeholder="Search training types…"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              aria-label="Search training types"
-            />
-            <div className="training-jump">
-              <button
-                type="button"
-                className="training-jump-toggle"
-                aria-label={`Jump to a ${tab} training item`}
-                aria-expanded={jumpOpen}
-                onClick={() => setJumpOpen((prev) => !prev)}
-              >
-                <ChevronDown size={16} aria-hidden className={jumpOpen ? "rotated" : ""} />
-              </button>
-              {jumpOpen && (
-                <div className="training-jump-panel">
-                  {tabMilestones.length === 0 && <p className="small">Nothing in {tab} yet.</p>}
-                  {tabMilestones.map((milestone) => (
-                    <button
-                      key={milestone.id}
-                      type="button"
-                      className="training-jump-option"
-                      onClick={() => jumpToMilestone(milestone.id)}
-                    >
-                      <span className="training-jump-option-title">{milestone.title}</span>
-                      <span className="small">{milestoneProgress(milestone, activeDogId)}%</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          <button className="primary-button small" type="button" onClick={() => setQuickLogTarget("top")}>
-            <GraduationCap size={16} aria-hidden /> Quick log
+          <button
+            className="primary-button small training-quick-log"
+            type="button"
+            onClick={() => openQuickLog(isAloneTime ? ALONE_TIME_TRAINING_ID : undefined)}
+          >
+            <GraduationCap size={16} aria-hidden /> <span>Quick log</span>
           </button>
         </div>
-      )}
-      {tab !== "alone-time" && (
+
+        <div className={`training-header-row training-header-filters${isAloneTime ? " category-only" : ""}`}>
+          <label className="training-field">
+            <span className="training-field-label">Training category</span>
+            <select className="training-select" value={tab} onChange={(event) => setTab(event.target.value as TrainingTab)}>
+              {TRACK_ORDER.map((track) => (
+                <option key={track} value={track}>
+                  {TRACK_LABELS[track]}
+                </option>
+              ))}
+              <option value="alone-time">Alone Time</option>
+            </select>
+          </label>
+          {/* Status and Sort control a list that doesn't exist on the alone-time tab.
+              Not rendered rather than disabled — a greyed control invites a dead tap. */}
+          {!isAloneTime && (
+            <>
+              <label className="training-field">
+                <span className="training-field-label">Status</span>
+                <select
+                  className="training-select"
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+                >
+                  {(Object.keys(STATUS_FILTER_LABELS) as StatusFilter[]).map((value) => (
+                    <option key={value} value={value}>
+                      {STATUS_FILTER_LABELS[value]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="training-field">
+                <span className="training-field-label">Sort</span>
+                <select
+                  className="training-select"
+                  value={sortMode}
+                  onChange={(event) => setSortMode(event.target.value as MilestoneSortMode)}
+                >
+                  <option value="next-up">Next up</option>
+                  <option value="alphabetical">A–Z</option>
+                </select>
+              </label>
+            </>
+          )}
+        </div>
+
+        {!isAloneTime && (
+          <div className="training-header-row training-header-search">
+            <div className="training-search-group">
+              <input
+                className="training-search"
+                type="search"
+                placeholder="Search training types…"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                aria-label="Search training types"
+              />
+              <div className="training-jump">
+                <button
+                  type="button"
+                  className="training-jump-toggle"
+                  aria-label={`Jump to a ${TRACK_LABELS[tab as Milestone["track"]] ?? tab} training item`}
+                  aria-expanded={jumpOpen}
+                  onClick={() => setJumpOpen((prev) => !prev)}
+                >
+                  <ChevronDown size={16} aria-hidden className={jumpOpen ? "rotated" : ""} />
+                </button>
+                {jumpOpen && (
+                  <div className="training-jump-panel">
+                    {tabMilestones.length === 0 && <p className="small">Nothing here yet.</p>}
+                    {tabMilestones.map((milestone) => (
+                      <button
+                        key={milestone.id}
+                        type="button"
+                        className="training-jump-option"
+                        onClick={() => jumpToMilestone(milestone.id)}
+                      >
+                        <span className="training-jump-option-title">{milestone.title}</span>
+                        <span className="small">{milestoneProgress(milestone, activeDogId)}%</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {!isAloneTime && (
         <section className="milestone-grid">
-          {trackMilestones.length === 0 && (
+          {visibleMilestones.length === 0 && (
             <p className="small">
-              {query.trim() ? `Nothing in ${tab} matches "${query.trim()}".` : `No ${tab} training assigned to this dog yet.`}
+              {search
+                ? `Nothing in ${TRACK_LABELS[tab as Milestone["track"]]} matches "${query.trim()}".`
+                : statusFilter !== "all"
+                  ? `No ${TRACK_LABELS[tab as Milestone["track"]]} training is ${STATUS_FILTER_LABELS[statusFilter].toLowerCase()} for this dog.`
+                  : `No ${TRACK_LABELS[tab as Milestone["track"]]} training assigned to this dog yet.`}
             </p>
           )}
-          {trackMilestones.map((milestone) => (
+          {visibleMilestones.map((milestone) => (
             <div id={`milestone-${milestone.id}`} className={highlightId === milestone.id ? "milestone-jump-target" : ""} key={milestone.id}>
               <MilestoneCard
                 milestone={milestone}
                 dogId={activeDogId}
                 defaultCollapsed
-                onQuickLog={() => setQuickLogTarget(milestone.id)}
+                onQuickLog={(stepTitle) => openQuickLog(milestone.id, stepTitle)}
               />
             </div>
           ))}
         </section>
       )}
-      {tab === "alone-time" && (
+      {isAloneTime && (
         <AloneTimeReadinessPanel
           dogs={dogs.items}
           allDogIds={allDogIds}
           aloneTimeLogs={aloneTimeLogs.items}
           calendarEvents={items.items}
-          onLog={() => setAloneTimeModal(true)}
+          onLog={() => openQuickLog(ALONE_TIME_TRAINING_ID)}
         />
       )}
-      {tab !== "obedience" && tab !== "alone-time" && tab !== "health" && <ExposureGrid category={tab} />}
-      {aloneTimeModal && (
-        <Modal title="Quick log" onClose={() => setAloneTimeModal(false)}>
-          <QuickLogForm
-            date={toDateKey(new Date())}
-            initialKind="training"
-            initialTrainingType={ALONE_TIME_TRAINING_ID}
-            onClose={() => setAloneTimeModal(false)}
-          />
-        </Modal>
-      )}
-      {quickLogTarget && (
-        <Modal title="Quick log" onClose={() => setQuickLogTarget(null)}>
-          <QuickLogForm
-            date={toDateKey(new Date())}
-            initialKind="training"
-            initialTrainingType={quickLogTarget === "top" ? undefined : quickLogTarget}
-            initialDogIds={activeDogId ? [activeDogId] : undefined}
-            onClose={() => setQuickLogTarget(null)}
-          />
-        </Modal>
-      )}
+      {tab !== "obedience" && !isAloneTime && tab !== "health" && <ExposureGrid category={tab} />}
+      {quickLogModal}
     </div>
   );
 }
@@ -2063,6 +2174,7 @@ export function MilestonesView() {
   const { focus, clearFocus } = useNavigation();
   const [dogId, setDogId] = useState("");
   const activeDogId = dogId || dogs.items[0]?.id || "";
+  const { openQuickLog, quickLogModal } = useMilestoneQuickLog(activeDogId);
 
   useEffect(() => {
     if (!focus?.milestoneId) return;
@@ -2080,10 +2192,15 @@ export function MilestonesView() {
           .filter((milestone) => milestone.dogIds.length === 0 || milestone.dogIds.includes(activeDogId))
           .map((milestone) => (
             <div id={`milestone-${milestone.id}`} className={focus?.milestoneId === milestone.id ? "focus-target" : ""} key={milestone.id}>
-              <MilestoneCard milestone={milestone} dogId={activeDogId} />
+              <MilestoneCard
+                milestone={milestone}
+                dogId={activeDogId}
+                onQuickLog={(stepTitle) => openQuickLog(milestone.id, stepTitle)}
+              />
             </div>
           ))}
       </section>
+      {quickLogModal}
     </div>
   );
 }

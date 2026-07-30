@@ -718,12 +718,15 @@ export type TrainingFocus = {
  * says what's unlocked and what's unfinished, so a formula answers this honestly and
  * a generated sentence would only add a way to be wrong.
  *
- * The rule is momentum first, then curriculum order: finish a milestone that's already
- * underway before opening a new one, and otherwise take them in the order they're
- * authored, which is the order the training plan intends. Predictability matters more
- * than cleverness here — the answer should be the same tomorrow unless something was
- * actually logged. Anything richer (weaving training into meals and potty breaks by
- * time of day) is backlog item 12's rule engine, not this.
+ * The rule is momentum first, then curriculum order — which is exactly what
+ * `sortMilestonesForDog`'s "next-up" mode encodes, so this defers to it rather than
+ * keeping a second opinion. It used to take `candidates[0]` in authored array order,
+ * which was never the curriculum order (the catalogue lists "Sit" before its own
+ * prerequisites) and left the Dashboard recommending something other than the top of
+ * the Training page's list. Predictability still matters more than cleverness: the
+ * answer should be the same tomorrow unless something was actually logged. Anything
+ * richer (weaving training into meals and potty breaks by time of day) is backlog
+ * item 12's rule engine, not this.
  *
  * Always scoped to one dog — "what's next" has no meaningful answer for two dogs at
  * once, since they're rarely on the same step. */
@@ -737,8 +740,9 @@ export function nextTrainingFocus(milestones: Milestone[], dogId: string): Train
   });
   if (candidates.length === 0) return null;
 
-  const underway = candidates.filter((milestone) => milestone.steps.some((step) => stepSessions(step, dogId) > 0));
-  const pick = (underway.length > 0 ? underway : candidates)[0];
+  // The sort's "in-progress" bucket already puts underway milestones first, so this
+  // needs no momentum pre-filter of its own.
+  const pick = sortMilestonesForDog(candidates, milestones, dogId, "next-up")[0];
   const step = pick.steps.find((entry) => stepSessions(entry, dogId) < entry.sessionsRequired);
   if (!step) return null;
 
@@ -971,6 +975,134 @@ export function milestoneStatusFor(milestone: Milestone, allMilestones: Mileston
   if (hasLoggedProgress) return "current";
   const deps = resolveDependencies(milestone, allMilestones, dogId);
   return deps.every((dep) => dep.met) ? "current" : "locked";
+}
+
+/** The per-dog state the Training page sorts and filters on. `milestoneStatusFor`
+ * collapses "unlocked but untouched" and "already underway" into one "current" — the
+ * right answer for a status pill, useless for ordering a list by what to do next.
+ * This splits that one case in two and passes every other answer straight through, so
+ * there's still exactly one place that decides what locked/completed/skipped mean. */
+export type MilestoneWorkState = "in-progress" | "ready" | "locked" | "completed" | "delayed" | "skipped";
+
+export function milestoneWorkState(milestone: Milestone, allMilestones: Milestone[], dogId: string): MilestoneWorkState {
+  const status = milestoneStatusFor(milestone, allMilestones, dogId);
+  if (status !== "current") return status;
+  return milestone.steps.some((step) => stepSessions(step, dogId) > 0) ? "in-progress" : "ready";
+}
+
+export type MilestoneSortMode = "next-up" | "alphabetical";
+
+/** Bucket order for "next up". Completed sits last on purpose: it's the group that
+ * only ever grows, and the one you never need to look at to decide what to do this
+ * afternoon. Delayed/skipped rank above it because they're parked, not done — you may
+ * well want to un-park one. */
+const WORK_STATE_RANK: Record<MilestoneWorkState, number> = {
+  "in-progress": 0,
+  ready: 1,
+  locked: 2,
+  delayed: 3,
+  skipped: 4,
+  completed: 5,
+};
+
+/** How deep each milestone sits in the prerequisite DAG: 0 = nothing blocks it,
+ * otherwise one past its deepest prerequisite. Computed across every milestone rather
+ * than the track being rendered — `loose-leash` (obedience) depends on
+ * `outside-confidence` (confidence), and `dog-park` (socialization) depends on both
+ * `loose-leash` and `vaccines-complete` (health), so a per-track graph would be a lie.
+ *
+ * Deliberately dog-independent: whether *this* dog has met a prerequisite is the work-
+ * state bucket's job, and keeping depth structural means it describes the curriculum
+ * rather than one dog's progress through it.
+ *
+ * Unknown dependency ids are dropped rather than counted as depth 0 — a typo'd id
+ * shouldn't silently promote a milestone to the top of the list. A cycle returns 0 for
+ * the re-entered node, which keeps the comparator a total order instead of hanging;
+ * the seed data has none today, but nothing enforces that. */
+function dependencyDepths(allMilestones: Milestone[]): Map<string, number> {
+  const byId = new Map(allMilestones.map((milestone) => [milestone.id, milestone]));
+  const depths = new Map<string, number>();
+  const visiting = new Set<string>();
+
+  function depthOf(id: string): number {
+    const cached = depths.get(id);
+    if (cached !== undefined) return cached;
+    if (visiting.has(id)) return 0;
+    const milestone = byId.get(id);
+    if (!milestone) return 0;
+    visiting.add(id);
+    const known = milestone.dependencies.filter((depId) => byId.has(depId));
+    const depth = known.length === 0 ? 0 : 1 + Math.max(...known.map(depthOf));
+    visiting.delete(id);
+    depths.set(id, depth);
+    return depth;
+  }
+
+  allMilestones.forEach((milestone) => depthOf(milestone.id));
+  return depths;
+}
+
+/** How many milestones each one transitively unblocks — the tiebreaker inside a depth
+ * band, so at equal depth you're taught the thing that opens the most doors first.
+ * Counting only *direct* dependents was the obvious version and is wrong on this data:
+ * it ranks "Food lure mechanics" (6 direct, 12 transitive) above "Name / Look at Me"
+ * (4 direct, 23 transitive), inverting the actual first lesson. */
+function transitiveDependents(allMilestones: Milestone[]): Map<string, number> {
+  const children = new Map<string, string[]>(allMilestones.map((milestone) => [milestone.id, []]));
+  allMilestones.forEach((milestone) =>
+    milestone.dependencies.forEach((depId) => children.get(depId)?.push(milestone.id)),
+  );
+  const counts = new Map<string, number>();
+  allMilestones.forEach((milestone) => {
+    const seen = new Set<string>();
+    const stack = [...(children.get(milestone.id) ?? [])];
+    while (stack.length > 0) {
+      const next = stack.pop()!;
+      if (seen.has(next)) continue;
+      seen.add(next);
+      stack.push(...(children.get(next) ?? []));
+    }
+    counts.set(milestone.id, seen.size);
+  });
+  return counts;
+}
+
+/** Training-page ordering. `milestones` is the slice being rendered (one track, one
+ * dog); `allMilestones` is the whole store, which the dependency graph and per-dog
+ * status are derived from.
+ *
+ * "next-up" is what to work on, in order: bucket first (underway → unlocked → blocked
+ * → parked → done), then prerequisite depth so a prerequisite is never listed below the
+ * thing it unlocks, then transitive reach, then the authored age gate, then title.
+ * That last key matters beyond determinism — because the comparator never falls back to
+ * input order, the page is immune to the milestones query loading in an arbitrary order.
+ *
+ * "alphabetical" ignores buckets entirely. It's a find-it list, not a do-it list, and
+ * bucketing an A-Z list would make it neither.
+ *
+ * Pure: returns a new array and leaves `milestones` untouched. */
+export function sortMilestonesForDog(
+  milestones: Milestone[],
+  allMilestones: Milestone[],
+  dogId: string,
+  mode: MilestoneSortMode = "next-up",
+): Milestone[] {
+  if (mode === "alphabetical") {
+    return [...milestones].sort((a, b) => a.title.localeCompare(b.title));
+  }
+  const depths = dependencyDepths(allMilestones);
+  const reach = transitiveDependents(allMilestones);
+  const rank = new Map(
+    milestones.map((milestone) => [milestone.id, WORK_STATE_RANK[milestoneWorkState(milestone, allMilestones, dogId)]]),
+  );
+  return [...milestones].sort(
+    (a, b) =>
+      rank.get(a.id)! - rank.get(b.id)! ||
+      (depths.get(a.id) ?? 0) - (depths.get(b.id) ?? 0) ||
+      (reach.get(b.id) ?? 0) - (reach.get(a.id) ?? 0) ||
+      (a.ageGateWeeks ?? Number.MAX_SAFE_INTEGER) - (b.ageGateWeeks ?? Number.MAX_SAFE_INTEGER) ||
+      a.title.localeCompare(b.title),
+  );
 }
 
 /** The stored status: completed once every covered dog is done, locked only while

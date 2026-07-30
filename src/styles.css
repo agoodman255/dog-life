@@ -2699,6 +2699,9 @@ textarea:focus-visible,
 }
 
 @media (max-width: 1100px) {
+  /* .training-header wants this same offset, but its base rule is declared further
+     down the file — at equal specificity the later rule wins, so adding it here would
+     silently lose to `top: 0`. Its override lives next to its own block instead. */
   .search-overlay,
   .dashboard-toolbar,
   .calendar-heading.is-frozen {
@@ -3469,12 +3472,98 @@ textarea:focus-visible,
   gap: 10px;
 }
 
-.training-toolbar {
+/* Everything that decides which milestones you're looking at, frozen in place while you
+   scroll them. Same sticky recipe as .dashboard-toolbar and .calendar-heading.is-frozen:
+   opaque --bg background, z-index 3, and a 134px top offset under 1100px to clear the
+   sticky mobile sidebar (see the shared media query further up this file). */
+.training-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg);
+  display: grid;
+  gap: 7px;
+  padding: 6px 0 8px;
+  border-bottom: 1px solid var(--line);
+  /* .stack's 16px gap would otherwise read as a gap below a bottom border. */
+  margin-bottom: -9px;
+}
+
+/* Clears the sticky mobile sidebar, matching the 134px the other frozen headers use.
+   Must stay after the base rule above: same specificity, so source order decides. */
+@media (max-width: 1100px) {
+  .training-header {
+    top: 134px;
+  }
+}
+
+.training-header-row {
+  min-width: 0;
+}
+
+.training-header-identity {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   flex-wrap: wrap;
-  gap: 10px;
+}
+
+.training-header-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 220px));
+  gap: 8px;
+}
+
+.training-header-filters.category-only {
+  grid-template-columns: minmax(0, 260px);
+}
+
+.training-field {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.training-field-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--teal);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Native rather than the app's custom dropdown panels: one row tall, no open state to
+   manage, and on iOS it opens as a full-height wheel instead of a scroll container
+   nested inside a sticky element inside a scrolling page. */
+.training-select {
+  min-width: 0;
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+/* Shorter than the page's default 40px pills — these now share a frozen header with two
+   other rows, so every pixel of it is permanently spent. */
+.training-header .subtabs button {
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+.training-header .dog-switcher .eyebrow {
+  margin: 0;
+  flex: 0 0 auto;
 }
 
 .training-search-group {
@@ -3622,10 +3711,17 @@ textarea:focus-visible,
 }
 
 @media (max-width: 560px) {
-  .training-toolbar,
-  .dog-switcher {
-    flex-direction: column;
-    align-items: stretch;
+  /* Deliberately not flex-direction: column any more — "Viewing" on its own line above
+     the dog pills cost 24px for a seven-character word. Scoped to .training-header so
+     the Milestones roadmap, which shares DogSwitcher, keeps its stacked layout. */
+  .training-header .dog-switcher {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .training-header-filters {
+    grid-template-columns: 1.4fr 0.85fr 1fr;
   }
 
   .training-search-group {
@@ -3633,13 +3729,20 @@ textarea:focus-visible,
   }
 
   .training-search {
-    padding: 5px 8px;
-    min-height: 32px;
+    padding: 6px 10px;
+    min-height: 34px;
     font-size: 0.85rem;
   }
 
   .training-jump-toggle {
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
+  }
+}
+
+/* Below ~420px the label pushes Quick log onto a second row. */
+@media (max-width: 420px) {
+  .training-quick-log span {
+    display: none;
   }
 }

@@ -314,12 +314,6 @@ function useDataStore() {
     return occurrenceFor(itemId, date)?.state === "completed";
   }
 
-  function logMilestoneSession(milestoneId: string, stepTitle: string, dogId: string) {
-    const target = milestones.items.find((item) => item.id === milestoneId);
-    if (!target) return;
-    milestones.update(milestoneId, { steps: adjustStepSessions(target.steps, [stepTitle], [dogId], 1) });
-  }
-
   function logExposure(itemId: string, entry: ExposureItem["log"][number], status: ExposureItem["status"]) {
     const current = exposureItems.items.find((item) => item.id === itemId);
     if (!current) return;
@@ -1025,7 +1019,6 @@ function useDataStore() {
     unstartTask,
     occurrenceFor,
     isCompletedOn,
-    logMilestoneSession,
     logExposure,
     getInstance,
     ensureInstance,

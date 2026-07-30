@@ -1,4 +1,4 @@
-import { Activity, Check, ChevronDown, ChevronRight, Droplet, Dumbbell, GlassWater, GraduationCap, Lock, Play, Plus, Trophy, Unlock, Utensils, X } from "lucide-react";
+import { Activity, Check, ChevronDown, ChevronRight, Droplet, Dumbbell, GlassWater, GraduationCap, Lock, Plus, Trophy, Unlock, Utensils, X } from "lucide-react";
 import { FormEvent, ReactNode, useState } from "react";
 import { useSession } from "./auth";
 import { useNavigation } from "./navigation";
@@ -618,6 +618,7 @@ export function QuickLogForm({
   initialKind = "potty",
   initialTrainingType,
   initialDogIds,
+  initialStepTitles,
   attachTo,
   editingLog,
   onClose,
@@ -630,6 +631,11 @@ export function QuickLogForm({
   /** Pre-selects which dog(s) the entry is for. Set when arriving from a per-dog
    * recommendation, where the dog is already unambiguous. */
   initialDogIds?: string[];
+  /** Steps to arrive pre-ticked. Set when the entry point already knows which step you
+   * worked — the per-step button on a milestone card — so logging the session you just
+   * did is a rating and a submit rather than re-finding the step you were looking at.
+   * Ignored when editing: a stored entry's ticked steps are its own. */
+  initialStepTitles?: string[];
   /** Present = this entry is being recorded against a scheduled item, so the kind is
    * already decided by that item's category and the strip would only offer ways to
    * contradict it. Purely presentational for now; the stored link lands with the
@@ -657,7 +663,7 @@ export function QuickLogForm({
     const isAlone = editingLog.values.some((value) => value.fieldName === "Training type" && value.value === "Alone time");
     return isAlone ? ALONE_TIME_TRAINING_ID : "";
   });
-  const [stepTitles, setStepTitles] = useState<string[]>(() => editingLog?.advancedStepTitles ?? []);
+  const [stepTitles, setStepTitles] = useState<string[]>(() => editingLog?.advancedStepTitles ?? initialStepTitles ?? []);
   const [rating, setRating] = useState<number | undefined>(editingLog?.rating);
   const [notes, setNotes] = useState(editingLog?.text ?? "");
   // When it actually happened, defaulted to now. Separate from when the row gets
@@ -692,6 +698,8 @@ export function QuickLogForm({
     setKind(next);
     setSelections({});
     setTrainingType("");
+    // Not seeded from `initialStepTitles` the way `resetAll` is: this also clears the
+    // milestone, so keeping them would tick steps of something no longer selected.
     setStepTitles([]);
     setRating(undefined);
     setError("");
@@ -700,7 +708,7 @@ export function QuickLogForm({
   function resetAll() {
     setSelections({});
     setTrainingType(initialTrainingType ?? "");
-    setStepTitles([]);
+    setStepTitles(initialStepTitles ?? []);
     setRating(undefined);
     setNotes("");
     setError("");
@@ -2068,11 +2076,13 @@ export function MilestoneCard({
    * track fits on screen without scrolling past detail nobody asked to see yet. Other
    * callers (the Milestones roadmap) leave this unset and get the old always-open card. */
   defaultCollapsed?: boolean;
-  /** Opens the full Quick log form pre-scoped to this milestone, so logging a rated
-   * session doesn't require expanding the card and hunting for the per-step button. */
-  onQuickLog?: () => void;
+  /** Opens the full Quick log form pre-scoped to this milestone. Called with a step
+   * title from the per-step button, so that step arrives ticked. This replaced a
+   * fire-and-forget +1 that wrote no log entry: step progress is now always backed by a
+   * real session with a rating, a time, notes and an undo. */
+  onQuickLog?: (stepTitle?: string) => void;
 }) {
-  const { milestones, dogs, logMilestoneSession } = useStore();
+  const { milestones, dogs } = useStore();
   const [collapsed, setCollapsed] = useState(defaultCollapsed ?? false);
   const progress = milestoneProgress(milestone, dogId);
   const effectiveStatus = milestoneStatusFor(milestone, milestones.items, dogId);
@@ -2094,7 +2104,7 @@ export function MilestoneCard({
               className="icon-button small"
               type="button"
               aria-label={`Quick log a session for ${milestone.title}`}
-              onClick={onQuickLog}
+              onClick={() => onQuickLog()}
             >
               <GraduationCap size={14} aria-hidden />
             </button>
@@ -2143,14 +2153,14 @@ export function MilestoneCard({
                       {step.successCriteria} · {sessions}/{step.sessionsRequired} sessions
                     </p>
                   </div>
-                  {!done && (
+                  {!done && onQuickLog && (
                     <button
                       className="icon-button small"
                       type="button"
                       aria-label={`Log a session for ${step.title} for ${dogName}`}
-                      onClick={() => logMilestoneSession(milestone.id, step.title, dogId)}
+                      onClick={() => onQuickLog(step.title)}
                     >
-                      <Play size={14} aria-hidden />
+                      <GraduationCap size={14} aria-hidden />
                     </button>
                   )}
                 </div>
