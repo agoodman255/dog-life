@@ -2994,7 +2994,7 @@ textarea:focus-visible,
    into a scrollable row. */
 .quick-log-kinds {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 6px;
 }
 
@@ -3128,7 +3128,7 @@ textarea:focus-visible,
 /* Dashboard Log section: today's tallies, then the feed. */
 .quick-log-tallies {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 6px;
   margin-bottom: 12px;
 }

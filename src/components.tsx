@@ -1,4 +1,4 @@
-import { Activity, Check, ChevronDown, ChevronRight, Droplet, Dumbbell, GlassWater, GraduationCap, Lock, Plus, Trophy, Unlock, Utensils, X } from "lucide-react";
+import { Activity, Check, ChevronDown, ChevronRight, Droplet, Dumbbell, GlassWater, GraduationCap, HeartPulse, Lock, Plus, Trophy, Unlock, Utensils, X } from "lucide-react";
 import { FormEvent, ReactNode, useState } from "react";
 import { useSession } from "./auth";
 import { useNavigation } from "./navigation";
@@ -602,6 +602,7 @@ export const QUICK_LOG_ICONS: Record<QuickLogKind, typeof Droplet> = {
   training: GraduationCap,
   food: Utensils,
   water: GlassWater,
+  health: HeartPulse,
 };
 
 /** The Dashboard's Quick log. Every kind follows the same four beats — pick the one
@@ -619,6 +620,7 @@ export function QuickLogForm({
   initialTrainingType,
   initialDogIds,
   initialStepTitles,
+  initialSelections,
   attachTo,
   editingLog,
   onClose,
@@ -631,6 +633,11 @@ export function QuickLogForm({
   /** Pre-selects which dog(s) the entry is for. Set when arriving from a per-dog
    * recommendation, where the dog is already unambiguous. */
   initialDogIds?: string[];
+  /** Pre-fills the primary selection (and any sub-fields) for a non-training kind.
+   * Set when arriving from a spot that already knows what's being logged — the
+   * Health page's per-dog "Log weight" button opens straight to `{ Type: "weight" }`
+   * instead of making you re-pick a chip you just tapped your way to. */
+  initialSelections?: Record<string, string | number>;
   /** Steps to arrive pre-ticked. Set when the entry point already knows which step you
    * worked — the per-step button on a milestone card — so logging the session you just
    * did is a rating and a submit rather than re-finding the step you were looking at.
@@ -655,7 +662,7 @@ export function QuickLogForm({
   const [selections, setSelections] = useState<Record<string, string | number | null>>(() =>
     editingLog
       ? Object.fromEntries(editingLog.values.filter((value) => value.fieldName !== "Training type").map((value) => [value.fieldName, value.value]))
-      : {},
+      : (initialSelections ?? {}),
   );
   const [trainingType, setTrainingType] = useState(() => {
     if (!editingLog) return initialTrainingType ?? "";
@@ -753,7 +760,7 @@ export function QuickLogForm({
     if (kind === "training" && !trainingType) return setError("Pick what you worked on.");
     if (kind !== "training" && !selections[spec.primary.name]) return setError(`Answer "${spec.primary.label}" first.`);
     if (isAloneTime && !selections.Duration) return setError("Enter how long they were alone.");
-    if (!rating) return setError("Give it a 1-5 score.");
+    if (!spec.skipRating && !rating) return setError("Give it a 1-5 score.");
 
     setSubmitting(true);
     setError("");
@@ -773,7 +780,12 @@ export function QuickLogForm({
       if (kind === "training" && field === spec.primary) return;
       const value = selections[field.name];
       if (value === null || value === undefined || value === "") return;
-      values.push({ fieldName: field.name, dataType: field.input === "number" ? "number" : "text", unit: field.unit, value });
+      values.push({
+        fieldName: field.name,
+        dataType: field.input === "number" ? "number" : field.input === "date" ? "date" : "text",
+        unit: field.unit,
+        value,
+      });
     });
 
     const input = {
@@ -1062,69 +1074,86 @@ export function QuickLogForm({
         </div>
       )}
 
-      {visibleFields.map((field) =>
-        field.input === "choice" ? (
+      {visibleFields.map((field) => {
+        if (field.input === "choice") {
+          return (
+            <div className="form-field" key={field.name}>
+              {field.label}
+              <div className="subtabs" role="group" aria-label={field.label}>
+                {field.options?.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={selections[field.name] === option.value ? "active" : ""}
+                    onClick={() => setField(field.name, option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        }
+        if (field.input === "number") {
+          return (
+            <div className="form-field" key={field.name}>
+              {field.label}
+              {field.unit ? ` (${field.unit})` : ""}
+              <div className="quick-log-number">
+                {field.presets?.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    className={selections[field.name] === preset ? "active" : ""}
+                    onClick={() => setField(field.name, preset)}
+                  >
+                    {preset}
+                  </button>
+                ))}
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  placeholder={field.unit ?? "Amount"}
+                  value={typeof selections[field.name] === "number" ? String(selections[field.name]) : ""}
+                  onChange={(event) =>
+                    setSelections((prev) => ({ ...prev, [field.name]: event.target.value === "" ? null : Number(event.target.value) }))
+                  }
+                />
+              </div>
+            </div>
+          );
+        }
+        return (
           <div className="form-field" key={field.name}>
             {field.label}
-            <div className="subtabs" role="group" aria-label={field.label}>
-              {field.options?.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={selections[field.name] === option.value ? "active" : ""}
-                  onClick={() => setField(field.name, option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+            <input
+              type={field.input === "date" ? "date" : "text"}
+              value={typeof selections[field.name] === "string" ? (selections[field.name] as string) : ""}
+              onChange={(event) => setSelections((prev) => ({ ...prev, [field.name]: event.target.value === "" ? null : event.target.value }))}
+            />
           </div>
-        ) : (
-          <div className="form-field" key={field.name}>
-            {field.label}
-            {field.unit ? ` (${field.unit})` : ""}
-            <div className="quick-log-number">
-              {field.presets?.map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  className={selections[field.name] === preset ? "active" : ""}
-                  onClick={() => setField(field.name, preset)}
-                >
-                  {preset}
-                </button>
-              ))}
-              <input
-                type="number"
-                min={0}
-                step="any"
-                placeholder={field.unit ?? "Amount"}
-                value={typeof selections[field.name] === "number" ? String(selections[field.name]) : ""}
-                onChange={(event) =>
-                  setSelections((prev) => ({ ...prev, [field.name]: event.target.value === "" ? null : Number(event.target.value) }))
-                }
-              />
-            </div>
-          </div>
-        ),
-      )}
+        );
+      })}
 
-      <div className="form-field">
-        {spec.ratingLabel}
-        <div className="rating-row" aria-label={spec.ratingLabel}>
-          {[1, 2, 3, 4, 5].map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={rating === value ? "selected" : ""}
-              aria-pressed={rating === value}
-              onClick={() => setRating(rating === value ? undefined : value)}
-            >
-              {value}
-            </button>
-          ))}
+      {!spec.skipRating && (
+        <div className="form-field">
+          {spec.ratingLabel}
+          <div className="rating-row" aria-label={spec.ratingLabel}>
+            {[1, 2, 3, 4, 5].map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={rating === value ? "selected" : ""}
+                aria-pressed={rating === value}
+                onClick={() => setRating(rating === value ? undefined : value)}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="form-field">
         Notes

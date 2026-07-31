@@ -101,7 +101,7 @@ export const ITEM_INTENT_PRESETS: {
 // QuickLogForm renders them generically and the Dashboard's Log section can summarize
 // any entry without knowing which kind it is.
 
-export type QuickLogFieldInput = "choice" | "number";
+export type QuickLogFieldInput = "choice" | "number" | "text" | "date";
 
 export type QuickLogField = {
   /** Also the `fieldName` written into the log's `values`, so the ingest pass reads
@@ -129,6 +129,10 @@ export type QuickLogSpec = {
   fields: QuickLogField[];
   ratingLabel: string;
   notesPlaceholder: string;
+  /** True = skip the 1-5 "how did it go" prompt and don't require it to submit. A
+   * vet visit or a weight check isn't a subjective outcome the way a potty break or
+   * a training session is — forcing a rating on it would just be a tap nobody means. */
+  skipRating?: boolean;
 };
 
 export const QUICK_LOG_SPECS: QuickLogSpec[] = [
@@ -303,6 +307,38 @@ export const QUICK_LOG_SPECS: QuickLogSpec[] = [
     ratingLabel: "How's their hydration?",
     notesPlaceholder: "Anything unusual — gulping, panting, dry gums…",
   },
+  {
+    // Replaces the old per-item, freely-renamable `logFields` for these five
+    // categories (see `CATEGORY_QUICK_LOG_KIND` below) with one fixed spec, so
+    // "Weight" is always exactly that key rather than whatever a user's edit box
+    // happened to say — the growth chart sync in `store.tsx` depends on the name
+    // never drifting.
+    kind: "health",
+    label: "Health",
+    primary: {
+      name: "Type",
+      label: "What kind of record?",
+      input: "choice",
+      options: [
+        { value: "weight", label: "Weight check" },
+        { value: "vet", label: "Vet visit" },
+        { value: "vaccine", label: "Vaccine" },
+        { value: "medication", label: "Medication" },
+        { value: "grooming", label: "Grooming" },
+      ],
+    },
+    fields: [
+      { name: "Weight", label: "Weight", input: "number", unit: "lbs", showWhen: { field: "Type", values: ["weight", "vet", "grooming"] } },
+      { name: "Temperature", label: "Temperature", input: "number", unit: "°F", showWhen: { field: "Type", values: ["vet"] } },
+      { name: "Vaccine name", label: "Vaccine name", input: "text", showWhen: { field: "Type", values: ["vaccine"] } },
+      { name: "Dose", label: "Dose", input: "text", showWhen: { field: "Type", values: ["medication"] } },
+      { name: "Next due", label: "Next due date", input: "date", showWhen: { field: "Type", values: ["vaccine", "medication"] } },
+      { name: "Cost", label: "Cost", input: "number", unit: "$", showWhen: { field: "Type", values: ["vet", "vaccine", "medication", "grooming"] } },
+    ],
+    ratingLabel: "",
+    notesPlaceholder: "Symptoms, what the vet said, anything worth remembering…",
+    skipRating: true,
+  },
 ];
 
 export function quickLogSpec(kind: QuickLogKind): QuickLogSpec {
@@ -334,14 +370,21 @@ export function quickLogSpec(kind: QuickLogKind): QuickLogSpec {
  *   mini shouldn't force you to name a milestone before you can record it. (This is
  *   a different call than `relationship`, which — despite also being training-
  *   adjacent — is deliberately included for `play`, not `training`.)
- * - health / vet / vaccine / medication / grooming keep `DEFAULT_LOG_FIELDS` below —
- *   weight, temperature, cost, next due have no chip-shaped equivalent. */
+ * - health / vet / vaccine / medication / grooming all map to the single `health`
+ *   kind (2026-07-30) — weight, temperature, cost, dose, next-due each show up as a
+ *   sub-field gated on which record type was picked, the same `showWhen` mechanism
+ *   potty uses for pee color. */
 export const CATEGORY_QUICK_LOG_KIND: Partial<Record<Category, QuickLogKind[]>> = {
   potty: ["potty"],
   meals: ["food", "water"],
   training: ["training"],
   exercise: ["play"],
   relationship: ["play"],
+  health: ["health"],
+  vet: ["health"],
+  vaccine: ["health"],
+  medication: ["health"],
+  grooming: ["health"],
 };
 
 export function quickLogKindsForCategory(category: Category): QuickLogKind[] {
@@ -683,7 +726,8 @@ export function quickLogFieldVisible(field: QuickLogField, values: Record<string
  * option labels back off the spec so the feed says "Poo · Inside (accident)" rather
  * than echoing the raw stored values. */
 export function summarizeQuickLog(log: Pick<ItemLog, "quickLogKind" | "values">): string {
-  if (!log.quickLogKind) return log.values.map((value) => `${value.fieldName}: ${value.value}`).join(" · ");
+  if (!log.quickLogKind)
+    return log.values.map((value) => `${value.fieldName}: ${value.value}${value.unit ? ` ${value.unit}` : ""}`).join(" · ");
   const spec = quickLogSpec(log.quickLogKind);
   const allFields = [spec.primary, ...spec.fields];
   return log.values
@@ -769,32 +813,11 @@ export function quickLogsOn(logs: ItemLog[], dateKey: string): ItemLog[] {
  * without an entry here logs free text only, which is the honest default: most
  * categories have no obvious numbers worth prompting for. */
 export const DEFAULT_LOG_FIELDS: Partial<Record<Category, LogFieldDef[]>> = {
-  vet: [
-    { fieldName: "Weight", dataType: "number", unit: "lbs" },
-    { fieldName: "Temperature", dataType: "number", unit: "°F" },
-    { fieldName: "Cost", dataType: "number", unit: "$" },
-    { fieldName: "Next due", dataType: "date" },
-  ],
-  vaccine: [
-    { fieldName: "Vaccine name", dataType: "text" },
-    { fieldName: "Next due", dataType: "date" },
-    { fieldName: "Cost", dataType: "number", unit: "$" },
-  ],
-  medication: [
-    { fieldName: "Dose", dataType: "text" },
-    { fieldName: "Cost", dataType: "number", unit: "$" },
-  ],
-  grooming: [
-    { fieldName: "Weight", dataType: "number", unit: "lbs" },
-    { fieldName: "Cost", dataType: "number", unit: "$" },
-  ],
-  health: [
-    { fieldName: "Weight", dataType: "number", unit: "lbs" },
-    { fieldName: "Cost", dataType: "number", unit: "$" },
-  ],
   // training and meals are gone: both categories now log through the Quick log spec,
   // which already asks for duration/distractions and amount-eaten in a better shape.
-  // `alone-time` stays — it's what `aloneTimeMinutes` reads to write the readiness row.
+  // health / vet / vaccine / medication / grooming joined them on 2026-07-30 — see
+  // the `health` entry in `QUICK_LOG_SPECS`. `alone-time` stays — it's what
+  // `aloneTimeMinutes` reads to write the readiness row.
   "alone-time": [{ fieldName: "Duration", dataType: "number", unit: "min" }],
 };
 

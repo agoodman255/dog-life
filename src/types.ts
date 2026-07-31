@@ -28,7 +28,10 @@ export type Dog = {
   color: string;
   weight: number;
   expectedAdultWeight: number;
-  weightHistory: Array<{ date: string; pounds: number; notes: string }>;
+  /** `logId` links a point back to the Health quick log entry that produced it
+   * (absent on the seed value written at dog creation) — so editing that entry
+   * corrects this point in place instead of appending a second one. */
+  weightHistory: Array<{ date: string; pounds: number; notes: string; logId?: string }>;
   microchip: string;
   photo: string;
   veterinarian: string;
@@ -59,9 +62,9 @@ export type Person = {
   color: string;
 };
 
-/** One vocabulary across the app. Also drives the default log fields an item
- * offers (see DEFAULT_LOG_FIELDS in utils.ts) — picking "vet" pre-loads weight and
- * temperature rather than making you invent the fields yourself. */
+/** One vocabulary across the app. Also decides which Quick log kind an item logs
+ * through (see CATEGORY_QUICK_LOG_KIND in utils.ts) — picking "vet" gets you the
+ * `health` spec's weight/temperature/cost fields rather than inventing your own. */
 export type Category =
   | "potty"
   | "meals"
@@ -137,14 +140,15 @@ export type LogFieldValue = {
   value: number | string | null;
 };
 
-/** The five things that get logged constantly during a day, independent of anything
- * on the calendar. A Quick log entry is one of these; an item-attached log is none of
- * them. Distinct from `Category` on purpose — this is the Quick log taxonomy the
- * Dashboard's Log section groups by, not the calendar's. Several categories do map
- * into it (a calendar item's category can decide which of these it satisfies when
- * logged) — see `CATEGORY_QUICK_LOG_KIND` in `utils.ts` for exactly which, and why
- * some map to more than one kind. */
-export type QuickLogKind = "potty" | "play" | "training" | "food" | "water";
+/** The things that get logged constantly, independent of anything on the calendar.
+ * A Quick log entry is one of these; an item-attached log is none of them. Distinct
+ * from `Category` on purpose — this is the Quick log taxonomy the Dashboard's Log
+ * section groups by, not the calendar's. Several categories do map into it (a
+ * calendar item's category can decide which of these it satisfies when logged) —
+ * see `CATEGORY_QUICK_LOG_KIND` in `utils.ts` for exactly which, and why some map to
+ * more than one kind. `health` covers weight/vet/vaccine/medication/grooming — one
+ * structured spec instead of each item inventing its own free-text log fields. */
+export type QuickLogKind = "potty" | "play" | "training" | "food" | "water" | "health";
 
 /** One timestamped log. Usually against an item (weight over time, symptoms across
  * days) but a Quick log has no item behind it — it's recorded against the dog(s)
