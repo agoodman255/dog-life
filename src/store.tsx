@@ -35,6 +35,7 @@ import {
   ItemLog,
   ItemOccurrence,
   JournalEntry,
+  LogFieldValue,
   Meal,
   Milestone,
   Person,
@@ -551,8 +552,43 @@ function useDataStore() {
 
   // --- Logging --------------------------------------------------------------
 
+  /** A logged "Weight" field — from the Health quick log or (rarely) a custom
+   * item's own log fields — is also a growth-chart data point, not just log history,
+   * so it's mirrored onto every tagged dog's `weightHistory` here rather than leaving
+   * the Health page's chart fed by a separate entry point nothing actually calls.
+   *
+   * Keyed by `logId` rather than always appending: editing a weight entry (fixing a
+   * typo, correcting the value) should move that same point, not leave the old one
+   * behind and add a second. Also drops the point for any dog the edit un-tagged, or
+   * whose Weight field got cleared — a stale entry from before the edit is worse
+   * than none. Every dog is checked, not just the entry's current `dogIds`, since a
+   * dog dropped by the edit still has a stale entry, but is no longer in that list. */
+  async function syncWeightFromLog(logId: string, values: LogFieldValue[], dogIds: string[], notes: string, happenedAt: string) {
+    const weightValue = values.find((value) => value.fieldName === "Weight" && typeof value.value === "number");
+    const date = happenedAt.slice(0, 10);
+    const pounds = weightValue?.value as number | undefined;
+
+    for (const dog of dogs.items) {
+      const existingIndex = dog.weightHistory.findIndex((entry) => entry.logId === logId);
+      if (dogIds.includes(dog.id) && pounds !== undefined) {
+        const point = { date, pounds, notes, logId };
+        const weightHistory =
+          existingIndex >= 0
+            ? dog.weightHistory.map((entry, index) => (index === existingIndex ? point : entry))
+            : [...dog.weightHistory, point];
+        await dogs.update(dog.id, { weight: pounds, weightHistory });
+      } else if (existingIndex >= 0) {
+        await dogs.update(dog.id, { weightHistory: dog.weightHistory.filter((_, index) => index !== existingIndex) });
+      }
+    }
+  }
+
   async function addItemLog(entry: Omit<ItemLog, "id" | "loggedAt">) {
-    return itemLogs.add({ ...entry, id: makeId("log"), loggedAt: new Date().toISOString() });
+    const loggedAt = new Date().toISOString();
+    const id = makeId("log");
+    const ok = await itemLogs.add({ ...entry, id, loggedAt });
+    if (ok) await syncWeightFromLog(id, entry.values, entry.dogIds, entry.text, entry.happenedAt ?? loggedAt);
+    return ok;
   }
 
   /** Rolls a Quick log's milestone progress back — each step it advanced drops one
@@ -829,6 +865,7 @@ function useDataStore() {
     if (!ok) return null;
 
     await satisfyOccurrence(log);
+    await syncWeightFromLog(log.id, entry.values, entry.dogIds, entry.notes, log.happenedAt ?? log.loggedAt);
 
     // Alone time is a training type like any other in the Quick log, but it also
     // feeds `computeDogAloneTimeReadiness`, which only reads `alone_time_logs`. Writing
@@ -890,6 +927,7 @@ function useDataStore() {
     const slotChanged = existing.itemId !== updated.itemId || existing.occurrenceDate !== updated.occurrenceDate;
     if (slotChanged) await releaseSatisfiedOccurrence(existing);
     await satisfyOccurrence(updated);
+    await syncWeightFromLog(logId, entry.values, entry.dogIds, entry.notes, updated.happenedAt ?? updated.loggedAt);
 
     if (entry.aloneTimeMinutes && entry.aloneTimeMinutes > 0) {
       await aloneTimeLogs.add({

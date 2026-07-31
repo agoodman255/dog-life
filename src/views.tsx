@@ -2375,6 +2375,7 @@ function carryForward(values: (number | null)[]): number[] {
 export function HealthView() {
   const { dogs, items, itemLogs, milestones, people, aloneTimeLogs } = useStore();
   const [modal, setModal] = useState<"new" | Item | null>(null);
+  const [healthLog, setHealthLog] = useState<{ dogIds?: string[]; selections?: Record<string, string | number> } | null>(null);
   const dogName = (id: string) => dogs.items.find((dog) => dog.id === id)?.name ?? id;
   const sortedEvents = items.items
     .filter(isHealthItem)
@@ -2388,9 +2389,14 @@ export function HealthView() {
             <p className="eyebrow">Health</p>
             <h2>Growth charts and upcoming care</h2>
           </div>
-          <button className="primary-button" type="button" onClick={() => setModal("new")}>
-            <Plus size={16} aria-hidden /> Add health record
-          </button>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="text-button" type="button" onClick={() => setHealthLog({})}>
+              <HeartPulse size={16} aria-hidden /> Log health record
+            </button>
+            <button className="primary-button" type="button" onClick={() => setModal("new")}>
+              <Plus size={16} aria-hidden /> Add health record
+            </button>
+          </div>
         </div>
         <div className="growth-grid">
           {dogs.items.map((dog) => (
@@ -2399,6 +2405,13 @@ export function HealthView() {
               <p className="small">{ageLabel(dog.birthday)}</p>
               <Sparkline values={dog.weightHistory.map((entry) => entry.pounds)} />
               <p className="small">{dog.weightHistory[dog.weightHistory.length - 1]?.pounds ?? dog.weight} lb latest</p>
+              <button
+                className="text-button"
+                type="button"
+                onClick={() => setHealthLog({ dogIds: [dog.id], selections: { Type: "weight" } })}
+              >
+                <Pencil size={14} aria-hidden /> Log weight
+              </button>
             </article>
           ))}
         </div>
@@ -2426,9 +2439,7 @@ export function HealthView() {
                 {logs.map((log) => (
                   <small key={log.id} className="health-log-line">
                     {new Date(log.loggedAt).toLocaleDateString()}
-                    {log.values.length > 0
-                      ? ` — ${log.values.map((value) => `${value.fieldName}: ${value.value}${value.unit ? ` ${value.unit}` : ""}`).join(", ")}`
-                      : ""}
+                    {log.values.length > 0 ? ` — ${summarizeQuickLog(log)}` : ""}
                     {log.text ? ` — ${log.text}` : ""}
                   </small>
                 ))}
@@ -2462,6 +2473,17 @@ export function HealthView() {
                 ? items.add(itemFormValuesToItem(values, makeId("item")))
                 : items.update(modal.id, itemFormValuesToItem(values, modal.id))
             }
+          />
+        </Modal>
+      )}
+      {healthLog && (
+        <Modal title="Log health record" onClose={() => setHealthLog(null)}>
+          <QuickLogForm
+            date={toDateKey(new Date())}
+            initialKind="health"
+            initialDogIds={healthLog.dogIds}
+            initialSelections={healthLog.selections}
+            onClose={() => setHealthLog(null)}
           />
         </Modal>
       )}
