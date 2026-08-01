@@ -1,5 +1,5 @@
 import { Activity, Check, ChevronDown, ChevronRight, Droplet, Dumbbell, GlassWater, GraduationCap, HeartPulse, Lock, Plus, Trophy, Unlock, Utensils, X } from "lucide-react";
-import { FormEvent, ReactNode, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "./auth";
 import { useNavigation } from "./navigation";
 import { makeId, useStore } from "./store";
@@ -19,14 +19,19 @@ import {
   QuickLogResult,
 } from "./types";
 import { MilestonePicker } from "./milestonePicker";
+import { HealthCatalogPicker } from "./healthCatalogPicker";
 import { formatInZone, isoToZonedParts, searchTimezones, zonedTimeToUtcIso, zoneLabel } from "./timezones";
 
 import {
   ALONE_TIME_TRAINING_ID,
   buildDefaultChecklist,
+  combinedHealthCatalog,
+  computeNextDue,
   emptyLogValues,
   formatMinutes,
   groupChecklistByDog,
+  healthBrandSuggestions,
+  healthCatalogEntry,
   itemDurationMinutes,
   itemStateLabels,
   milestoneProgress,
@@ -655,8 +660,9 @@ export function QuickLogForm({
   editingLog?: ItemLog;
   onClose: () => void;
 }) {
-  const { dogs, milestones, items, itemOccurrences, addQuickLog, editQuickLog } = useStore();
+  const { dogs, milestones, items, itemOccurrences, itemLogs, healthCatalogEntries, addQuickLog, editQuickLog } = useStore();
   const { timezone } = useNavigation();
+  const healthCatalog = useMemo(() => combinedHealthCatalog(healthCatalogEntries.items), [healthCatalogEntries.items]);
   const [kind, setKind] = useState<QuickLogKind>(editingLog?.quickLogKind ?? initialKind);
   const [dogIds, setDogIds] = useState<string[]>(() => editingLog?.dogIds ?? initialDogIds ?? []);
   const [selections, setSelections] = useState<Record<string, string | number | null>>(() =>
@@ -700,6 +706,54 @@ export function QuickLogForm({
     dogIds.length === 0
       ? milestones.items
       : milestones.items.filter((entry) => entry.dogIds.length === 0 || entry.dogIds.some((id) => dogIds.includes(id)));
+
+  // The picked "Vaccine"/"Medication" catalog entry, whichever field happens to be
+  // in play for the current Type. Drives both auto-fill effects below.
+  const catalogEntryId =
+    kind === "health"
+      ? ((typeof selections.Vaccine === "string" && selections.Vaccine) ||
+          (typeof selections.Medication === "string" && selections.Medication) ||
+          undefined)
+      : undefined;
+  const dogIdsKey = dogIds.join(",");
+
+  // Brand auto-fill: suggest the most recently used brand for this catalog entry,
+  // but only into an empty field — never overwrite something the user typed.
+  useEffect(() => {
+    if (kind !== "health" || !catalogEntryId) return;
+    setSelections((prev) => {
+      if (prev.Brand) return prev;
+      const suggestion = healthBrandSuggestions(itemLogs.items, catalogEntryId, dogIds)[0];
+      return suggestion ? { ...prev, Brand: suggestion } : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, catalogEntryId, dogIdsKey]);
+
+  // Next-due auto-fill: project forward from each selected dog's effective
+  // interval for this catalog entry, using the earliest resulting date when dogs
+  // have different overrides (reminds sooner rather than later). Tracked via a ref
+  // so a manually-typed date is never clobbered — only ever overwrites empty, or
+  // its own last-computed suggestion.
+  const lastAutoNextDueRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (kind !== "health" || !catalogEntryId) return;
+    const entry = healthCatalogEntry(healthCatalog, catalogEntryId);
+    if (!entry) return;
+    const dueDates = dogIds
+      .map((id) => dogs.items.find((candidate) => candidate.id === id))
+      .filter((candidate): candidate is Dog => !!candidate)
+      .map((dog) => computeNextDue(date, dog, entry))
+      .filter((due): due is string => !!due)
+      .sort();
+    const earliest = dueDates[0];
+    setSelections((prev) => {
+      const current = prev["Next due"];
+      if (current && current !== lastAutoNextDueRef.current) return prev; // user typed their own
+      lastAutoNextDueRef.current = earliest ?? null;
+      return earliest && earliest !== current ? { ...prev, "Next due": earliest } : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, catalogEntryId, dogIdsKey, date, healthCatalog]);
 
   function resetKind(next: QuickLogKind) {
     setKind(next);
@@ -1121,6 +1175,44 @@ export function QuickLogForm({
                   }
                 />
               </div>
+            </div>
+          );
+        }
+        if (field.input === "catalog") {
+          return (
+            <div className="form-field" key={field.name}>
+              {field.label}
+              <HealthCatalogPicker
+                entries={healthCatalog.filter((entry) => entry.kind === field.catalogKind)}
+                value={typeof selections[field.name] === "string" ? (selections[field.name] as string) : ""}
+                onChange={(id) => setField(field.name, id)}
+                onAddCustom={async (name) => {
+                  const id = makeId("catalog");
+                  await healthCatalogEntries.add({ id, kind: field.catalogKind!, name, defaultIntervalDays: null, custom: true });
+                  return id;
+                }}
+              />
+            </div>
+          );
+        }
+        if (field.name === "Brand") {
+          const suggestions = catalogEntryId ? healthBrandSuggestions(itemLogs.items, catalogEntryId, dogIds) : [];
+          return (
+            <div className="form-field" key={field.name}>
+              {field.label}
+              <input
+                type="text"
+                list="health-brand-suggestions"
+                value={typeof selections[field.name] === "string" ? (selections[field.name] as string) : ""}
+                onChange={(event) =>
+                  setSelections((prev) => ({ ...prev, [field.name]: event.target.value === "" ? null : event.target.value }))
+                }
+              />
+              <datalist id="health-brand-suggestions">
+                {suggestions.map((brand) => (
+                  <option key={brand} value={brand} />
+                ))}
+              </datalist>
             </div>
           );
         }
@@ -2297,8 +2389,11 @@ export function DogProfile({ dog, onEdit, onDelete }: { dog: Dog; onEdit?: (dog:
           <div>
             <strong>Weight history</strong>
             <ul>
-              {dog.weightHistory.map((entry) => (
-                <li key={entry.date}>
+              {dog.weightHistory.map((entry, index) => (
+                // logId is unique when present; older entries (and the one seeded
+                // at dog creation) don't have one, and a dog can have more than one
+                // weigh-in on the same day, so `entry.date` alone isn't unique either.
+                <li key={entry.logId ?? index}>
                   {entry.date}: {entry.pounds} lb
                 </li>
               ))}

@@ -3444,6 +3444,17 @@ textarea:focus-visible,
   color: var(--muted);
 }
 
+.training-picker-add-new {
+  color: var(--teal);
+}
+
+.training-picker-add-new .training-picker-option-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--teal);
+}
+
 .training-picker-option.active .training-picker-meta {
   color: rgba(249, 244, 233, 0.8);
 }

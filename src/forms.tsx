@@ -11,8 +11,10 @@ import {
   DogFormation,
   DogStatus,
   ExposureItem,
+  HealthCatalogEntry,
   Item,
   ItemIntent,
+  ItemLog,
   JournalEntry,
   LogFieldDataType,
   LogFieldDef,
@@ -29,6 +31,7 @@ import { locations } from "./data";
 import { MilestonePicker } from "./milestonePicker";
 import { makeId } from "./store";
 import {
+  activeCatalogEntriesForDog,
   computeEventCoverageNeeded,
   computeEventTimes,
   defaultLogFieldsFor,
@@ -225,6 +228,10 @@ const dogSchema = z.object({
   medicalHistory: z.string(),
   allergies: z.string(),
   medicationEntries: z.string(),
+  /** Keyed by HealthCatalogEntry.id — only entries this dog has actually logged a
+   * dose of get a row in the UI (see `activeCatalogEntriesForDog`), and only rows
+   * changed from the catalog's own default end up in here at all. */
+  healthIntervalOverrides: z.record(z.string(), z.number()),
   energy: z.number().min(0).max(100),
   confidence: z.number().min(0).max(100),
   fearfulness: z.number().min(0).max(100),
@@ -259,6 +266,7 @@ function dogDefaults(dog?: Dog): DogFormValues {
     medicalHistory: arrayToCsv(dog?.medicalHistory ?? []),
     allergies: arrayToCsv(dog?.allergies ?? []),
     medicationEntries: medicationEntriesToLines(dog?.medicationEntries ?? []),
+    healthIntervalOverrides: dog?.healthIntervalOverrides ?? {},
     energy: dog?.energy ?? 50,
     confidence: dog?.confidence ?? 50,
     fearfulness: dog?.fearfulness ?? 20,
@@ -293,6 +301,7 @@ export function dogFormValuesToDog(values: DogFormValues, base: Pick<Dog, "id" |
     medicalHistory: csvToArray(values.medicalHistory),
     allergies: csvToArray(values.allergies),
     medicationEntries: parseMedicationLines(values.medicationEntries),
+    healthIntervalOverrides: values.healthIntervalOverrides,
     energy: values.energy,
     confidence: values.confidence,
     fearfulness: values.fearfulness,
@@ -308,12 +317,43 @@ export function dogFormValuesToDog(values: DogFormValues, base: Pick<Dog, "id" |
   };
 }
 
-export function DogForm({ initial, onSubmit, onCancel }: { initial?: Dog; onSubmit: (values: DogFormValues) => void; onCancel: () => void }) {
+export function DogForm({
+  initial,
+  logs,
+  catalog,
+  onSubmit,
+  onCancel,
+}: {
+  initial?: Dog;
+  /** Only used to figure out which vaccines/medications this dog has actually
+   * logged a dose of, so the interval-override list below shows real entries
+   * instead of all 12+ catalog rows whether or not this dog's ever had them. Empty
+   * for a not-yet-created dog — nothing to override before anything's logged. */
+  logs: ItemLog[];
+  catalog: HealthCatalogEntry[];
+  onSubmit: (values: DogFormValues) => void;
+  onCancel: () => void;
+}) {
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<DogFormValues>({ resolver: zodResolver(dogSchema), defaultValues: dogDefaults(initial) });
+  const overrides = watch("healthIntervalOverrides");
+  const activeEntries = initial ? activeCatalogEntriesForDog(logs, initial.id, catalog) : [];
+
+  function setOverride(entryId: string, defaultDays: number | null, raw: string) {
+    const next = { ...overrides };
+    const parsed = raw === "" ? NaN : Number(raw);
+    if (raw === "" || Number.isNaN(parsed) || parsed === defaultDays) {
+      delete next[entryId];
+    } else {
+      next[entryId] = parsed;
+    }
+    setValue("healthIntervalOverrides", next);
+  }
 
   return (
     <form className="entity-form" onSubmit={handleSubmit(onSubmit)}>
@@ -331,6 +371,7 @@ export function DogForm({ initial, onSubmit, onCancel }: { initial?: Dog; onSubm
         <label>
           Birthday
           <input type="date" {...register("birthday")} />
+          {errors.birthday && <small className="form-error">{errors.birthday.message}</small>}
         </label>
         <label>
           Sex
@@ -389,6 +430,27 @@ export function DogForm({ initial, onSubmit, onCancel }: { initial?: Dog; onSubm
         Medications, supplements & injections (one per line: name | medication/supplement/injection/preventive | dosage | frequency | notes)
         <textarea rows={4} {...register("medicationEntries")} placeholder="Gabapentin | medication | 1 pill | 2x/day with meals | " />
       </label>
+      {activeEntries.length > 0 && (
+        <fieldset className="capability-detail">
+          <legend>Reminder schedule</legend>
+          <p className="small">
+            How often {initial?.name ?? "this dog"} actually gets each of these — only shown for what's been logged before.
+            Leave a field alone to keep using the standard interval.
+          </p>
+          {activeEntries.map((entry) => (
+            <div className="form-field" key={entry.id}>
+              {entry.name}
+              <input
+                type="number"
+                min={1}
+                placeholder={entry.defaultIntervalDays === null ? "No standard interval" : `${entry.defaultIntervalDays} days`}
+                value={overrides[entry.id] ?? ""}
+                onChange={(event) => setOverride(entry.id, entry.defaultIntervalDays, event.target.value)}
+              />
+            </div>
+          ))}
+        </fieldset>
+      )}
       <div className="form-grid">
         <label>
           Medical history (comma separated)

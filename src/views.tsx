@@ -67,6 +67,7 @@ import {
   ExposureCategory,
   ExposureItem,
   FeedbackLoopRule,
+  HealthCatalogEntry,
   InboxRequest,
   InventoryItem,
   Item,
@@ -85,8 +86,11 @@ import {
   ALONE_TIME_TRAINING_ID,
   QUICK_LOG_SPECS,
   accidentTrend,
+  activeCatalogEntriesForDog,
   buildTodayTimeline,
+  combinedHealthCatalog,
   dateKeysBetween,
+  doseHistory,
   fieldDistribution,
   formatDuration,
   isAccident,
@@ -258,7 +262,7 @@ function QuickLogRow({
    * distinguishes "the 7:15 break happened" from "they also went out at 10:40". */
   unscheduled?: boolean;
 }) {
-  const { deleteQuickLog, milestones } = useStore();
+  const { deleteQuickLog, milestones, healthCatalogEntries } = useStore();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -272,7 +276,7 @@ function QuickLogRow({
   // in whatever zone the browser happens to be in. Both mattered once this list started
   // sharing an ordering with scheduled slots.
   const time = formatInZone(log.happenedAt ?? log.loggedAt, timezone);
-  const summary = summarizeQuickLog(log);
+  const summary = summarizeQuickLog(log, combinedHealthCatalog(healthCatalogEntries.items));
   const milestoneTitle = milestones.items.find((entry) => entry.id === log.milestoneId)?.title;
   const rollback = log.advancedStepTitles ?? [];
 
@@ -1792,7 +1796,7 @@ function CalendarMilestonesPanel({
 }
 
 export function ProfileView() {
-  const { dogs, people } = useStore();
+  const { dogs, people, itemLogs, healthCatalogEntries } = useStore();
   const [dogModal, setDogModal] = useState<"new" | Dog | null>(null);
   const [personModal, setPersonModal] = useState(false);
   const { focus, clearFocus } = useNavigation();
@@ -1850,6 +1854,8 @@ export function ProfileView() {
         <Modal title={dogModal === "new" ? "Add dog" : `Edit ${dogModal.name}`} onClose={() => setDogModal(null)}>
           <DogForm
             initial={dogModal === "new" ? undefined : dogModal}
+            logs={itemLogs.items}
+            catalog={combinedHealthCatalog(healthCatalogEntries.items)}
             onCancel={() => setDogModal(null)}
             onSubmit={(values) => {
               if (dogModal === "new") {
@@ -2359,6 +2365,61 @@ function DailyLogHistory({ dogs, logs }: { dogs: Dog[]; logs: ItemLog[] }) {
   );
 }
 
+/** Days-since-last-dose / next-due cards for every vaccine/medication a dog has at
+ * least one logged entry of. Reads `itemLogs` directly with no dependency on
+ * whether the entry happened to be attached to a calendar Item — a standalone
+ * "Log health record" from the Dashboard shows up here just the same as one logged
+ * against a scheduled vet visit, which is the whole point: before this, that kind
+ * of entry surfaced nowhere on the Health page at all. */
+function VaccineMedicationInsights({ dogs, logs, catalog }: { dogs: Dog[]; logs: ItemLog[]; catalog: HealthCatalogEntry[] }) {
+  const [dogId, setDogId] = useState(() => dogs[0]?.id ?? "");
+  const dog = dogs.find((entry) => entry.id === dogId);
+  const todayKey = toDateKey(new Date());
+  const entries = dog ? activeCatalogEntriesForDog(logs, dog.id, catalog) : [];
+
+  if (dogs.length === 0) return null;
+
+  return (
+    <section className="panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Vaccines & medications</p>
+          <h2>Since last dose, and what's next</h2>
+        </div>
+      </div>
+      {dogs.length > 1 && (
+        <div className="subtabs" role="group" aria-label="Which dog">
+          {dogs.map((entry) => (
+            <button key={entry.id} type="button" className={dogId === entry.id ? "active" : ""} onClick={() => setDogId(entry.id)}>
+              {entry.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {entries.length === 0 ? (
+        <p className="small">No vaccines or medications logged for this dog yet.</p>
+      ) : (
+        <div className="growth-grid">
+          {entries.map((entry) => {
+            if (!dog) return null;
+            const stats = doseHistory(logs, dog, entry, todayKey);
+            return (
+              <article className="growth-card" key={entry.id}>
+                <strong>{entry.name}</strong>
+                {stats.overdue && <small className="heavy-tag">Overdue</small>}
+                <p className="small">
+                  {stats.daysSinceLast === null ? "Never logged" : `${stats.daysSinceLast} days since last dose`}
+                </p>
+                <p className="small">{stats.nextDueDate ? `Next due ${formatDate(stats.nextDueDate)}` : "No schedule set"}</p>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** Replaces gaps with the last real value, leaving leading gaps at zero. Lets a
  * sparkline stay continuous across days that genuinely had nothing to measure. */
 function carryForward(values: (number | null)[]): number[] {
@@ -2373,9 +2434,10 @@ function carryForward(values: (number | null)[]): number[] {
 // category, newest first, with its logged entries inline. Same data the calendar
 // shows, filtered — so a vet visit added from the calendar shows up here for free.
 export function HealthView() {
-  const { dogs, items, itemLogs, milestones, people, aloneTimeLogs } = useStore();
+  const { dogs, items, itemLogs, milestones, people, aloneTimeLogs, healthCatalogEntries } = useStore();
   const [modal, setModal] = useState<"new" | Item | null>(null);
   const [healthLog, setHealthLog] = useState<{ dogIds?: string[]; selections?: Record<string, string | number> } | null>(null);
+  const healthCatalog = combinedHealthCatalog(healthCatalogEntries.items);
   const dogName = (id: string) => dogs.items.find((dog) => dog.id === id)?.name ?? id;
   const sortedEvents = items.items
     .filter(isHealthItem)
@@ -2417,6 +2479,7 @@ export function HealthView() {
         </div>
       </section>
       <DailyLogHistory dogs={dogs.items} logs={itemLogs.items} />
+      <VaccineMedicationInsights dogs={dogs.items} logs={itemLogs.items} catalog={healthCatalog} />
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -2439,7 +2502,7 @@ export function HealthView() {
                 {logs.map((log) => (
                   <small key={log.id} className="health-log-line">
                     {new Date(log.loggedAt).toLocaleDateString()}
-                    {log.values.length > 0 ? ` — ${summarizeQuickLog(log)}` : ""}
+                    {log.values.length > 0 ? ` — ${summarizeQuickLog(log, healthCatalog)}` : ""}
                     {log.text ? ` — ${log.text}` : ""}
                   </small>
                 ))}

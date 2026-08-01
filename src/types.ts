@@ -11,6 +11,25 @@ export type MedicationEntry = {
   notes: string;
 };
 
+export type HealthCatalogKind = "vaccine" | "medication";
+
+/** One entry in the vaccine/medication catalog the Health quick log picks from —
+ * built-ins ship in `HEALTH_CATALOG` (utils.ts); household-added ones persist
+ * through `useStore().healthCatalogEntries`. Replaces free-text "Vaccine name"/
+ * "Dose" entry so a dose can actually be aggregated, not just read back as a
+ * string a user happened to type. */
+export type HealthCatalogEntry = {
+  id: string;
+  kind: HealthCatalogKind;
+  name: string;
+  /** Days between doses, e.g. Rabies ≈ 365, Heartworm prevention ≈ 30. Null = no
+   * universal default (a one-off titer test, an as-needed antibiotic) — next-due
+   * computation and reminder creation are simply skipped without one. */
+  defaultIntervalDays: number | null;
+  /** True only for household-added entries — built-ins never carry this. */
+  custom?: boolean;
+};
+
 export type Household = {
   id: string;
   name: string;
@@ -41,6 +60,11 @@ export type Dog = {
   medicalHistory: string[];
   allergies: string[];
   medicationEntries: MedicationEntry[];
+  /** Per-dog override of a HealthCatalogEntry's interval (days), keyed by its id —
+   * a vet-directed schedule that differs from the catalog's own default without
+   * forking the catalog entry itself. Absent key = use the catalog entry's own
+   * defaultIntervalDays. */
+  healthIntervalOverrides?: Record<string, number>;
   energy: number;
   confidence: number;
   fearfulness: number;
@@ -365,6 +389,12 @@ export type Item = {
   // --- carried over from HealthEvent ---
   /** Link to a stored receipt/vaccine record/document. */
   documentUrl?: string;
+
+  /** Set only on the lightweight reminder Item `syncHealthReminderFromLog`
+   * maintains — links it back to the (dog, HealthCatalogEntry) pair it's
+   * tracking, so a later dose updates this Item in place instead of duplicating
+   * it. Absent on every hand-created Item. */
+  healthCatalogEntryId?: string;
 
   // --- away-from-home planning (carried over from CalendarEvent) ---
   /** Number of Rover sitter visits recommended while away (0/undefined = none needed). */

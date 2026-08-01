@@ -21,10 +21,12 @@ import * as mapping from "./dataMapping";
 import { getSupabaseClient, isBackendConfigured } from "./supabaseClient";
 import {
   AloneTimeLog,
+  Category,
   ChecklistItemValue,
   Dog,
   ExposureItem,
   GroceryListItem,
+  HealthCatalogEntry,
   Household,
   InboxRequest,
   InventoryItem,
@@ -48,7 +50,10 @@ import {
 import {
   adjustStepSessions,
   buildDefaultChecklist,
+  combinedHealthCatalog,
   computeMilestoneStatus,
+  computeNextDue,
+  healthCatalogEntry,
   isMilestoneComplete,
   milestoneDogs,
   milestoneProgress,
@@ -254,6 +259,13 @@ function useDataStore() {
     seedExposureItems,
     "exposure_items",
     mapping.exposureItem,
+    "client",
+  );
+  const healthCatalogEntries = useCollection<HealthCatalogEntry>(
+    "health-catalog-entries",
+    [],
+    "health_catalog_entries",
+    mapping.healthCatalogEntry,
     "client",
   );
   const relationshipLogs = useCollection<RelationshipLog>("relationship-logs", seedRelationshipLogs, "relationship_logs", mapping.relationshipLog);
@@ -583,11 +595,90 @@ function useDataStore() {
     }
   }
 
+  /** Keeps a lightweight reminder Item in sync with the most recent dose logged for
+   * one dog + catalog entry — same idea as `syncWeightFromLog`, but for vaccine/
+   * medication schedules instead of the growth chart. Finds the existing reminder
+   * Item for this (dog, catalogEntryId) pair via `healthCatalogEntryId` + a
+   * single-dog `dogIds` and updates its date/title in place; creates one the first
+   * time a dose with a computable next-due date is logged. Removes the Item
+   * outright if the edited log no longer computes a next-due date (e.g. switched to
+   * a catalog entry with no interval) — a stale reminder pointing at a date nobody
+   * expects is worse than none.
+   *
+   * One Item per (dog, catalogEntryId): a two-dog combo dose creates/updates two
+   * separate Items, since per-dog interval overrides mean the two dogs can
+   * genuinely be due on different dates. */
+  async function syncHealthReminderFromLog(values: LogFieldValue[], dogIds: string[], happenedAt: string) {
+    const catalogEntryId = values.find((value) => value.fieldName === "Vaccine" || value.fieldName === "Medication")?.value;
+    if (typeof catalogEntryId !== "string" || !catalogEntryId) return;
+
+    const catalog = combinedHealthCatalog(healthCatalogEntries.items);
+    const entry = healthCatalogEntry(catalog, catalogEntryId);
+    if (!entry) return;
+
+    const explicitNextDue = values.find((value) => value.fieldName === "Next due")?.value;
+    const dateLogged = happenedAt.slice(0, 10);
+
+    for (const dogId of dogIds) {
+      const dog = dogs.items.find((candidate) => candidate.id === dogId);
+      if (!dog) continue;
+      const nextDue = (typeof explicitNextDue === "string" && explicitNextDue) || computeNextDue(dateLogged, dog, entry);
+      const existing = items.items.find(
+        (candidate) =>
+          candidate.healthCatalogEntryId === catalogEntryId && candidate.dogIds?.length === 1 && candidate.dogIds[0] === dogId,
+      );
+
+      if (!nextDue) {
+        if (existing) await items.remove(existing.id);
+        continue;
+      }
+
+      const patch = {
+        title: `${entry.name} due — ${dog.name}`,
+        category: entry.kind as Category,
+        date: nextDue,
+        // Synthetic wall-clock time: the reminder edge function skips any item
+        // with no start_time, regardless of what's in `reminders`.
+        startTime: "9:00 AM",
+        dogIds: [dogId],
+        healthCatalogEntryId: catalogEntryId,
+        reminders: existing?.reminders?.length ? existing.reminders : [{ id: makeId("reminder"), amount: 1, unit: "days" as const }],
+      };
+      if (existing) {
+        await items.update(existing.id, patch);
+      } else {
+        await items.add({
+          id: makeId("item"),
+          kind: "one-off",
+          intent: "health-record",
+          status: "confirmed",
+          windowLabel: "",
+          assignedTo: "",
+          requiresCompletion: false,
+          checklist: [],
+          requiresLog: false,
+          logFields: [],
+          aloneTimeRequired: "no",
+          priority: "important",
+          supplies: [],
+          setting: "either",
+          difficulty: 1,
+          notes: `Auto-created from a logged ${entry.name.toLowerCase()} dose.`,
+          ...patch,
+        });
+      }
+    }
+  }
+
   async function addItemLog(entry: Omit<ItemLog, "id" | "loggedAt">) {
     const loggedAt = new Date().toISOString();
     const id = makeId("log");
     const ok = await itemLogs.add({ ...entry, id, loggedAt });
-    if (ok) await syncWeightFromLog(id, entry.values, entry.dogIds, entry.text, entry.happenedAt ?? loggedAt);
+    if (ok) {
+      const happenedAt = entry.happenedAt ?? loggedAt;
+      await syncWeightFromLog(id, entry.values, entry.dogIds, entry.text, happenedAt);
+      await syncHealthReminderFromLog(entry.values, entry.dogIds, happenedAt);
+    }
     return ok;
   }
 
@@ -866,6 +957,7 @@ function useDataStore() {
 
     await satisfyOccurrence(log);
     await syncWeightFromLog(log.id, entry.values, entry.dogIds, entry.notes, log.happenedAt ?? log.loggedAt);
+    await syncHealthReminderFromLog(entry.values, entry.dogIds, log.happenedAt ?? log.loggedAt);
 
     // Alone time is a training type like any other in the Quick log, but it also
     // feeds `computeDogAloneTimeReadiness`, which only reads `alone_time_logs`. Writing
@@ -928,6 +1020,7 @@ function useDataStore() {
     if (slotChanged) await releaseSatisfiedOccurrence(existing);
     await satisfyOccurrence(updated);
     await syncWeightFromLog(logId, entry.values, entry.dogIds, entry.notes, updated.happenedAt ?? updated.loggedAt);
+    await syncHealthReminderFromLog(entry.values, entry.dogIds, updated.happenedAt ?? updated.loggedAt);
 
     if (entry.aloneTimeMinutes && entry.aloneTimeMinutes > 0) {
       await aloneTimeLogs.add({
@@ -1031,6 +1124,7 @@ function useDataStore() {
     milestones,
     journalEntries,
     exposureItems,
+    healthCatalogEntries,
     relationshipLogs,
     productFeedback,
     itemDeletions,

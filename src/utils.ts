@@ -7,6 +7,8 @@ import {
   DayOfWeek,
   Dog,
   GroceryListItem,
+  HealthCatalogEntry,
+  HealthCatalogKind,
   InventoryItem,
   Item,
   ItemIntent,
@@ -101,7 +103,7 @@ export const ITEM_INTENT_PRESETS: {
 // QuickLogForm renders them generically and the Dashboard's Log section can summarize
 // any entry without knowing which kind it is.
 
-export type QuickLogFieldInput = "choice" | "number" | "text" | "date";
+export type QuickLogFieldInput = "choice" | "number" | "text" | "date" | "catalog";
 
 export type QuickLogField = {
   /** Also the `fieldName` written into the log's `values`, so the ingest pass reads
@@ -117,6 +119,10 @@ export type QuickLogField = {
   /** Only render once `field` holds one of `values`. How "consistency" stays hidden
    * until you've said it was a poo. */
   showWhen?: { field: string; values: string[] };
+  /** Only meaningful when input is "catalog" — which half of the health catalog
+   * (HEALTH_CATALOG below) this field pickers over. The stored value is the picked
+   * entry's id, not its display name — a rename never breaks a past log. */
+  catalogKind?: HealthCatalogKind;
 };
 
 export type QuickLogSpec = {
@@ -330,8 +336,10 @@ export const QUICK_LOG_SPECS: QuickLogSpec[] = [
     fields: [
       { name: "Weight", label: "Weight", input: "number", unit: "lbs", showWhen: { field: "Type", values: ["weight", "vet", "grooming"] } },
       { name: "Temperature", label: "Temperature", input: "number", unit: "°F", showWhen: { field: "Type", values: ["vet"] } },
-      { name: "Vaccine name", label: "Vaccine name", input: "text", showWhen: { field: "Type", values: ["vaccine"] } },
+      { name: "Vaccine", label: "Vaccine", input: "catalog", catalogKind: "vaccine", showWhen: { field: "Type", values: ["vaccine"] } },
+      { name: "Medication", label: "Medication", input: "catalog", catalogKind: "medication", showWhen: { field: "Type", values: ["medication"] } },
       { name: "Dose", label: "Dose", input: "text", showWhen: { field: "Type", values: ["medication"] } },
+      { name: "Brand", label: "Brand / product", input: "text", showWhen: { field: "Type", values: ["vaccine", "medication"] } },
       { name: "Next due", label: "Next due date", input: "date", showWhen: { field: "Type", values: ["vaccine", "medication"] } },
       { name: "Cost", label: "Cost", input: "number", unit: "$", showWhen: { field: "Type", values: ["vet", "vaccine", "medication", "grooming"] } },
     ],
@@ -345,6 +353,37 @@ export function quickLogSpec(kind: QuickLogKind): QuickLogSpec {
   // Non-null: QUICK_LOG_SPECS covers every member of the QuickLogKind union, and the
   // compiler enforces that any new kind added there gets a spec here too.
   return QUICK_LOG_SPECS.find((spec) => spec.kind === kind)!;
+}
+
+/** Built-in vaccine/medication catalog the Health quick log's "Vaccine"/"Medication"
+ * fields pick from. Households can add their own on top (see `healthCatalogEntries`
+ * in store.tsx) — `combinedHealthCatalog` below is what call sites actually use.
+ * Intervals are typical veterinary defaults, not a substitute for an actual vet's
+ * schedule — that's exactly what a dog's `healthIntervalOverrides` is for. One
+ * pinned "Other / prescription medication" entry exists so a one-off vet-directed
+ * course doesn't force "+ Add custom" for something that won't be reused; no
+ * equivalent "Other vaccine" since that list is short and standardized. */
+export const HEALTH_CATALOG: HealthCatalogEntry[] = [
+  { id: "rabies", kind: "vaccine", name: "Rabies", defaultIntervalDays: 365 },
+  { id: "dhpp", kind: "vaccine", name: "DHPP (Distemper/Parvo combo)", defaultIntervalDays: 365 },
+  { id: "bordetella", kind: "vaccine", name: "Bordetella (kennel cough)", defaultIntervalDays: 365 },
+  { id: "leptospirosis", kind: "vaccine", name: "Leptospirosis", defaultIntervalDays: 365 },
+  { id: "canine-influenza", kind: "vaccine", name: "Canine influenza", defaultIntervalDays: 365 },
+  { id: "lyme", kind: "vaccine", name: "Lyme disease", defaultIntervalDays: 365 },
+  { id: "heartworm-prevention", kind: "medication", name: "Heartworm prevention", defaultIntervalDays: 30 },
+  { id: "flea-tick-prevention", kind: "medication", name: "Flea & tick prevention", defaultIntervalDays: 30 },
+  { id: "heartworm-test", kind: "medication", name: "Heartworm test", defaultIntervalDays: 365 },
+  { id: "dewormer", kind: "medication", name: "Dewormer", defaultIntervalDays: null },
+  { id: "joint-supplement", kind: "medication", name: "Joint supplement", defaultIntervalDays: null },
+  { id: "other-medication", kind: "medication", name: "Other / prescription medication", defaultIntervalDays: null },
+];
+
+export function combinedHealthCatalog(custom: HealthCatalogEntry[]): HealthCatalogEntry[] {
+  return [...HEALTH_CATALOG, ...custom];
+}
+
+export function healthCatalogEntry(catalog: HealthCatalogEntry[], id: string): HealthCatalogEntry | undefined {
+  return catalog.find((entry) => entry.id === id);
 }
 
 /** Which scheduled items are the same thing as one of the five Quick logs. A "Morning
@@ -508,6 +547,88 @@ export function logsForHistory(
 function logValue(log: ItemLog, fieldName: string): string | null {
   const match = log.values.find((value) => value.fieldName === fieldName);
   return typeof match?.value === "string" ? match.value : null;
+}
+
+function catalogIdOf(log: ItemLog): string | null {
+  return logValue(log, "Vaccine") ?? logValue(log, "Medication");
+}
+
+/** Brand/product strings previously entered for one catalog entry, most-recently-
+ * used first, deduped. Scoped to the dog(s) currently selected when any are picked
+ * — so "which product reacted badly on THIS dog" stays scoped — falling back to
+ * the whole household's history for that entry when the dog has none yet, so a
+ * first-time log for a second dog still benefits from what's already recorded. */
+export function healthBrandSuggestions(logs: ItemLog[], catalogEntryId: string, dogIds: string[]): string[] {
+  const forEntry = logs.filter((log) => log.quickLogKind === "health" && catalogIdOf(log) === catalogEntryId);
+  const scoped = dogIds.length > 0 ? forEntry.filter((log) => log.dogIds.some((id) => dogIds.includes(id))) : [];
+  const pool = scoped.length > 0 ? scoped : forEntry;
+  const sorted = pool.slice().sort((a, b) => (b.happenedAt ?? b.loggedAt).localeCompare(a.happenedAt ?? a.loggedAt));
+  const brands = sorted.map((log) => logValue(log, "Brand")).filter((value): value is string => !!value);
+  return Array.from(new Set(brands));
+}
+
+/** The interval (days) actually in force for one dog + catalog entry: the dog's
+ * override if set, else the catalog entry's own default, else null (no default
+ * exists — e.g. a one-off titer test or "Other medication"). */
+export function effectiveIntervalDays(dog: Pick<Dog, "healthIntervalOverrides">, entry: HealthCatalogEntry): number | null {
+  return dog.healthIntervalOverrides?.[entry.id] ?? entry.defaultIntervalDays;
+}
+
+/** Next due date (YYYY-MM-DD) for one dog, one catalog entry, given when this dose
+ * was logged. Null when there's no interval to project from. Always single-dog —
+ * a combo dose given to two dogs at once is the caller's job to fan out, since each
+ * dog can have its own override. */
+export function computeNextDue(dateLogged: string, dog: Pick<Dog, "healthIntervalOverrides">, entry: HealthCatalogEntry): string | null {
+  const interval = effectiveIntervalDays(dog, entry);
+  return interval === null ? null : toDateKey(addDays(parseLocalDate(dateLogged), interval));
+}
+
+export type DoseHistoryStats = {
+  catalogEntryId: string;
+  lastDoseDate: string | null;
+  daysSinceLast: number | null;
+  nextDueDate: string | null;
+  overdue: boolean;
+};
+
+/** Last-dose / next-due stats for one dog + catalog entry, read straight from
+ * ItemLog[] with no dependency on whether the log happened to be attached to a
+ * calendar Item — a standalone "Log health record" entry counts just as much as
+ * one logged against a scheduled vet visit. Mirrors accidentTrend's daysSinceLast
+ * shape. Prefers the log's own explicit "Next due" value over the computed one, so
+ * a vet-given exact date always wins over the interval estimate. */
+export function doseHistory(
+  logs: ItemLog[],
+  dog: Pick<Dog, "id" | "healthIntervalOverrides">,
+  entry: HealthCatalogEntry,
+  todayKey: string,
+): DoseHistoryStats {
+  const relevant = logs
+    .filter((log) => log.quickLogKind === "health" && log.dogIds.includes(dog.id) && catalogIdOf(log) === entry.id)
+    .sort((a, b) => (b.happenedAt ?? b.loggedAt).localeCompare(a.happenedAt ?? a.loggedAt));
+  const last = relevant[0] as ItemLog | undefined;
+  const lastDoseDate = last ? (last.happenedAt ?? last.loggedAt).slice(0, 10) : null;
+  const nextDueDate = (last && logValue(last, "Next due")) || (lastDoseDate ? computeNextDue(lastDoseDate, dog, entry) : null);
+  const daysSinceLast = lastDoseDate
+    ? Math.round((parseLocalDate(todayKey).getTime() - parseLocalDate(lastDoseDate).getTime()) / 86400000)
+    : null;
+  return {
+    catalogEntryId: entry.id,
+    lastDoseDate,
+    daysSinceLast,
+    nextDueDate,
+    overdue: !!nextDueDate && nextDueDate < todayKey,
+  };
+}
+
+/** Every catalog entry this dog has at least one logged dose of — the set worth
+ * rendering an insight card for, rather than one for every entry in the catalog
+ * whether or not this dog has ever had it. */
+export function activeCatalogEntriesForDog(logs: ItemLog[], dogId: string, catalog: HealthCatalogEntry[]): HealthCatalogEntry[] {
+  const used = new Set(
+    logs.filter((log) => log.quickLogKind === "health" && log.dogIds.includes(dogId)).map(catalogIdOf).filter((id): id is string => !!id),
+  );
+  return catalog.filter((entry) => used.has(entry.id));
 }
 
 /** An accident is a potty logged somewhere it shouldn't have happened. Same rule the
@@ -725,7 +846,7 @@ export function quickLogFieldVisible(field: QuickLogField, values: Record<string
 /** One-line summary of a log's structured selections, for the Log feed. Reads the
  * option labels back off the spec so the feed says "Poo · Inside (accident)" rather
  * than echoing the raw stored values. */
-export function summarizeQuickLog(log: Pick<ItemLog, "quickLogKind" | "values">): string {
+export function summarizeQuickLog(log: Pick<ItemLog, "quickLogKind" | "values">, catalog: HealthCatalogEntry[] = HEALTH_CATALOG): string {
   if (!log.quickLogKind)
     return log.values.map((value) => `${value.fieldName}: ${value.value}${value.unit ? ` ${value.unit}` : ""}`).join(" · ");
   const spec = quickLogSpec(log.quickLogKind);
@@ -733,6 +854,12 @@ export function summarizeQuickLog(log: Pick<ItemLog, "quickLogKind" | "values">)
   return log.values
     .map((value) => {
       const field = allFields.find((entry) => entry.name === value.fieldName);
+      // A catalog field stores the entry's id, not its display name — resolve it
+      // by id so a household's custom entries (not just the built-ins the default
+      // param covers) still read as a name instead of a raw id string.
+      if (field?.input === "catalog" && typeof value.value === "string") {
+        return healthCatalogEntry(catalog, value.value)?.name ?? String(value.value);
+      }
       const option = field?.options?.find((entry) => entry.value === value.value);
       if (option) return option.label;
       if (value.unit) return `${value.value} ${value.unit}`;

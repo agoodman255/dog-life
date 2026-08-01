@@ -49,6 +49,9 @@ create table if not exists dogs (
   medical_history text[] not null default '{}',
   allergies text[] not null default '{}',
   medication_entries jsonb not null default '[]',
+  -- Per-dog override of a health_catalog_entries interval (days), keyed by that
+  -- entry's id. Absent key = use the catalog entry's own default_interval_days.
+  health_interval_overrides jsonb not null default '{}',
   energy int not null default 50,
   confidence int not null default 50,
   fearfulness int not null default 20,
@@ -69,6 +72,7 @@ create table if not exists dogs (
 -- entries (name/kind/dosage/frequency/notes) instead of a flat text list.
 alter table dogs add column if not exists medication_entries jsonb not null default '[]';
 alter table dogs drop column if exists medications;
+alter table dogs add column if not exists health_interval_overrides jsonb not null default '{}';
 
 create table if not exists tasks (
   id uuid primary key default gen_random_uuid(),
@@ -238,6 +242,17 @@ create table if not exists exposure_items (
   dog_ids uuid[] not null default '{}',
   status text not null default 'not-started',
   log jsonb not null default '[]'
+);
+
+-- Household-added vaccine/medication catalog entries — the Health quick log's
+-- "Vaccine"/"Medication" fields pick from this plus the built-in HEALTH_CATALOG in
+-- utils.ts (never round-tripped through this table). 2026-07-31.
+create table if not exists health_catalog_entries (
+  id text primary key,
+  household_id uuid not null references households (id) on delete cascade,
+  kind text not null check (kind in ('vaccine', 'medication')),
+  name text not null,
+  default_interval_days int
 );
 
 create table if not exists relationship_logs (
@@ -444,6 +459,10 @@ create table if not exists items (
   formation text,
   related_milestone_id text,
   document_url text,
+  -- Set only on the lightweight reminder item syncHealthReminderFromLog maintains —
+  -- links it back to the (dog, health_catalog_entries) pair it's tracking so a
+  -- later dose updates this row in place instead of duplicating it.
+  health_catalog_entry_id text,
   rover_visits int,
   prep_steps text[] not null default '{}',
   rover_instructions text[] not null default '{}',
@@ -467,6 +486,7 @@ alter table items add column if not exists reminders jsonb not null default '[]'
 -- calendar is actually being consulted for. Whether to honour it is a per-viewer
 -- preference in the Calendar; this column only says which items it applies to.
 alter table items add column if not exists calendar_visibility text not null default 'calendar';
+alter table items add column if not exists health_catalog_entry_id text;
 
 -- Per-date state for an item. A recurring item needs independent completion state
 -- per occurrence — finishing Monday's must not finish Tuesday's — which is exactly
@@ -650,6 +670,7 @@ alter table milestones enable row level security;
 alter table health_events enable row level security;
 alter table journal_entries enable row level security;
 alter table exposure_items enable row level security;
+alter table health_catalog_entries enable row level security;
 alter table relationship_logs enable row level security;
 alter table feedback enable row level security;
 alter table product_feedback enable row level security;
@@ -675,7 +696,7 @@ declare
 begin
   for t in select unnest(array[
     'households', 'people', 'dogs', 'tasks', 'milestones',
-    'health_events', 'journal_entries', 'exposure_items',
+    'health_events', 'journal_entries', 'exposure_items', 'health_catalog_entries',
     'relationship_logs', 'feedback', 'product_feedback',
     'calendar_events', 'calendar_event_deletions', 'task_deletions', 'alone_time_logs', 'task_instances', 'inbox_requests',
     'meals', 'recipe_ingredients', 'inventory', 'grocery_list',
@@ -705,7 +726,7 @@ declare
 begin
   for t in select unnest(array[
     'households', 'people', 'dogs', 'tasks', 'milestones',
-    'health_events', 'journal_entries', 'exposure_items',
+    'health_events', 'journal_entries', 'exposure_items', 'health_catalog_entries',
     'relationship_logs', 'feedback', 'product_feedback',
     'calendar_events', 'calendar_event_deletions', 'task_deletions', 'alone_time_logs', 'task_instances', 'inbox_requests',
     'meals', 'recipe_ingredients', 'inventory', 'grocery_list',

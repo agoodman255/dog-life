@@ -3,6 +3,7 @@ import {
   Dog,
   ExposureItem,
   GroceryListItem,
+  HealthCatalogEntry,
   Household,
   InboxRequest,
   InventoryItem,
@@ -65,6 +66,7 @@ export const dog = {
       medicalHistory: row.medical_history ?? [],
       allergies: row.allergies ?? [],
       medicationEntries: row.medication_entries ?? [],
+      healthIntervalOverrides: row.health_interval_overrides ?? undefined,
       energy: row.energy,
       confidence: row.confidence,
       fearfulness: row.fearfulness,
@@ -100,6 +102,7 @@ export const dog = {
       medical_history: item.medicalHistory,
       allergies: item.allergies,
       medication_entries: item.medicationEntries,
+      health_interval_overrides: item.healthIntervalOverrides ?? {},
       energy: item.energy,
       confidence: item.confidence,
       fearfulness: item.fearfulness,
@@ -154,6 +157,7 @@ export const item = {
       formation: row.formation ?? undefined,
       relatedMilestoneId: row.related_milestone_id ?? undefined,
       documentUrl: row.document_url ?? undefined,
+      healthCatalogEntryId: row.health_catalog_entry_id ?? undefined,
       roverVisits: row.rover_visits ?? undefined,
       prepSteps: row.prep_steps ?? undefined,
       roverInstructions: row.rover_instructions ?? undefined,
@@ -199,6 +203,7 @@ export const item = {
       formation: entry.formation ?? null,
       related_milestone_id: entry.relatedMilestoneId ?? null,
       document_url: entry.documentUrl ?? null,
+      health_catalog_entry_id: entry.healthCatalogEntryId ?? null,
       rover_visits: entry.roverVisits ?? null,
       prep_steps: entry.prepSteps ?? [],
       rover_instructions: entry.roverInstructions ?? [],
@@ -304,6 +309,30 @@ export const journalEntry = {
       text: item.text,
       tags: item.tags,
       mood: item.mood,
+    };
+  },
+};
+
+// Only ever holds household-added catalog entries — built-ins (HEALTH_CATALOG in
+// utils.ts) never round-trip through this table, so `custom` is hardcoded true here
+// rather than a stored column.
+export const healthCatalogEntry = {
+  fromRow(row: any): HealthCatalogEntry {
+    return {
+      id: row.id,
+      kind: row.kind,
+      name: row.name,
+      defaultIntervalDays: row.default_interval_days ?? null,
+      custom: true,
+    };
+  },
+  toRow(item: HealthCatalogEntry, householdId: string) {
+    return {
+      id: item.id,
+      household_id: householdId,
+      kind: item.kind,
+      name: item.name,
+      default_interval_days: item.defaultIntervalDays,
     };
   },
 };
