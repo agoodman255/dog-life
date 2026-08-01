@@ -196,9 +196,22 @@ export const QUICK_LOG_SPECS: QuickLogSpec[] = [
           { value: "watery", label: "Watery" },
         ],
       },
+      {
+        // A stool can be firm-with-streaks or watery-and-bloody — blood is an
+        // independent axis from Consistency, not a fifth point on that scale, so it
+        // gets its own field rather than being folded into (or lost from) the notes.
+        name: "Blood present",
+        label: "Blood in the stool?",
+        input: "choice",
+        showWhen: { field: "Type", values: ["poo", "both"] },
+        options: [
+          { value: "no", label: "No" },
+          { value: "yes", label: "Yes" },
+        ],
+      },
     ],
     ratingLabel: "How did the break go?",
-    notesPlaceholder: "Anything worth remembering — blood, straining, how long it took…",
+    notesPlaceholder: "Anything worth remembering — straining, how long it took…",
   },
   {
     kind: "play",
@@ -214,15 +227,6 @@ export const QUICK_LOG_SPECS: QuickLogSpec[] = [
     },
     fields: [
       { name: "Duration", label: "How long?", input: "number", unit: "min", presets: [5, 10, 15, 30, 60] },
-      {
-        name: "Where",
-        label: "Where?",
-        input: "choice",
-        options: [
-          { value: "indoors", label: "Indoors" },
-          { value: "outdoors", label: "Outdoors" },
-        ],
-      },
       {
         name: "Energy after",
         label: "Energy afterwards",
@@ -331,6 +335,7 @@ export const QUICK_LOG_SPECS: QuickLogSpec[] = [
         { value: "vaccine", label: "Vaccine" },
         { value: "medication", label: "Medication" },
         { value: "grooming", label: "Grooming" },
+        { value: "vomit", label: "Vomiting / GI issue" },
       ],
     },
     fields: [
@@ -341,6 +346,40 @@ export const QUICK_LOG_SPECS: QuickLogSpec[] = [
       { name: "Dose", label: "Dose", input: "text", showWhen: { field: "Type", values: ["medication"] } },
       { name: "Brand", label: "Brand / product", input: "text", showWhen: { field: "Type", values: ["vaccine", "medication"] } },
       { name: "Next due", label: "Next due date", input: "date", showWhen: { field: "Type", values: ["vaccine", "medication"] } },
+      {
+        name: "Content",
+        label: "What did it look like?",
+        input: "choice",
+        showWhen: { field: "Type", values: ["vomit"] },
+        options: [
+          { value: "food", label: "Undigested food" },
+          { value: "bile", label: "Yellow bile" },
+          { value: "foam", label: "White foam" },
+        ],
+      },
+      {
+        name: "Frequency",
+        label: "How many times?",
+        input: "choice",
+        showWhen: { field: "Type", values: ["vomit"] },
+        options: [
+          { value: "once", label: "Once" },
+          { value: "few", label: "A few times" },
+          { value: "repeated", label: "Repeated / can't keep anything down" },
+        ],
+      },
+      {
+        // Same reasoning as potty's own Blood present field: independent of Content,
+        // since bile or foam can carry blood streaks just as easily as food can.
+        name: "Blood present",
+        label: "Blood present?",
+        input: "choice",
+        showWhen: { field: "Type", values: ["vomit"] },
+        options: [
+          { value: "no", label: "No" },
+          { value: "yes", label: "Yes" },
+        ],
+      },
       { name: "Cost", label: "Cost", input: "number", unit: "$", showWhen: { field: "Type", values: ["vet", "vaccine", "medication", "grooming"] } },
     ],
     ratingLabel: "",

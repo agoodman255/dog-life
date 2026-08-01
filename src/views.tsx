@@ -2269,6 +2269,7 @@ function DailyLogHistory({ dogs, logs }: { dogs: Dog[]; logs: ItemLog[] }) {
   const urine = fieldDistribution(logs, "potty", "Color", rangeKeys, dogId);
   const appetite = fieldDistribution(logs, "food", "Amount eaten", rangeKeys, dogId);
   const water = fieldDistribution(logs, "water", "Intake", rangeKeys, dogId);
+  const energyAfterPlay = fieldDistribution(logs, "play", "Energy after", rangeKeys, dogId);
   const totalPotty = intervals.byDay.reduce((sum, day) => sum + day.breaks, 0);
 
   const distributions = [
@@ -2276,6 +2277,7 @@ function DailyLogHistory({ dogs, logs }: { dogs: Dog[]; logs: ItemLog[] }) {
     { title: "Urine colour", rows: urine },
     { title: "Appetite", rows: appetite },
     { title: "Water intake", rows: water },
+    { title: "Energy after play", rows: energyAfterPlay },
   ].filter((group) => group.rows.some((row) => row.count > 0));
 
   if (dogs.length === 0) return null;
@@ -2285,7 +2287,7 @@ function DailyLogHistory({ dogs, logs }: { dogs: Dog[]; logs: ItemLog[] }) {
       <div className="section-heading">
         <div>
           <p className="eyebrow">Daily record</p>
-          <h2>Potty, food and water over time</h2>
+          <h2>Potty, food, water and play over time</h2>
         </div>
       </div>
       <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
@@ -2307,41 +2309,45 @@ function DailyLogHistory({ dogs, logs }: { dogs: Dog[]; logs: ItemLog[] }) {
         </div>
       </div>
 
-      {totalPotty === 0 && accidents.total === 0 ? (
+      {totalPotty === 0 && accidents.total === 0 && distributions.length === 0 ? (
         <p className="small">Nothing logged for this dog in the last {days} days.</p>
       ) : (
         <>
-          <div className="metric-grid">
-            <AppMetric
-              label="Between breaks"
-              value={intervals.averageMinutes === null ? "—" : formatDuration(intervals.averageMinutes)}
-              icon={Clock}
-            />
-            <AppMetric
-              label="Longest gap"
-              value={intervals.longestMinutes === null ? "—" : formatDuration(intervals.longestMinutes)}
-              icon={Clock}
-            />
-            <AppMetric
-              label="Days since accident"
-              value={accidents.daysSinceLast === null ? "None logged" : `${accidents.daysSinceLast}`}
-              icon={Check}
-            />
-            <AppMetric label="Best clean run" value={`${accidents.longestCleanStreak} days`} icon={Sparkles} />
-          </div>
-          <div className="chart-row">
-            <div>
-              <p className="eyebrow">Average gap between breaks</p>
-              {/* Days with fewer than two breaks have no gap to report; carrying the
-                  previous day's value keeps the line continuous without inventing a
-                  number that would read as a real measurement. */}
-              <Sparkline values={carryForward(intervals.byDay.map((day) => day.averageMinutes))} />
-            </div>
-            <div>
-              <p className="eyebrow">Accidents per day</p>
-              <Sparkline values={accidents.byDay.map((day) => day.accidents)} />
-            </div>
-          </div>
+          {(totalPotty > 0 || accidents.total > 0) && (
+            <>
+              <div className="metric-grid">
+                <AppMetric
+                  label="Between breaks"
+                  value={intervals.averageMinutes === null ? "—" : formatDuration(intervals.averageMinutes)}
+                  icon={Clock}
+                />
+                <AppMetric
+                  label="Longest gap"
+                  value={intervals.longestMinutes === null ? "—" : formatDuration(intervals.longestMinutes)}
+                  icon={Clock}
+                />
+                <AppMetric
+                  label="Days since accident"
+                  value={accidents.daysSinceLast === null ? "None logged" : `${accidents.daysSinceLast}`}
+                  icon={Check}
+                />
+                <AppMetric label="Best clean run" value={`${accidents.longestCleanStreak} days`} icon={Sparkles} />
+              </div>
+              <div className="chart-row">
+                <div>
+                  <p className="eyebrow">Average gap between breaks</p>
+                  {/* Days with fewer than two breaks have no gap to report; carrying the
+                      previous day's value keeps the line continuous without inventing a
+                      number that would read as a real measurement. */}
+                  <Sparkline values={carryForward(intervals.byDay.map((day) => day.averageMinutes))} />
+                </div>
+                <div>
+                  <p className="eyebrow">Accidents per day</p>
+                  <Sparkline values={accidents.byDay.map((day) => day.accidents)} />
+                </div>
+              </div>
+            </>
+          )}
           {distributions.map((group) => (
             <div key={group.title}>
               <p className="eyebrow">{group.title}</p>
