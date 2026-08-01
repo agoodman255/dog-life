@@ -2990,6 +2990,31 @@ textarea:focus-visible,
   font-size: 0.95rem;
 }
 
+/* Overrides the generic `.quick-log-form label` grid rule above — this is a single
+   checkbox-and-text row, not a title stacked over a control. */
+.quick-log-form .quick-log-per-dog-toggle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* One dog's own copy of the fields, visually grouped so it reads as "Griz's entry"
+   rather than a continuation of the shared form above it. */
+.quick-log-per-dog {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+}
+
+.quick-log-per-dog > .eyebrow {
+  margin: 0;
+}
+
 /* Kind picker. Icon over label so five options still fit a phone without wrapping
    into a scrollable row. */
 .quick-log-kinds {
@@ -3161,6 +3186,43 @@ textarea:focus-visible,
 .quick-log-tally.has-entries {
   border-color: var(--teal);
   color: var(--teal);
+}
+
+.quick-log-tally-wrap {
+  position: relative;
+}
+
+.quick-log-tally-wrap .quick-log-tally {
+  width: 100%;
+}
+
+/* Overlaid on the tally tile rather than a second grid cell, so seeing history
+   doesn't cost the tallies row any width. */
+.quick-log-tally-history {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 4px;
+}
+
+.quick-log-tally-history:hover {
+  color: var(--teal);
+}
+
+.quick-log-history {
+  display: grid;
+  gap: 8px;
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
 .quick-log-feed {

@@ -641,30 +641,43 @@ function useDataStore() {
     return rolledBack;
   }
 
-  /** Claims a scheduled slot on behalf of a Quick log: the entry is the observation
-   * that the expected thing happened.
+  /** An occurrence's required dogs: its own override if one was set ("just today,
+   * no Mara"), otherwise the item's. Kept as one function so every place that checks
+   * coverage — satisfying, releasing, and editing the dog list itself — agrees on
+   * which set that is. */
+  function requiredDogsFor(item: Item, instance: ItemOccurrence): string[] {
+    return instance.dogIds ?? item.dogIds ?? [];
+  }
+
+  /** Claims a scheduled slot on behalf of one or more Quick logs written in the same
+   * submission: the entry (or entries) is the observation that the expected thing
+   * happened. Takes an array so logging both dogs at once — as two single-dog logs,
+   * one per dog, when their details differ — can be evaluated as one unit instead of
+   * needing `itemLogs.items` to have flushed the first insert before the second runs.
    *
    * Completion is gated on dog coverage. An occurrence carries one `state` for every
    * dog it involves, so flipping it on a log that only covers Mara would be asserting
    * Griz went out too — the same fabricated data the completion rework exists to
    * prevent. Until the logs claiming this slot span its dogs it stays open, and the
-   * second log closes it naturally.
+   * next log closes it naturally.
    *
    * The occurrence rating takes the *lowest* score across the claiming logs, so one
    * bad break isn't averaged out of existence by a good one. */
-  async function satisfyOccurrence(log: ItemLog): Promise<void> {
-    if (!log.itemId || !log.occurrenceDate) return;
-    const item = items.items.find((entry) => entry.id === log.itemId);
+  async function satisfyOccurrence(logs: ItemLog[]): Promise<void> {
+    const [first] = logs;
+    if (!first || !first.itemId || !first.occurrenceDate) return;
+    const item = items.items.find((entry) => entry.id === first.itemId);
     if (!item || !item.requiresCompletion) return;
 
-    const instance = ensureInstance(item, log.occurrenceDate);
-    const claimIds = Array.from(new Set([...(instance.satisfiedByLogIds ?? []), log.id]));
-    // Include this log explicitly: `itemLogs.items` hasn't flushed the insert yet
-    // within the same call, so reading it back would miss the entry we're claiming for.
-    const claimingLogs = [log, ...itemLogs.items.filter((entry) => claimIds.includes(entry.id) && entry.id !== log.id)];
+    const instance = ensureInstance(item, first.occurrenceDate);
+    const newIds = logs.map((entry) => entry.id);
+    const claimIds = Array.from(new Set([...(instance.satisfiedByLogIds ?? []), ...newIds]));
+    // Include these logs explicitly: `itemLogs.items` hasn't flushed their inserts yet
+    // within the same call, so reading it back would miss the entries we're claiming for.
+    const claimingLogs = [...logs, ...itemLogs.items.filter((entry) => claimIds.includes(entry.id) && !newIds.includes(entry.id))];
 
     const covered = new Set(claimingLogs.flatMap((entry) => entry.dogIds));
-    const required = item.dogIds ?? [];
+    const required = requiredDogsFor(item, instance);
     const fullyCovered = required.length === 0 || required.every((id) => covered.has(id));
 
     const ratings = claimingLogs.map((entry) => entry.rating).filter((value): value is number => typeof value === "number");
@@ -702,17 +715,66 @@ function useDataStore() {
     // A training Quick log already advanced its milestone through `advancedStepTitles`.
     // Marking the occurrence as advanced stops `advanceLinkedMilestone` counting the
     // same session a second time if this item is later completed or reopened.
-    const milestoneAdvanced = instance.milestoneAdvanced || (log.quickLogKind === "training" && !!log.milestoneId);
+    const milestoneAdvanced = instance.milestoneAdvanced || logs.some((entry) => entry.quickLogKind === "training" && !!entry.milestoneId);
+    // The latest of the new logs' own times — when the slot actually became fully
+    // covered, not necessarily when any single one of them happened.
+    const endTime = logs.map((entry) => entry.happenedAt ?? entry.loggedAt).sort().slice(-1)[0];
 
     await persistInstance({
       ...instance,
       state: "completed",
-      endTime: log.happenedAt ?? log.loggedAt,
+      endTime,
       satisfiedByLogIds: claimIds,
       rating,
       milestoneAdvanced,
       history: withHistory(instance, { type: "end", oldValue: instance.state, newValue: "completed", reason: "Logged" }),
     });
+  }
+
+  /** Per-occurrence override of which dogs this item's slot needs — "just today, no
+   * Mara" — without touching the recurring series. Recomputes completion against the
+   * new required set from whatever logs already claim this slot, the same coverage
+   * rule `satisfyOccurrence` uses, so narrowing to a dog that's already logged can
+   * close the slot immediately, and widening it back can reopen one. */
+  async function setOccurrenceDogs(item: Item, date: string, dogIds: string[]): Promise<boolean> {
+    const instance = ensureInstance(item, date);
+    const claimingLogs = itemLogs.items.filter((entry) => (instance.satisfiedByLogIds ?? []).includes(entry.id));
+    const covered = new Set(claimingLogs.flatMap((entry) => entry.dogIds));
+    const fullyCovered = dogIds.length === 0 || dogIds.every((id) => covered.has(id));
+    const ratings = claimingLogs.map((entry) => entry.rating).filter((value): value is number => typeof value === "number");
+
+    const history = withHistory(instance, {
+      type: "edit_dogs",
+      oldValue: requiredDogsFor(item, instance).join(", ") || "—",
+      newValue: dogIds.join(", ") || "—",
+      reason: "Edited dogs for this occurrence",
+    });
+
+    if (fullyCovered && claimingLogs.length > 0) {
+      return persistInstance({
+        ...instance,
+        dogIds,
+        state: "completed",
+        endTime: instance.endTime ?? claimingLogs.map((entry) => entry.happenedAt ?? entry.loggedAt).sort().slice(-1)[0],
+        rating: ratings.length > 0 ? Math.min(...ratings) : instance.rating,
+        history,
+      });
+    }
+
+    if (!fullyCovered && instance.state === "completed") {
+      return persistInstance({
+        ...instance,
+        dogIds,
+        state: "not_started",
+        endTime: undefined,
+        endTimeZone: undefined,
+        rating: undefined,
+        milestoneAdvanced: false,
+        history,
+      });
+    }
+
+    return persistInstance({ ...instance, dogIds, history });
   }
 
   /** Releases whatever `satisfyOccurrence` claimed, when the log is deleted or edited
@@ -729,7 +791,7 @@ function useDataStore() {
     const claimingLogs = itemLogs.items.filter((entry) => claimIds.includes(entry.id));
 
     const covered = new Set(claimingLogs.flatMap((entry) => entry.dogIds));
-    const required = item?.dogIds ?? [];
+    const required = item ? requiredDogsFor(item, instance) : [];
     const stillCovered = claimIds.length > 0 && (required.length === 0 || required.every((id) => covered.has(id)));
 
     const ratings = claimingLogs.map((entry) => entry.rating).filter((value): value is number => typeof value === "number");
@@ -831,19 +893,15 @@ function useDataStore() {
     };
   }
 
-  /** Everything a Quick log changed, handed back so the form can say what just
-   * happened instead of silently closing. The "what's next / what unlocked" half of
-   * Andrew's ask (2026-07-26) lives here — logging a training session is only useful
-   * if it visibly moves the milestone it belongs to. */
-  async function addQuickLog(entry: QuickLogInput): Promise<QuickLogResult | null> {
-    const dateKey = entry.date;
+  // Built here rather than through addItemLog so the row can be handed straight to
+  // satisfyOccurrence — `itemLogs.items` hasn't flushed the insert yet at that point,
+  // so reading it back would find nothing to claim the slot with. Shared by
+  // addQuickLog and addQuickLogGroup so a split (one row per dog) builds each row
+  // exactly the same way a single shared-dogs entry would.
+  function buildQuickLogRow(entry: QuickLogInput): ItemLog {
     const milestone = entry.milestoneId ? milestones.items.find((item) => item.id === entry.milestoneId) : undefined;
     const advancing = !!milestone && entry.completedStepTitles.length > 0;
-
-    // Built here rather than through addItemLog so the row can be handed straight to
-    // satisfyOccurrence — `itemLogs.items` hasn't flushed the insert yet at that point,
-    // so reading it back would find nothing to claim the slot with.
-    const log: ItemLog = {
+    return {
       id: makeId("log"),
       loggedAt: new Date().toISOString(),
       quickLogKind: entry.kind,
@@ -851,7 +909,7 @@ function useDataStore() {
       // doubles as the occurrence key, so an attached entry points at the right day of
       // a recurring item rather than at the series.
       itemId: entry.itemId,
-      occurrenceDate: entry.itemId ? (entry.occurrenceDate ?? dateKey) : dateKey,
+      occurrenceDate: entry.itemId ? (entry.occurrenceDate ?? entry.date) : entry.date,
       happenedAt: entry.happenedAt,
       loggedBy: people.items[0]?.id ?? "",
       text: entry.notes,
@@ -861,10 +919,19 @@ function useDataStore() {
       milestoneId: entry.milestoneId,
       advancedStepTitles: advancing ? entry.completedStepTitles : undefined,
     };
+  }
+
+  /** Everything a Quick log changed, handed back so the form can say what just
+   * happened instead of silently closing. The "what's next / what unlocked" half of
+   * Andrew's ask (2026-07-26) lives here — logging a training session is only useful
+   * if it visibly moves the milestone it belongs to. */
+  async function addQuickLog(entry: QuickLogInput): Promise<QuickLogResult | null> {
+    const milestone = entry.milestoneId ? milestones.items.find((item) => item.id === entry.milestoneId) : undefined;
+    const log = buildQuickLogRow(entry);
     const ok = await itemLogs.add(log);
     if (!ok) return null;
 
-    await satisfyOccurrence(log);
+    await satisfyOccurrence([log]);
     await syncWeightFromLog(log.id, entry.values, entry.dogIds, entry.notes, log.happenedAt ?? log.loggedAt);
 
     // Alone time is a training type like any other in the Quick log, but it also
@@ -874,7 +941,7 @@ function useDataStore() {
     if (entry.aloneTimeMinutes && entry.aloneTimeMinutes > 0) {
       await aloneTimeLogs.add({
         id: makeId("alone"),
-        date: dateKey,
+        date: entry.date,
         durationMinutes: entry.aloneTimeMinutes,
         dogIds: entry.dogIds,
         notes: entry.notes,
@@ -882,6 +949,52 @@ function useDataStore() {
     }
 
     return advanceMilestoneAndReport(milestones.items, milestone, entry.completedStepTitles, entry.dogIds);
+  }
+
+  /** Same submission as addQuickLog, but for the Quick log form's "these differ per
+   * dog" toggle: each dog gets its own row with its own values/rating/notes instead
+   * of one row shared across all of them. All the new rows are evaluated against the
+   * shared occurrence slot in one satisfyOccurrence call — calling addQuickLog once
+   * per dog instead would have each call read `itemLogs.items` before the previous
+   * one's insert had flushed, so a later dog's log could never see an earlier one's
+   * claim and the slot would never close on its own.
+   *
+   * Milestone progress is evaluated once across the whole group (union of every
+   * entry's dogIds) rather than per entry: the form keeps the milestone and ticked
+   * steps shared when splitting per dog — only rating and notes differ — so this
+   * mirrors the existing single-entry multi-dog path instead of risking
+   * double-counted sessions from separate sequential calls. */
+  async function addQuickLogGroup(entries: QuickLogInput[]): Promise<QuickLogResult | null> {
+    const [first] = entries;
+    if (!first) return null;
+
+    const logs = entries.map((entry) => buildQuickLogRow(entry));
+    const oks = await Promise.all(logs.map((log) => itemLogs.add(log)));
+    if (!oks.every(Boolean)) return null;
+
+    await satisfyOccurrence(logs);
+    await Promise.all(
+      entries.map((entry, index) =>
+        syncWeightFromLog(logs[index].id, entry.values, entry.dogIds, entry.notes, logs[index].happenedAt ?? logs[index].loggedAt),
+      ),
+    );
+
+    await Promise.all(
+      entries
+        .filter((entry) => entry.aloneTimeMinutes && entry.aloneTimeMinutes > 0)
+        .map((entry) =>
+          aloneTimeLogs.add({
+            id: makeId("alone"),
+            date: entry.date,
+            durationMinutes: entry.aloneTimeMinutes!,
+            dogIds: entry.dogIds,
+            notes: entry.notes,
+          }),
+        ),
+    );
+
+    const milestone = first.milestoneId ? milestones.items.find((item) => item.id === first.milestoneId) : undefined;
+    return advanceMilestoneAndReport(milestones.items, milestone, first.completedStepTitles, entries.flatMap((entry) => entry.dogIds));
   }
 
   /** Edit a Quick log in place: correct the rating, notes, dogs, or which steps got
@@ -926,7 +1039,7 @@ function useDataStore() {
     const updated: ItemLog = { ...existing, ...patch };
     const slotChanged = existing.itemId !== updated.itemId || existing.occurrenceDate !== updated.occurrenceDate;
     if (slotChanged) await releaseSatisfiedOccurrence(existing);
-    await satisfyOccurrence(updated);
+    await satisfyOccurrence([updated]);
     await syncWeightFromLog(logId, entry.values, entry.dogIds, entry.notes, updated.happenedAt ?? updated.loggedAt);
 
     if (entry.aloneTimeMinutes && entry.aloneTimeMinutes > 0) {
@@ -1040,6 +1153,7 @@ function useDataStore() {
     itemLogs,
     addItemLog,
     addQuickLog,
+    addQuickLogGroup,
     editQuickLog,
     deleteQuickLog,
     markLogsProcessed,
@@ -1066,6 +1180,7 @@ function useDataStore() {
     rescheduleTask,
     skipTask,
     delegateTask,
+    setOccurrenceDogs,
     respondToDelegation,
     snapshot,
     restore,

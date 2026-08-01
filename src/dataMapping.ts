@@ -434,6 +434,7 @@ export const itemOccurrence = {
       checklist: row.checklist ?? [],
       milestoneAdvanced: row.milestone_advanced ?? undefined,
       satisfiedByLogIds: row.satisfied_by_log_ids ?? [],
+      dogIds: row.dog_ids ?? undefined,
       history: row.history ?? [],
     };
   },
@@ -457,6 +458,7 @@ export const itemOccurrence = {
       checklist: entry.checklist,
       milestone_advanced: entry.milestoneAdvanced ?? false,
       satisfied_by_log_ids: entry.satisfiedByLogIds ?? [],
+      dog_ids: entry.dogIds ?? null,
       history: entry.history,
     };
   },
