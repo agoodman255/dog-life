@@ -1,5 +1,5 @@
 import { Activity, Check, ChevronDown, ChevronRight, Droplet, Dumbbell, GlassWater, GraduationCap, HeartPulse, Lock, Plus, Trophy, Unlock, Utensils, X } from "lucide-react";
-import { FormEvent, ReactNode, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { useSession } from "./auth";
 import { useNavigation } from "./navigation";
 import { makeId, useStore } from "./store";
@@ -15,6 +15,7 @@ import {
   LogFieldValue,
   Milestone,
   Person,
+  QuickLogInput,
   QuickLogKind,
   QuickLogResult,
 } from "./types";
@@ -33,6 +34,8 @@ import {
   milestoneStatusFor,
   stepSessions,
   QUICK_LOG_SPECS,
+  QuickLogField,
+  QuickLogSpec,
   quickLogFieldVisible,
   quickLogKindForCategory,
   quickLogKindsForCategory,
@@ -605,6 +608,149 @@ export const QUICK_LOG_ICONS: Record<QuickLogKind, typeof Droplet> = {
   health: HeartPulse,
 };
 
+/** One dog's own copy of the fields a shared Quick log would otherwise force to be
+ * identical across every dog it's logged for. */
+type PerDogEntry = { selections: Record<string, string | number | null>; rating: number | undefined; notes: string };
+
+/** The primary-selection-plus-sub-fields-plus-rating-plus-notes block, factored out
+ * of `QuickLogForm` so it can render once (the shared, same-for-every-dog default)
+ * or once per dog (the "these differ per dog" toggle) without duplicating the JSX.
+ * `showPrimary` is false for training, whose primary selection is the milestone
+ * picker rendered separately and stays shared even when per-dog is on. */
+function QuickLogFieldsGroup({
+  spec,
+  visibleFields,
+  showPrimary,
+  selections,
+  setField,
+  setFieldValue,
+  rating,
+  setRating,
+  notes,
+  setNotes,
+}: {
+  spec: QuickLogSpec;
+  visibleFields: QuickLogField[];
+  showPrimary: boolean;
+  selections: Record<string, string | number | null>;
+  /** Toggling behavior for chip-style picks (choices, number presets): tapping the
+   * already-selected chip clears it. */
+  setField: (name: string, value: string | number | null) => void;
+  /** Always-set behavior for typed inputs (free numbers, text, dates) — typing must
+   * never toggle a field back to empty just because it matches the previous value. */
+  setFieldValue: (name: string, value: string | number | null) => void;
+  rating: number | undefined;
+  setRating: (value: number | undefined) => void;
+  notes: string;
+  setNotes: (value: string) => void;
+}) {
+  return (
+    <>
+      {showPrimary && (
+        <div className="form-field">
+          {spec.primary.label}
+          <div className="subtabs" role="group" aria-label={spec.primary.label}>
+            {spec.primary.options?.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={selections[spec.primary.name] === option.value ? "active" : ""}
+                onClick={() => setField(spec.primary.name, option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {visibleFields.map((field) => {
+        if (field.input === "choice") {
+          return (
+            <div className="form-field" key={field.name}>
+              {field.label}
+              <div className="subtabs" role="group" aria-label={field.label}>
+                {field.options?.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={selections[field.name] === option.value ? "active" : ""}
+                    onClick={() => setField(field.name, option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        }
+        if (field.input === "number") {
+          return (
+            <div className="form-field" key={field.name}>
+              {field.label}
+              {field.unit ? ` (${field.unit})` : ""}
+              <div className="quick-log-number">
+                {field.presets?.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    className={selections[field.name] === preset ? "active" : ""}
+                    onClick={() => setField(field.name, preset)}
+                  >
+                    {preset}
+                  </button>
+                ))}
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  placeholder={field.unit ?? "Amount"}
+                  value={typeof selections[field.name] === "number" ? String(selections[field.name]) : ""}
+                  onChange={(event) => setFieldValue(field.name, event.target.value === "" ? null : Number(event.target.value))}
+                />
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div className="form-field" key={field.name}>
+            {field.label}
+            <input
+              type={field.input === "date" ? "date" : "text"}
+              value={typeof selections[field.name] === "string" ? (selections[field.name] as string) : ""}
+              onChange={(event) => setFieldValue(field.name, event.target.value === "" ? null : event.target.value)}
+            />
+          </div>
+        );
+      })}
+
+      {!spec.skipRating && (
+        <div className="form-field">
+          {spec.ratingLabel}
+          <div className="rating-row" aria-label={spec.ratingLabel}>
+            {[1, 2, 3, 4, 5].map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={rating === value ? "selected" : ""}
+                aria-pressed={rating === value}
+                onClick={() => setRating(rating === value ? undefined : value)}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="form-field">
+        Notes
+        <textarea rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={spec.notesPlaceholder} />
+      </div>
+    </>
+  );
+}
+
 /** The Dashboard's Quick log. Every kind follows the same four beats — pick the one
  * predetermined selection, fill the sub-fields it reveals, score it 1-5, add a note —
  * so the flow is muscle memory regardless of what you're recording.
@@ -655,7 +801,7 @@ export function QuickLogForm({
   editingLog?: ItemLog;
   onClose: () => void;
 }) {
-  const { dogs, milestones, items, itemOccurrences, addQuickLog, editQuickLog } = useStore();
+  const { dogs, milestones, items, itemOccurrences, addQuickLog, addQuickLogGroup, editQuickLog } = useStore();
   const { timezone } = useNavigation();
   const [kind, setKind] = useState<QuickLogKind>(editingLog?.quickLogKind ?? initialKind);
   const [dogIds, setDogIds] = useState<string[]>(() => editingLog?.dogIds ?? initialDogIds ?? []);
@@ -687,6 +833,27 @@ export function QuickLogForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<QuickLogResult | null>(null);
+  // "These differ per dog": off by default (one shared entry, today's behavior).
+  // On, each selected dog gets its own fields/rating/notes and submits as its own
+  // single-dog log row instead of one row shared across all of them. Not offered
+  // while editing — splitting an existing multi-dog entry is a delete-and-relog,
+  // same as the other things this form won't let you change in place.
+  const [perDogMode, setPerDogMode] = useState(false);
+  const [perDog, setPerDog] = useState<Record<string, PerDogEntry>>({});
+
+  // Keeps `perDog` in step with which dogs are actually selected — added dogs get a
+  // blank entry, removed ones drop out — without wiping what's already been entered
+  // for the dogs that are still selected.
+  useEffect(() => {
+    if (!perDogMode) return;
+    setPerDog((prev) => {
+      const next: Record<string, PerDogEntry> = {};
+      dogIds.forEach((id) => {
+        next[id] = prev[id] ?? { selections: {}, rating: undefined, notes: "" };
+      });
+      return next;
+    });
+  }, [perDogMode, dogIds.join(",")]);
 
   const spec = quickLogSpec(kind);
   const isAloneTime = trainingType === ALONE_TIME_TRAINING_ID;
@@ -730,6 +897,17 @@ export function QuickLogForm({
     setSelections((prev) => ({ ...prev, [name]: prev[name] === value ? null : value }));
   }
 
+  function setFieldValue(name: string, value: string | number | null) {
+    setSelections((prev) => ({ ...prev, [name]: value }));
+  }
+
+  function updatePerDog(dogId: string, patch: Partial<PerDogEntry>) {
+    setPerDog((prev) => {
+      const current = prev[dogId] ?? { selections: {}, rating: undefined, notes: "" };
+      return { ...prev, [dogId]: { ...current, ...patch } };
+    });
+  }
+
   const visibleFields = spec.fields.filter((field) => quickLogFieldVisible(field, selections));
 
   // The attached item's category may cover more than one kind (a meal is a candidate
@@ -754,20 +932,11 @@ export function QuickLogForm({
   const chosenSlotTitle = chosenSlot?.item.title ?? (slotChoice ? items.items.find((item) => item.id === slotChoice)?.title : undefined);
   const slotAnswered = slotChoice !== undefined;
 
-  async function submit() {
-    if (submitting) return;
-    if (dogIds.length === 0) return setError("Pick at least one dog.");
-    if (kind === "training" && !trainingType) return setError("Pick what you worked on.");
-    if (kind !== "training" && !selections[spec.primary.name]) return setError(`Answer "${spec.primary.label}" first.`);
-    if (isAloneTime && !selections.Duration) return setError("Enter how long they were alone.");
-    if (!spec.skipRating && !rating) return setError("Give it a 1-5 score.");
-
-    setSubmitting(true);
-    setError("");
-
-    // The primary selection for training is the milestone itself, which has no entry
-    // in the spec's option list — write it in by title so the log stays readable
-    // without a join.
+  // The primary selection for training is the milestone itself, which has no entry
+  // in the spec's option list — write it in by title so the log stays readable
+  // without a join. Shared by the single-entry and per-dog submit paths so a split
+  // entry's values are built exactly the way a shared entry's would be.
+  function buildValues(fromSelections: Record<string, string | number | null>, fromVisibleFields: QuickLogField[]): LogFieldValue[] {
     const values: LogFieldValue[] = [];
     if (kind === "training") {
       values.push({
@@ -776,9 +945,9 @@ export function QuickLogForm({
         value: isAloneTime ? "Alone time" : (selectedMilestone?.title ?? trainingType),
       });
     }
-    [spec.primary, ...visibleFields].forEach((field) => {
+    [spec.primary, ...fromVisibleFields].forEach((field) => {
       if (kind === "training" && field === spec.primary) return;
-      const value = selections[field.name];
+      const value = fromSelections[field.name];
       if (value === null || value === undefined || value === "") return;
       values.push({
         fieldName: field.name,
@@ -787,22 +956,78 @@ export function QuickLogForm({
         value,
       });
     });
+    return values;
+  }
+
+  async function submit() {
+    if (submitting) return;
+    if (dogIds.length === 0) return setError("Pick at least one dog.");
+    if (kind === "training" && !trainingType) return setError("Pick what you worked on.");
+
+    if (perDogMode) {
+      for (const dogId of dogIds) {
+        const entry = perDog[dogId] ?? { selections: {}, rating: undefined, notes: "" };
+        const dogName = dogs.items.find((dog) => dog.id === dogId)?.name ?? "that dog";
+        if (kind !== "training" && !entry.selections[spec.primary.name]) return setError(`Answer "${spec.primary.label}" for ${dogName} first.`);
+        if (isAloneTime && !entry.selections.Duration) return setError(`Enter how long ${dogName} was alone.`);
+        if (!spec.skipRating && !entry.rating) return setError(`Give ${dogName} a 1-5 score.`);
+      }
+    } else {
+      if (kind !== "training" && !selections[spec.primary.name]) return setError(`Answer "${spec.primary.label}" first.`);
+      if (isAloneTime && !selections.Duration) return setError("Enter how long they were alone.");
+      if (!spec.skipRating && !rating) return setError("Give it a 1-5 score.");
+    }
+
+    setSubmitting(true);
+    setError("");
+
+    // Arriving from an item decides the slot outright; otherwise it's whatever was
+    // confirmed below, and an unanswered prompt means unscheduled — the safe reading,
+    // since the expectation stays open and can be attached from the timeline later.
+    const itemId = attachTo?.itemId ?? slotChoice ?? undefined;
+    const occurrenceDate = attachTo?.occurrenceDate ?? chosenSlot?.occurrenceDate ?? (slotChoice ? editingLog?.occurrenceDate : undefined);
+    const happenedAt = zonedTimeToUtcIso(date, happenedClock, timezone);
+    const milestoneId = kind === "training" && !isAloneTime ? trainingType : undefined;
+    const completedStepTitles = kind === "training" && !isAloneTime ? stepTitles : [];
+
+    if (perDogMode) {
+      const entries: QuickLogInput[] = dogIds.map((dogId) => {
+        const entry = perDog[dogId] ?? { selections: {}, rating: undefined, notes: "" };
+        const dogVisibleFields = spec.fields.filter((field) => quickLogFieldVisible(field, entry.selections));
+        return {
+          kind,
+          date,
+          itemId,
+          occurrenceDate,
+          happenedAt,
+          dogIds: [dogId],
+          values: buildValues(entry.selections, dogVisibleFields),
+          rating: entry.rating,
+          notes: entry.notes.trim(),
+          milestoneId,
+          completedStepTitles,
+          aloneTimeMinutes: isAloneTime ? Number(entry.selections.Duration) : undefined,
+        };
+      });
+      const outcome = await addQuickLogGroup(entries);
+      setSubmitting(false);
+      if (!outcome) return setError("Couldn't save that. Try again.");
+      setResult(outcome);
+      return;
+    }
 
     const input = {
       kind,
       date,
-      // Arriving from an item decides the slot outright; otherwise it's whatever was
-      // confirmed below, and an unanswered prompt means unscheduled — the safe reading,
-      // since the expectation stays open and can be attached from the timeline later.
-      itemId: attachTo?.itemId ?? slotChoice ?? undefined,
-      occurrenceDate: attachTo?.occurrenceDate ?? chosenSlot?.occurrenceDate ?? (slotChoice ? editingLog?.occurrenceDate : undefined),
-      happenedAt: zonedTimeToUtcIso(date, happenedClock, timezone),
+      itemId,
+      occurrenceDate,
+      happenedAt,
       dogIds,
-      values,
+      values: buildValues(selections, visibleFields),
       rating,
       notes: notes.trim(),
-      milestoneId: kind === "training" && !isAloneTime ? trainingType : undefined,
-      completedStepTitles: kind === "training" && !isAloneTime ? stepTitles : [],
+      milestoneId,
+      completedStepTitles,
       aloneTimeMinutes: isAloneTime ? Number(selections.Duration) : undefined,
     };
 
@@ -1056,109 +1281,55 @@ export function QuickLogForm({
             </div>
           )}
         </>
-      ) : (
-        <div className="form-field">
-          {spec.primary.label}
-          <div className="subtabs" role="group" aria-label={spec.primary.label}>
-            {spec.primary.options?.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={selections[spec.primary.name] === option.value ? "active" : ""}
-                onClick={() => setField(spec.primary.name, option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
+      ) : null}
+
+      {!editingLog && dogIds.length > 1 && (
+        <label className="quick-log-per-dog-toggle">
+          <input type="checkbox" checked={perDogMode} onChange={(event) => setPerDogMode(event.target.checked)} />
+          These differ per dog
+        </label>
       )}
 
-      {visibleFields.map((field) => {
-        if (field.input === "choice") {
-          return (
-            <div className="form-field" key={field.name}>
-              {field.label}
-              <div className="subtabs" role="group" aria-label={field.label}>
-                {field.options?.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={selections[field.name] === option.value ? "active" : ""}
-                    onClick={() => setField(field.name, option.value)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        }
-        if (field.input === "number") {
-          return (
-            <div className="form-field" key={field.name}>
-              {field.label}
-              {field.unit ? ` (${field.unit})` : ""}
-              <div className="quick-log-number">
-                {field.presets?.map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    className={selections[field.name] === preset ? "active" : ""}
-                    onClick={() => setField(field.name, preset)}
-                  >
-                    {preset}
-                  </button>
-                ))}
-                <input
-                  type="number"
-                  min={0}
-                  step="any"
-                  placeholder={field.unit ?? "Amount"}
-                  value={typeof selections[field.name] === "number" ? String(selections[field.name]) : ""}
-                  onChange={(event) =>
-                    setSelections((prev) => ({ ...prev, [field.name]: event.target.value === "" ? null : Number(event.target.value) }))
-                  }
-                />
-              </div>
-            </div>
-          );
-        }
-        return (
-          <div className="form-field" key={field.name}>
-            {field.label}
-            <input
-              type={field.input === "date" ? "date" : "text"}
-              value={typeof selections[field.name] === "string" ? (selections[field.name] as string) : ""}
-              onChange={(event) => setSelections((prev) => ({ ...prev, [field.name]: event.target.value === "" ? null : event.target.value }))}
-            />
-          </div>
-        );
-      })}
-
-      {!spec.skipRating && (
-        <div className="form-field">
-          {spec.ratingLabel}
-          <div className="rating-row" aria-label={spec.ratingLabel}>
-            {[1, 2, 3, 4, 5].map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={rating === value ? "selected" : ""}
-                aria-pressed={rating === value}
-                onClick={() => setRating(rating === value ? undefined : value)}
-              >
-                {value}
-              </button>
-            ))}
-          </div>
-        </div>
+      {!perDogMode && (
+        <QuickLogFieldsGroup
+          spec={spec}
+          visibleFields={visibleFields}
+          showPrimary={kind !== "training"}
+          selections={selections}
+          setField={setField}
+          setFieldValue={setFieldValue}
+          rating={rating}
+          setRating={setRating}
+          notes={notes}
+          setNotes={setNotes}
+        />
       )}
 
-      <div className="form-field">
-        Notes
-        <textarea rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={spec.notesPlaceholder} />
-      </div>
+      {perDogMode &&
+        dogIds.map((dogId) => {
+          const dog = dogs.items.find((entry) => entry.id === dogId);
+          const entry = perDog[dogId] ?? { selections: {}, rating: undefined, notes: "" };
+          const dogVisibleFields = spec.fields.filter((field) => quickLogFieldVisible(field, entry.selections));
+          return (
+            <div className="quick-log-per-dog" key={dogId}>
+              <p className="eyebrow">{dog?.name ?? dogId}</p>
+              <QuickLogFieldsGroup
+                spec={spec}
+                visibleFields={dogVisibleFields}
+                showPrimary={kind !== "training"}
+                selections={entry.selections}
+                setField={(name, value) =>
+                  updatePerDog(dogId, { selections: { ...entry.selections, [name]: entry.selections[name] === value ? null : value } })
+                }
+                setFieldValue={(name, value) => updatePerDog(dogId, { selections: { ...entry.selections, [name]: value } })}
+                rating={entry.rating}
+                setRating={(value) => updatePerDog(dogId, { rating: value })}
+                notes={entry.notes}
+                setNotes={(value) => updatePerDog(dogId, { notes: value })}
+              />
+            </div>
+          );
+        })}
 
       {/* Propose, then ask. Sits inline right above Save so it reads as the last thing
           to confirm, never as a modal you have to clear before you can carry on — and
@@ -1251,17 +1422,54 @@ export function ItemDetailModal({
    * can run the item but never change what it is. */
   onEdit?: (item: Item) => void;
 }) {
-  const { dogs, milestones, locations, people, getInstance, startTask, endTask, reopenTask, unstartTask, rescheduleTask, skipTask, delegateTask, deleteItem } = useStore();
+  const {
+    dogs,
+    milestones,
+    locations,
+    people,
+    getInstance,
+    startTask,
+    endTask,
+    reopenTask,
+    unstartTask,
+    rescheduleTask,
+    skipTask,
+    delegateTask,
+    deleteItem,
+    setOccurrenceDogs,
+  } = useStore();
   const { navigate, timezone } = useNavigation();
-  const [activePanel, setActivePanel] = useState<null | "start" | "end" | "reopen" | "unstart" | "reschedule" | "skip" | "delegate" | "log">(null);
+  const [activePanel, setActivePanel] = useState<
+    null | "start" | "end" | "reopen" | "unstart" | "reschedule" | "skip" | "delegate" | "log" | "dogs"
+  >(null);
   const [error, setError] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [dogsDraft, setDogsDraft] = useState<string[]>([]);
 
   const instance = getInstance(task.id, date);
   const state = instance?.state ?? "not_started";
   // Guards every lifecycle confirm below against a slow network response +
   // an impatient re-tap creating a duplicate task_instance for the same slot.
   const [submitting, setSubmitting] = useState(false);
+
+  // "Just today" doesn't touch the series — it edits this occurrence's own dog
+  // list, defaulting to whatever's already in effect (an existing override, or
+  // else the item's dogs) so re-opening the panel shows what's really active today.
+  function openDogs() {
+    setError(false);
+    setActivePanel("dogs");
+    setDogsDraft(instance?.dogIds ?? task.dogIds ?? []);
+  }
+
+  async function confirmDogs() {
+    if (submitting) return;
+    setSubmitting(true);
+    setError(false);
+    const ok = await setOccurrenceDogs(task, date, dogsDraft);
+    setSubmitting(false);
+    if (!ok) setError(true);
+    else setActivePanel(null);
+  }
 
   const involvedDogs = dogs.items.filter((dog) => (task.dogIds ?? []).includes(dog.id));
   const dogName = (id: string) => dogs.items.find((dog) => dog.id === id)?.name ?? id;
@@ -1964,9 +2172,44 @@ export function ItemDetailModal({
                 Edit item
               </button>
             )}
+            {(task.dogIds ?? []).length > 0 && (
+              <button className="text-button" type="button" onClick={openDogs}>
+                Edit dogs for today
+              </button>
+            )}
             <button className="text-button danger" type="button" onClick={() => setDeleteModalOpen(true)}>
               Delete
             </button>
+          </div>
+        )}
+
+        {activePanel === "dogs" && (
+          <div className="form-field" style={{ marginTop: 12 }}>
+            <p className="eyebrow">Dogs for today</p>
+            <p className="small">Doesn't change the routine — just which dogs this occurrence needs today.</p>
+            <div className="subtabs" role="group" aria-label="Dogs for today">
+              {involvedDogs.map((dog) => (
+                <button
+                  key={dog.id}
+                  type="button"
+                  className={dogsDraft.includes(dog.id) ? "active" : ""}
+                  onClick={() =>
+                    setDogsDraft((prev) => (prev.includes(dog.id) ? prev.filter((id) => id !== dog.id) : [...prev, dog.id]))
+                  }
+                >
+                  {dog.name}
+                </button>
+              ))}
+            </div>
+            {error && <p className="form-error">That didn't save — check the browser console and try again.</p>}
+            <div className="form-actions">
+              <button className="text-button" type="button" onClick={() => setActivePanel(null)}>
+                Cancel
+              </button>
+              <button className="primary-button" type="button" onClick={confirmDogs} disabled={submitting}>
+                Save
+              </button>
+            </div>
           </div>
         )}
 

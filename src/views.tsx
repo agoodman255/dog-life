@@ -11,6 +11,7 @@ import {
   Download,
   GraduationCap,
   HeartPulse,
+  History,
   Import,
   Info,
   Moon,
@@ -344,6 +345,35 @@ function QuickLogRow({
   );
 }
 
+/** The persistent view behind a Dashboard tally: every entry of one kind, newest
+ * first, not just today's count. Reuses `QuickLogRow` so edit/delete keep working
+ * for free — this is just a different slice of the same `itemLogs` collection.
+ * Capped at 30 days: this is a quick-glance list, not the archive — `DailyLogHistory`
+ * on the Health page already covers longer-window trends as aggregates. */
+function QuickLogHistoryModal({ kind, onClose }: { kind: QuickLogKind; onClose: () => void }) {
+  const { itemLogs, dogs } = useStore();
+  const { timezone } = useNavigation();
+  const label = quickLogSpec(kind).label;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  const cutoffIso = cutoff.toISOString();
+  const entries = itemLogs.items
+    .filter((log) => log.quickLogKind === kind && (log.happenedAt ?? log.loggedAt) >= cutoffIso)
+    .sort((a, b) => (b.happenedAt ?? b.loggedAt).localeCompare(a.happenedAt ?? a.loggedAt));
+
+  return (
+    <Modal title={`${label} history`} onClose={onClose}>
+      <div className="quick-log-history">
+        {entries.length === 0 ? (
+          <p className="small">Nothing logged in the last 30 days.</p>
+        ) : (
+          entries.map((log) => <QuickLogRow key={log.id} log={log} dogs={dogs.items} timezone={timezone} />)
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 /** The Quick log modal a milestone card opens, plus the opener to hand it. Every place
  * that renders a `MilestoneCard` needs this now: advancing a step used to be a bare +1
  * on the card itself, and once that's gone a card without this hook is a card you can't
@@ -388,6 +418,7 @@ export function DashboardView() {
     stepTitles?: string[];
     attachTo?: { itemId: string; occurrenceDate: string; itemTitle: string };
   }>(null);
+  const [logHistory, setLogHistory] = useState<QuickLogKind | null>(null);
   const todayLogs = quickLogsOn(itemLogs.items, todayKey);
   // Both halves of the day in one ordered list — what was expected and what actually
   // happened. Sorting is done in the household's zone so a break logged at 9pm for
@@ -503,20 +534,30 @@ export function DashboardView() {
                 const Icon = QUICK_LOG_ICONS[spec.kind];
                 const count = todayLogs.filter((log) => log.quickLogKind === spec.kind).length;
                 return (
-                  <button
-                    key={spec.kind}
-                    type="button"
-                    className={`quick-log-tally ${count > 0 ? "has-entries" : ""}`}
-                    onClick={() => setQuickLog({ kind: spec.kind })}
-                    aria-label={`Log ${spec.label.toLowerCase()} — ${count} today`}
-                  >
-                    <Icon size={16} aria-hidden />
-                    <strong>{count}</strong>
-                    <span>{spec.label}</span>
-                  </button>
+                  <div className="quick-log-tally-wrap" key={spec.kind}>
+                    <button
+                      type="button"
+                      className={`quick-log-tally ${count > 0 ? "has-entries" : ""}`}
+                      onClick={() => setQuickLog({ kind: spec.kind })}
+                      aria-label={`Log ${spec.label.toLowerCase()} — ${count} today`}
+                    >
+                      <Icon size={16} aria-hidden />
+                      <strong>{count}</strong>
+                      <span>{spec.label}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="quick-log-tally-history"
+                      onClick={() => setLogHistory(spec.kind)}
+                      aria-label={`View ${spec.label.toLowerCase()} history`}
+                    >
+                      <History size={13} aria-hidden />
+                    </button>
+                  </div>
                 );
               })}
             </div>
+            {logHistory && <QuickLogHistoryModal kind={logHistory} onClose={() => setLogHistory(null)} />}
             {nextFocuses.map(({ dog, focus }) => (
               <div className="quick-log-next" key={dog.id}>
                 <div>

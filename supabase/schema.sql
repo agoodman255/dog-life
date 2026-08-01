@@ -500,6 +500,9 @@ alter table item_occurrences add column if not exists milestone_advanced boolean
 -- `milestone_advanced` is stored, and the opposite of the (date, duration, dogs)
 -- guesswork that alone-time rows are matched by.
 alter table item_occurrences add column if not exists satisfied_by_log_ids text[] not null default '{}';
+-- Per-occurrence override of the item's dog_ids — "just today" drops or adds a dog
+-- without touching the recurring series. Null = no override, use the item's dog_ids.
+alter table item_occurrences add column if not exists dog_ids uuid[];
 
 -- Timestamped log entries. Usually against an item — multiple per item (and per
 -- occurrence) is the point: weight over time, symptoms across days. `processed_at`

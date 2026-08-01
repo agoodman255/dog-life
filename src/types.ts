@@ -390,7 +390,17 @@ export type ItemState =
   | "assigned_pending"
   | "reassigned";
 
-export type ItemHistoryEntryType = "start" | "unstart" | "end" | "reopen" | "reschedule" | "skip" | "delegate" | "accept" | "decline";
+export type ItemHistoryEntryType =
+  | "start"
+  | "unstart"
+  | "end"
+  | "reopen"
+  | "reschedule"
+  | "skip"
+  | "delegate"
+  | "accept"
+  | "decline"
+  | "edit_dogs";
 
 export type ItemHistoryEntry = {
   id: string;
@@ -442,6 +452,10 @@ export type ItemOccurrence = {
    * covers the item's dogs — an occurrence has one state for every dog, so completing
    * on a single dog's log would be claiming the other one went out too. */
   satisfiedByLogIds?: string[];
+  /** Per-occurrence override of the item's `dogIds` — "just today" drops or adds a
+   * dog without touching the recurring series. Undefined = no override, the
+   * occurrence's required dogs are the item's `dogIds` unchanged. */
+  dogIds?: string[];
   history: ItemHistoryEntry[];
 };
 
